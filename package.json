@@ -1,0 +1,20 @@
+{
+  "name": "node_back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "body-parser": "^1.20.3",
+    "cheerio": "1.0.0-rc.12",
+    "express": "4.17.1",
+    "multer": "1.4.5-lts.1",
+    "mysql2": "^3.11.4"
+  }
+}
