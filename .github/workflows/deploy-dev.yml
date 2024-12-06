@@ -21,7 +21,7 @@ jobs:
       - name: Run deployment script over SSH
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.SERVER_ADDRESS }}
+          host: 139.9.83.16
           username: ${{ secrets.SERVER_USER }}
           port: 22
           key_path: deploy_key.pem
