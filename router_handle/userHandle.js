@@ -7,18 +7,24 @@ exports.login = (req, res) => {
     const sql = "SELECT * FROM user WHERE user_name = ? AND password = ?";
     pool
       .query(sql, [userName, password])
-      .then(([result]) => {
-        if (result.length === 0) {
-          res.send(resultData(null, 401, "用户名或密码错误")); // 设置状态码为401
-          return;
-        }
-        res.send(resultData(result[0]));
+      .then(async ([result]) => {
+          if (result.length === 0) {
+              res.send(resultData(null, 401, "用户名或密码错误")); // 设置状态码为401
+              return;
+          }
+          const bookmarkTotalSql = `SELECT COUNT(DISTINCT name) FROM bookmark WHERE user_id=? and del_flag = 0`;
+          const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
+          const tagTotalSql = `SELECT COUNT(DISTINCT name) FROM tag WHERE user_id=? and del_flag = 0`;
+          const [tagTotalRes] = await pool.query(tagTotalSql, [result[0].id]);
+          result[0].bookmarkTotal = bookmarkTotalRes[0]["COUNT(DISTINCT name)"];
+          result[0].tagTotal = tagTotalRes[0]["COUNT(DISTINCT name)"];
+          res.send(resultData(result[0]));
       })
       .catch((err) => {
         res.send(resultData(null, 500, "服务器内部错误: " + err.message)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, "客户端请求异常：" + err)); // 设置状态码为400
+    res.send(resultData(null, 400, "客户端请求异常：" + e)); // 设置状态码为400
   }
 };
 
