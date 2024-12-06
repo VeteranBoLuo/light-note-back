@@ -1,4 +1,4 @@
-name: Deploy to Dev Server1
+name: Deploy to Dev Server2
 
 on:
   push:
