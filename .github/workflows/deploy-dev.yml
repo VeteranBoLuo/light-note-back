@@ -24,7 +24,6 @@ jobs:
           host: ${{ secrets.SERVER_ADDRESS }}
           username: ${{ secrets.SERVER_USER }}
           key_path: deploy_key.pem
-          remoteDir: /www/test
           script: |
             sudo -u www bash -c '
             cd /www/test
