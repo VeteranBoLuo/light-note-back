@@ -1,0 +1,34 @@
+name: Deploy to Dev Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Add SSH Key
+        run: |
+          echo "${{ secrets.SSH_PEM_KEY }}" > deploy_key.pem
+          chmod 600 deploy_key.pem
+
+      - name: Run deployment script over SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_ADDRESS }}
+          username: ${{ secrets.SERVER_USER }}
+          key_path: deploy_key.pem
+          script_stop: true
+          script: |
+            sudo -u www bash -c '
+            cd /www/test
+            git pull origin main'
+
+      - name: Cleanup
+        run: rm -f deploy_key.pem
