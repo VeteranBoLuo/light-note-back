@@ -48,7 +48,7 @@ jobs:
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          password: ${{ secrets.PASSWORD }}
+          password: wenjunqiu123@
           port: ${{ secrets.PORT }}
           script: |
             cd /root/test
