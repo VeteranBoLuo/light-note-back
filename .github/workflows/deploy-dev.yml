@@ -42,4 +42,5 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             cd /www/wwwroot/BMS_Back
+            npm stop
             npm start
