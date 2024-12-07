@@ -98,5 +98,5 @@ app.use("/bookmark", bookmarkRouter);
 
 //  启动服务器
 app.listen(9001, () => {
-  console.log("服务器已启动， 监听端口9001");
+  console.log("服务器已启动，监听端口9001");
 });
