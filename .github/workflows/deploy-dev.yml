@@ -28,7 +28,7 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           # 源目录改为项目根目录
-          source: "./*"
+          source: "/"
           # 目标目录根据你的服务器路径修改
           target: "/www/wwwroot"
 
