@@ -16,18 +16,18 @@ jobs:
       - name: Add SSH Key
         run: |
           echo "${{ secrets.SSH_PEM_KEY }}" > deploy_key.pem
-          chmod 600 deploy_key.pem
+          chmod 600 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCm8iVdK41DTJirsQGGcbvQTf04QuLwV0fX5obpBjlmiv+7ktXVJnz+B0Bfn9o0iv99bKY+9I0eI6/Cw34BuX6SI/t0SwP/14e2uDBOgW7enc6yGE/ZZsSlTKVIwvLl5119TuWHmj/Gq/NDbphOgy8iHeFpu4Q67Y7Jj+Magsp9uXB9Dw2dfjh4E8oWDC6xBUTYDd2H5hC3XozH/9Bz0geC6rPsDPdDjjzisy2ao3kH7d3ck30M+obf2wJQPEXqTFSZcM5Uw1LiFRm/m6hCbxlnKMhu2lZ8nMIZdGXvB36NgR80igfVm9kFOSiQK1DGaye1LkuynITb670Tdn3xfGejXs2pOOHMF3aq6G3eb9YEOVK64YOLO1hyyYHoSHsIpUb1JthPlVoc1ZJ5sO/1LJ4+N1m8bV5LThx2E2/B8+E3E+KNjAN5/sntjtpplPqRuFkQYzur/QAfZYOuuM6bN2tiixRwgj04wCWw4Jxb3NAcPBWZNj7VJkynKQVZ8k8G2tU= root@hcss-ecs-b15e
 
       - name: Run deployment script over SSH
         uses: appleboy/ssh-action@master
         with:
           host: 139.9.83.16
           username: root
-          key_path: deploy_key.pem
+          key_path: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCm8iVdK41DTJirsQGGcbvQTf04QuLwV0fX5obpBjlmiv+7ktXVJnz+B0Bfn9o0iv99bKY+9I0eI6/Cw34BuX6SI/t0SwP/14e2uDBOgW7enc6yGE/ZZsSlTKVIwvLl5119TuWHmj/Gq/NDbphOgy8iHeFpu4Q67Y7Jj+Magsp9uXB9Dw2dfjh4E8oWDC6xBUTYDd2H5hC3XozH/9Bz0geC6rPsDPdDjjzisy2ao3kH7d3ck30M+obf2wJQPEXqTFSZcM5Uw1LiFRm/m6hCbxlnKMhu2lZ8nMIZdGXvB36NgR80igfVm9kFOSiQK1DGaye1LkuynITb670Tdn3xfGejXs2pOOHMF3aq6G3eb9YEOVK64YOLO1hyyYHoSHsIpUb1JthPlVoc1ZJ5sO/1LJ4+N1m8bV5LThx2E2/B8+E3E+KNjAN5/sntjtpplPqRuFkQYzur/QAfZYOuuM6bN2tiixRwgj04wCWw4Jxb3NAcPBWZNj7VJkynKQVZ8k8G2tU= root@hcss-ecs-b15e
           script: |
             sudo -u www bash -c '
             cd /www/test
             git pull origin main'
 
       - name: Cleanup
-        run: rm -f deploy_key.pem
+        run: rm -f ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCm8iVdK41DTJirsQGGcbvQTf04QuLwV0fX5obpBjlmiv+7ktXVJnz+B0Bfn9o0iv99bKY+9I0eI6/Cw34BuX6SI/t0SwP/14e2uDBOgW7enc6yGE/ZZsSlTKVIwvLl5119TuWHmj/Gq/NDbphOgy8iHeFpu4Q67Y7Jj+Magsp9uXB9Dw2dfjh4E8oWDC6xBUTYDd2H5hC3XozH/9Bz0geC6rPsDPdDjjzisy2ao3kH7d3ck30M+obf2wJQPEXqTFSZcM5Uw1LiFRm/m6hCbxlnKMhu2lZ8nMIZdGXvB36NgR80igfVm9kFOSiQK1DGaye1LkuynITb670Tdn3xfGejXs2pOOHMF3aq6G3eb9YEOVK64YOLO1hyyYHoSHsIpUb1JthPlVoc1ZJ5sO/1LJ4+N1m8bV5LThx2E2/B8+E3E+KNjAN5/sntjtpplPqRuFkQYzur/QAfZYOuuM6bN2tiixRwgj04wCWw4Jxb3NAcPBWZNj7VJkynKQVZ8k8G2tU= root@hcss-ecs-b15e
