@@ -31,6 +31,15 @@ jobs:
           source: "./*"
           # 目标目录根据你的服务器路径修改
           target: "/www/wwwroot/BMS_Back"
+      - name: 停止Node.js应用
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            ps aux | grep 'node /www/wwwroot/BMS_Back' | grep -v grep | awk '{print $2}' | xargs kill -9
 
       # 如果需要，添加步骤来在服务器上启动你的Node.js应用
       - name: 启动Node.js应用
