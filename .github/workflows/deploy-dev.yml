@@ -1,60 +1,45 @@
-name: Publish And Deploy Demo
+name: 部署Node.js项目到服务器
 on:
   push:
     branches:
       - main
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - run: pwd
-      - run: ls
 
-#      # 下载源码
-#      - name: Checkout
-#        uses: actions/checkout@master
-#
-#      # 打包构建
-#      - name: Build
-#        uses: actions/setup-node@master
-#      - run: tar -zcvf release.tgz package.json  pm2.config.json
-#
-#      # 发布 Release
-#      - name: Create Release
-#        id: create_release
-#        uses: actions/create-release@master
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.TOKEN }}
-#        with:
-#          tag_name: BMS_Back_02
-#          release_name: Release BMS_Bck_02
-#          draft: false
-#          prerelease: false
-#
-#      # 上传构建结果到 Release
-#      - name: Upload Release Asset
-#        id: upload-release-asset
-#        uses: actions/upload-release-asset@master
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.TOKEN }}
-#        with:
-#          upload_url: ${{ steps.create_release.outputs.upload_url }}
-#          asset_path: ./release.tgz
-#          asset_name: release.tgz
-#          asset_content_type: application/x-tgz
-#
-#      # 部署到服务器
-#      - name: Deploy
-#        uses: appleboy/ssh-action@master
-#        with:
-#          host: ${{ secrets.HOST }}
-#          username: ${{ secrets.USERNAME }}
-#          password: ${{ secrets.PASSWORD }}
-#          port: ${{ secrets.PORT }}
-#          script: |
-#            cd /root/test
-#            wget https://github.com/VeteranBoLuo/BMS_Back/releases/latest/download/release.tgz -O release.tgz
-#            tar zxvf release.tgz
-#            npm install --production
-#            pm2 reload pm2.config.json
+      - name: 读取仓库内容
+        uses: actions/checkout@master
+
+      - name: 安装Node.js
+        uses: actions/setup-node@master
+
+      - name: 安装依赖
+        run: npm install
+
+      # 删除了打包步骤，因为不需要构建
+
+      - name: 将项目同步到服务器
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          # 源目录改为项目根目录
+          source: "./*"
+          # 目标目录根据你的服务器路径修改
+          target: "/www/wwwroot/BMS_Back"
+
+      # 如果需要，添加步骤来在服务器上启动你的Node.js应用
+      - name: 启动Node.js应用
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd /www/wwwroot/BMS_Back
+            npm start
