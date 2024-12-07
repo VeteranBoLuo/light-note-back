@@ -83,8 +83,8 @@ app.use(async (req, res, next) => {
         pool.query(query, [snakeCaseKeys(log)]).catch((err) => {
           console.error("日志更新错误错误: " + err.message);
         });
-      } catch (err) {
-        console.error("日志更新错误错误：", err);
+      } catch (err1) {
+        console.error("日志更新错误错误：", err1);
       }
     }
   });
