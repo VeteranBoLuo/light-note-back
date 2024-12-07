@@ -16,7 +16,7 @@ jobs:
       # 打包构建
       - name: Build
         uses: actions/setup-node@master
-      - run: tar -zcvf release.tgz package.json package-lock.json pm2.config.json
+      - run: tar -zcvf release.tgz package.json  pm2.config.json
 
       # 发布 Release
       - name: Create Release
