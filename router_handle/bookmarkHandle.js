@@ -326,12 +326,12 @@ FROM
   pool
     .query(sql, params)
     .then(async ([result]) => {
-      const totalSql = `SELECT COUNT(DISTINCT name) FROM bookmark WHERE user_id=? and del_flag = 0`;
+      const totalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
       const [totalRes] = await pool.query(totalSql,[userId]);
       res.send(
         resultData({
           items: result,
-          total: totalRes[0]["COUNT(DISTINCT name)"],
+          total: totalRes[0]["COUNT(*)"],
         }),
       );
     })

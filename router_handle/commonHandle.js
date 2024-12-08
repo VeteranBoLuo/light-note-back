@@ -12,7 +12,7 @@ exports.getApiLogs = (req, res) => {
     const { filters, pageSize, currentPage } = req.body;
     const skip = pageSize * (currentPage - 1);
     let sql =
-      "SELECT * FROM api_logs where user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%') AND del_flag=0 ORDER BY request_time DESC LIMIT ? OFFSET ?";
+      "SELECT * FROM api_logs where (user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%')) AND del_flag=0 ORDER BY request_time DESC LIMIT ? OFFSET ?";
     pool
       .query(sql, [filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
