@@ -14,4 +14,7 @@ router.get("/clearOperationLogs", commonHandle.clearOperationLogs);
 
 router.post("/analyzeImgUrl", commonHandle.analyzeImgUrl);
 
+router.post("/addOpinion", commonHandle.addOpinion);
+
+
 module.exports = router;

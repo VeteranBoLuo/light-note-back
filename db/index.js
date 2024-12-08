@@ -3,9 +3,9 @@ const mysql = require("mysql2/promise");
 
 const pool = mysql.createPool({
   connectionLimit: 10, // 例如限制为10个连接
-  host: "127.0.0.1",
+  host: "139.9.83.16",
   port: 3306,
-  user: "root",
+  user: "boluo",
   password: "123456",
   database: "tag_db",
   namedPlaceholders: true,

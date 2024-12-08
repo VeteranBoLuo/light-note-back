@@ -203,3 +203,24 @@ exports.analyzeImgUrl = async (req, res) => {
     connection.release(); // 释放连接
   }
 };
+
+
+exports.addOpinion = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const insertSql='INSERT INTO opinion SET ?'
+    pool
+        .query(insertSql,[snakeCaseKeys(req.body)])
+        .then(() => {
+          res.send(resultData('反馈成功'));
+        })
+        .catch((err) => {
+         throw new Error(err.message)
+        });
+  } catch (err) {
+    // 如果发生错误，发送错误响应给前端
+    res.send(resultData(null, 500, "服务器内部错误: " + err.message));
+  } finally {
+    connection.release(); // 释放连接
+  }
+};
