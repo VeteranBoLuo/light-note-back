@@ -12,7 +12,7 @@ exports.getApiLogs = (req, res) => {
     const { filters, pageSize, currentPage } = req.body;
     const skip = pageSize * (currentPage - 1);
     let sql =
-      "SELECT * FROM api_logs where (user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%')) AND del_flag=0 ORDER BY request_time DESC LIMIT ? OFFSET ?";
+      "SELECT * FROM api_logs where (user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%')) AND del_flag=0 AND user_name!='wenjunqiu' ORDER BY request_time DESC LIMIT ? OFFSET ?";
     pool
       .query(sql, [filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
@@ -37,7 +37,7 @@ exports.getApiLogs = (req, res) => {
           }
         });
         const [totalRes] = await pool.query(
-          "SELECT COUNT(*) FROM api_logs where (user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%')) AND del_flag=0 ",
+          "SELECT COUNT(*) FROM api_logs where (user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%')) AND user_name!='wenjunqiu' AND del_flag=0 ",
           [filters.key, filters.key],
         );
         res.send(
@@ -104,7 +104,7 @@ LEFT JOIN user u ON o.create_by = u.id
 WHERE (u.user_name LIKE CONCAT('%', ?, '%') 
 OR o.operation LIKE CONCAT('%', ?, '%') 
 OR o.module LIKE CONCAT('%', ?, '%')) 
-AND o.del_flag = 0
+AND o.del_flag = 0 AND u.user_name!='wenjunqiu'
 ORDER BY o.create_time DESC
 LIMIT ? OFFSET ?;
 `,
@@ -115,7 +115,7 @@ LIMIT ? OFFSET ?;
 (u.user_name LIKE CONCAT('%', ?, '%') 
 OR o.operation LIKE CONCAT('%', ?, '%') 
 OR o.module LIKE CONCAT('%', ?, '%'))
-AND o.del_flag=0`;
+AND o.del_flag=0 AND u.user_name!='wenjunqiu'`;
         const [totalRes] = await pool.query(totalSql, [
           filters.key,
           filters.key,
