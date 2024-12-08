@@ -110,13 +110,14 @@ exports.addTag = async (req, res) => {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction(); // 开始事务
+      const userId=req.headers["x-user-id"]
       const params = {
         ...req.body,
         createTime: getCurrentTimeFormatted(),
-        userId: req.headers["x-user-id"],
+        userId: userId,
       };
-      const sqlCheck = "SELECT * FROM tag WHERE name = ? AND del_flag = 0";
-      const [checkRes] = await connection.query(sqlCheck, [params.name]);
+      const sqlCheck = "SELECT * FROM tag WHERE user_id=? name = ? AND del_flag = 0";
+      const [checkRes] = await connection.query(sqlCheck, [userId,params.name]);
       if (checkRes.length > 0) {
         throw new Error("标签已存在");
       }
