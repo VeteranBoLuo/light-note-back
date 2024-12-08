@@ -116,7 +116,7 @@ exports.addTag = async (req, res) => {
         createTime: getCurrentTimeFormatted(),
         userId: userId,
       };
-      const sqlCheck = "SELECT * FROM tag WHERE user_id=? name = ? AND del_flag = 0";
+      const sqlCheck = "SELECT * FROM tag WHERE user_id=? AND name = ? AND del_flag = 0";
       const [checkRes] = await connection.query(sqlCheck, [userId,params.name]);
       if (checkRes.length > 0) {
         throw new Error("标签已存在");
@@ -203,9 +203,9 @@ exports.updateTag = async (req, res) => {
       name: paramsData.name,
       iconUrl: paramsData.iconUrl,
     };
-
-    const sqlCheck = "SELECT * FROM tag WHERE name = ? AND del_flag = 0";
-    const [checkRes] = await connection.query(sqlCheck, [params.name]);
+    const userId=req.headers["x-user-id"]
+    const sqlCheck = "SELECT * FROM tag WHERE user_id=? AND name = ? AND del_flag = 0";
+    const [checkRes] = await connection.query(sqlCheck, [userId,params.name]);
     if (checkRes.length > 0 && checkRes[0].id !== id) {
       throw new Error("标签已存在");
     }
@@ -345,13 +345,14 @@ exports.addBookmark = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+    const userId=req.headers["x-user-id"]
     const params = {
       ...req.body,
       createTime: getCurrentTimeFormatted(),
-      userId: req.headers["x-user-id"],
+      userId: userId,
     };
-    const sqlCheck = "SELECT * FROM bookmark WHERE name = ? AND del_flag = 0";
-    const [checkRes] = await connection.query(sqlCheck, [params.name]);
+    const sqlCheck = "SELECT * FROM bookmark WHERE user_id=? AND name = ? AND del_flag = 0";
+    const [checkRes] = await connection.query(sqlCheck, [userId,params.name]);
     if (checkRes.length > 0) {
       throw new Error("书签已存在");
     }
@@ -392,8 +393,9 @@ exports.updateBookmark = async (req, res) => {
   try {
     await connection.beginTransaction();
     const id = req.body.id;
-    const sqlCheck = "SELECT * FROM bookmark WHERE name = ? AND del_flag = 0";
-    const [checkRes] = await connection.query(sqlCheck, [req.body.name]);
+    const userId=req.headers["x-user-id"]
+    const sqlCheck = "SELECT * FROM bookmark WHERE user_id=? AND name = ? AND del_flag = 0";
+    const [checkRes] = await connection.query(sqlCheck, [userId,req.body.name]);
     if (checkRes.length > 0 && checkRes[0].id != id) {
       throw new Error("书签已存在");
     }
