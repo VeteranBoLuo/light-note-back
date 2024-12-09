@@ -67,7 +67,7 @@ exports.clearApiLogs = (req, res) => {
 };
 
 // 用户操作日志
-exports.addOperationLogs = (req, res) => {
+exports.recordOperationLogs = (req, res) => {
   try {
     const userId = req.headers["x-user-id"];
     const log = {
@@ -205,7 +205,7 @@ exports.analyzeImgUrl = async (req, res) => {
 };
 
 
-exports.addOpinion = async (req, res) => {
+exports.recordOpinion = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const insertSql='INSERT INTO opinion SET ?'

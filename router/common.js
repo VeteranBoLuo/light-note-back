@@ -6,7 +6,7 @@ router.post("/getApiLogs", commonHandle.getApiLogs);
 
 router.get("/clearApiLogs", commonHandle.clearApiLogs);
 
-router.post("/addOperationLogs", commonHandle.addOperationLogs);
+router.post("/recordOperationLogs", commonHandle.recordOperationLogs);
 
 router.post("/getOperationLogs", commonHandle.getOperationLogs);
 
@@ -14,7 +14,7 @@ router.get("/clearOperationLogs", commonHandle.clearOperationLogs);
 
 router.post("/analyzeImgUrl", commonHandle.analyzeImgUrl);
 
-router.post("/addOpinion", commonHandle.addOpinion);
+router.post("/recordOpinion", commonHandle.recordOpinion);
 
 
 module.exports = router;
