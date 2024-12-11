@@ -91,7 +91,7 @@ exports.getUserList = (req, res) => {
     }
 };
 exports.saveUserInfo = (req, res) => {
-    const id = req.headers['x-user-id'] // 获取用户ID
+    const id =req.body.id?req.body.id: req.headers['x-user-id'] // 获取用户ID
     try {
         pool
             .query("update user set ? where id=?", [
