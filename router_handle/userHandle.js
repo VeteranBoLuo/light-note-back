@@ -9,7 +9,7 @@ exports.login = (req, res) => {
             .query(sql, [userName, password])
             .then(async ([result]) => {
                 if (result.length === 0) {
-                    res.send(resultData(null, 401, "用户名或密码错误")); // 设置状态码为401
+                    res.send(resultData(null, 401, "用户名密码错误或已过期，请重新输入")); // 设置状态码为401
                     return;
                 }
                 const bookmarkTotalSql = `SELECT COUNT(DISTINCT name) FROM bookmark WHERE user_id=? and del_flag = 0`;
