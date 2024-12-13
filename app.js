@@ -20,10 +20,17 @@ app.use(bodyParser.json({limit: "10mb", extended: true}));
 app.use(express.json());
 // 日志记录中间件
 app.use(async (req, res, next) => {
-    // 中间件来拦截和修改请求头
-    if (req.headers.role === 'visitor') {
-        const [result] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
-        req.headers['x-user-id'] = result[0].id;
+    // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
+    if (req.originalUrl.includes('login')) {
+        const {userName, password} = req.body;
+        const [userResult] = await pool.query("SELECT * FROM user WHERE user_name = ? AND password = ?", [
+            userName, password,
+        ]);
+        req.headers['x-user-id'] = userResult[0].id;
+        // 角色为游客，需要查询获取
+    } else if (req.headers.role === 'visitor') {
+        const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
+        req.headers['x-user-id'] = visitorResult[0].id;
     }
     const userId = req.headers["x-user-id"];
     let skipUser = false;
@@ -58,20 +65,15 @@ app.use(async (req, res, next) => {
     };
     // 等待响应结束
     res.on("finish", async () => {
-        // 调用登录注册接口时，没有userID，只有通过响应体判断
-        if (
-            userId ||
-            (responsePayload && JSON.parse(responsePayload)?.status === 200)
-        ) {
+        if (userId) {
             try {
                 // 查询用户信息
-                const id = userId ? userId : JSON.parse(responsePayload)?.data?.id;
                 const [result] = await pool.query("SELECT * FROM user WHERE id = ?", [
-                    id,
+                    userId,
                 ]);
                 // 构造日志对象
                 const log = {
-                    userId: id,
+                    userId: userId,
                     userName: result[0]?.user_name,
                     method: req.method,
                     url: req.originalUrl,
