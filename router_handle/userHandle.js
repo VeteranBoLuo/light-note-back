@@ -12,12 +12,12 @@ exports.login = (req, res) => {
                     res.send(resultData(null, 401, "用户名密码错误或已过期，请重新输入")); // 设置状态码为401
                     return;
                 }
-                const bookmarkTotalSql = `SELECT COUNT(DISTINCT name) FROM bookmark WHERE user_id=? and del_flag = 0`;
+                const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
                 const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
-                const tagTotalSql = `SELECT COUNT(DISTINCT name) FROM tag WHERE user_id=? and del_flag = 0`;
+                const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
                 const [tagTotalRes] = await pool.query(tagTotalSql, [result[0].id]);
-                result[0].bookmarkTotal = bookmarkTotalRes[0]["COUNT(DISTINCT name)"];
-                result[0].tagTotal = tagTotalRes[0]["COUNT(DISTINCT name)"];
+                result[0].bookmarkTotal = bookmarkTotalRes[0]["COUNT(*)"];
+                result[0].tagTotal = tagTotalRes[0]["COUNT(*)"];
                 res.send(resultData(result[0]));
             })
             .catch((err) => {
@@ -61,12 +61,12 @@ exports.getUserInfo = (req, res) => {
                     res.send(resultData(null, 401, "用户不存在,请重新登录！")); // 设置状态码为401
                     return;
                 }
-                const bookmarkTotalSql = `SELECT COUNT(DISTINCT name) FROM bookmark WHERE user_id=? and del_flag = 0`;
+                const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
                 const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [id]);
-                const tagTotalSql = `SELECT COUNT(DISTINCT name) FROM tag WHERE user_id=? and del_flag = 0`;
+                const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
                 const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
-                result[0].bookmarkTotal = bookmarkTotalRes[0]["COUNT(DISTINCT name)"];
-                result[0].tagTotal = tagTotalRes[0]["COUNT(DISTINCT name)"];
+                result[0].bookmarkTotal = bookmarkTotalRes[0]["COUNT(*)"];
+                result[0].tagTotal = tagTotalRes[0]["COUNT(*)"];
                 res.send(resultData(result[0]));
             })
             .catch((err) => {

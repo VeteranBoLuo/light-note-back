@@ -5,7 +5,7 @@ const pool = mysql.createPool({
   connectionLimit: 10, // 例如限制为10个连接
   host: "127.0.0.1",
   port: 3306,
-  user: "boluo",
+  user: "root",
   password: "123456",
   database: "tag_db",
   namedPlaceholders: true,
