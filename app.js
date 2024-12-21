@@ -40,6 +40,7 @@ app.use(async (req, res, next) => {
         );
     }
     const skipApi = [
+        'registerUser',
         "Logs",
         "getUserInfo",
         "getUserList",
