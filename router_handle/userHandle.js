@@ -1,5 +1,5 @@
 const pool = require("../db");
-const {resultData, snakeCaseKeys, mergeExistingProperties} = require("../util/result");
+const {resultData, snakeCaseKeys, mergeExistingProperties, getCurrentTimeFormatted} = require("../util/result");
 
 exports.login = (req, res) => {
     try {
@@ -36,8 +36,10 @@ exports.registerUser = (req, res) => {
                 if (result?.length > 0) {
                     res.send(resultData(null, 500, "账号已存在")); // 设置状态码为500
                 } else {
+                    const params=req.body
+                    params.createTime=getCurrentTimeFormatted()
                     pool
-                        .query("INSERT INTO user set ?", [snakeCaseKeys(req.body)])
+                        .query("INSERT INTO user set ?", [snakeCaseKeys(params)])
                         .then(() => {
                             res.send(resultData(null, 200, "注册成功")); // 设置状态码为200
                         });
