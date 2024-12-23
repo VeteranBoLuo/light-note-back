@@ -1,5 +1,5 @@
-const pool = require('../db');
-const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/result');
+const pool = require("../db");
+const {resultData, snakeCaseKeys, mergeExistingProperties, getCurrentTimeFormatted} = require("../util/result");
 
 exports.login = (req, res) => {
   try {
@@ -29,24 +29,28 @@ exports.login = (req, res) => {
 };
 
 exports.registerUser = (req, res) => {
-  try {
-    pool
-      .query('SELECT * FROM user WHERE user_name = ?', [req.body.userName])
-      .then(([result]) => {
-        if (result?.length > 0) {
-          res.send(resultData(null, 500, '账号已存在')); // 设置状态码为500
-        } else {
-          pool.query('INSERT INTO user set ?', [snakeCaseKeys(req.body)]).then(() => {
-            res.send(resultData(null, 200, '注册成功')); // 设置状态码为200
-          });
-        }
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
-      });
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + err)); // 设置状态码为400
-  }
+    try {
+        pool
+            .query("SELECT * FROM user WHERE user_name = ?", [req.body.userName])
+            .then(([result]) => {
+                if (result?.length > 0) {
+                    res.send(resultData(null, 500, "账号已存在")); // 设置状态码为500
+                } else {
+                    const params=req.body
+                    params.createTime=getCurrentTimeFormatted()
+                    pool
+                        .query("INSERT INTO user set ?", [snakeCaseKeys(params)])
+                        .then(() => {
+                            res.send(resultData(null, 200, "注册成功")); // 设置状态码为200
+                        });
+                }
+            })
+            .catch((err) => {
+                res.send(resultData(null, 500, "服务器内部错误" + err)); // 设置状态码为500
+            });
+    } catch (e) {
+        res.send(resultData(null, 400, "客户端请求异常：" + err)); // 设置状态码为400
+    }
 };
 
 exports.getUserInfo = (req, res) => {
