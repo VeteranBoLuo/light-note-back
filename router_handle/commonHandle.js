@@ -34,7 +34,7 @@ exports.getApiLogs = (req, res) => {
           }
         });
         const [totalRes] = await pool.query(
-          "SELECT COUNT(*) FROM api_logs where (user_name LIKE CONCAT('%', ?, '%') OR url LIKE CONCAT('%', ?, '%')) AND user_name!='wenjunqiu' AND del_flag=0 ",
+          "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.user_name LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
           [filters.key, filters.key],
         );
         res.send(
