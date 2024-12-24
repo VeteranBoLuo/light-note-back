@@ -66,6 +66,9 @@ app.use(async (req, res, next) => {
     res.on('finish', async () => {
       if (userId) {
         try {
+          const [locations] = await pool.query('SELECT location FROM user WHERE id = ?', [userId]);
+          const location = locations[0].location;
+
           // 构造日志对象
           const log = {
             userId: userId,
@@ -75,7 +78,7 @@ app.use(async (req, res, next) => {
             os: req.headers.os,
             browser: req.headers['browser'],
             ip: req.headers['x-forwarded-for'],
-            location: req.headers['location'],
+            location: location,
             requestTime: getCurrentTimeFormatted(), // 获取当前时间
             del_flag: 0,
           };

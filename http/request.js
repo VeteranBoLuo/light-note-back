@@ -5,6 +5,7 @@ const request = {
       const reqOptions = {
         ...options,
         method: method,
+        rejectUnauthorized: false, // 允许自签名证书
       };
 
       const req = https.request(url, reqOptions, (res) => {
