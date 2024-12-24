@@ -6,7 +6,7 @@ exports.getApiLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = req.body;
     const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT a.id,a.method,a.browser,a.os,a.req,a.request_time,a.url,a.user_id,u.user_name 
+    let sql = `SELECT a.*,u.user_name 
       FROM api_logs a left join user u on a.user_id=u.id  where (u.user_name LIKE CONCAT('%', ?, '%') 
       OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;

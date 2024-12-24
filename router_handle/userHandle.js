@@ -1,5 +1,6 @@
 const pool = require('../db');
 const { resultData, snakeCaseKeys, mergeExistingProperties, getCurrentTimeFormatted } = require('../util/result');
+const request = require('../http/request');
 
 exports.login = (req, res) => {
   try {
@@ -10,11 +11,11 @@ exports.login = (req, res) => {
       .then(async ([result]) => {
         if (result.length === 0) {
           res.send(resultData(null, 401, '用户名密码错误或已过期，请重新输入')); // 设置状态码为401
-          return
+          return;
         }
         if (result[0].del_flag === 1) {
           res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
-          return
+          return;
         }
         const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
         const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
@@ -75,7 +76,6 @@ exports.registerUser = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
   }
 };
-
 exports.getUserInfo = (req, res) => {
   try {
     const id = req.headers['x-user-id']; // 获取用户ID
@@ -96,6 +96,10 @@ exports.getUserInfo = (req, res) => {
         const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
         result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
+        const { data } = await request.get(
+          `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
+        );
+        result[0].location = data;
         res.send(resultData(result[0]));
       })
       .catch((err) => {
