@@ -88,8 +88,7 @@ exports.getUserInfo = async (req, res) => {
       province: data.province,
       rectangle: data.rectangle,
     };
-    console.log('location',location);
-    await pool.query('update user set location=? where id=?', ['location', id]);
+    await pool.query('update user set location=? where id=?', [JSON.stringify(location), id]);
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
       .then(async ([result]) => {

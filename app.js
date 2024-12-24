@@ -75,7 +75,7 @@ app.use(async (req, res, next) => {
             os: req.headers.os,
             browser: req.headers['browser'],
             ip: req.headers['x-forwarded-for'],
-            location: req.headers['location'], // 添加location字段
+            location: req.headers['location'],
             requestTime: getCurrentTimeFormatted(), // 获取当前时间
             del_flag: 0,
           };
