@@ -79,19 +79,19 @@ exports.registerUser = (req, res) => {
 exports.getUserInfo = async (req, res) => {
   try {
     const id = req.headers['x-user-id']; // 获取用户ID
-    const { data } = await request.get(
-      `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
-    );
-    const location = {
-      ip: req.headers['x-forwarded-for'],
-      city: data.city,
-      province: data.province,
-      rectangle: data.rectangle,
-    };
-    await pool.query('update user set location=? where id=?', [
-      snakeCaseKeys(mergeExistingProperties(JSON.stringify(location), [], ['id'])),
-      id,
-    ]);
+    // const { data } = await request.get(
+    //   `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
+    // );
+    // const location = {
+    //   ip: req.headers['x-forwarded-for'],
+    //   city: data.city,
+    //   province: data.province,
+    //   rectangle: data.rectangle,
+    // };
+    // await pool.query('update user set location=? where id=?', [
+    //   snakeCaseKeys(mergeExistingProperties(JSON.stringify(location), [], ['id'])),
+    //   id,
+    // ]);
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
       .then(async ([result]) => {
