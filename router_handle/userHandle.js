@@ -89,7 +89,7 @@ exports.getUserInfo = async (req, res) => {
       rectangle: data.rectangle,
     };
     await pool.query('update user set location=? where id=?', [
-      snakeCaseKeys(mergeExistingProperties(JSON.stringify(location), [], ['id'])),
+      snakeCaseKeys(mergeExistingProperties(location, [], ['id'])),
       id,
     ]);
     pool
