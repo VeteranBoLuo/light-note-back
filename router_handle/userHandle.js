@@ -76,9 +76,22 @@ exports.registerUser = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
   }
 };
-exports.getUserInfo = (req, res) => {
+exports.getUserInfo = async (req, res) => {
   try {
     const id = req.headers['x-user-id']; // 获取用户ID
+    const { data } = await request.get(
+      `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
+    );
+    const location = {
+      ip: req.headers['x-forwarded-for'],
+      city: data.city,
+      province: data.province,
+      rectangle: data.rectangle,
+    };
+    await pool.query('update user set location=? where id=?', [
+      snakeCaseKeys(mergeExistingProperties(JSON.stringify(location), [], ['id'])),
+      id,
+    ]);
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
       .then(async ([result]) => {
@@ -96,14 +109,6 @@ exports.getUserInfo = (req, res) => {
         const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
         result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
-        const { data } = await request.get(
-          `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
-        );
-        result[0].location = {
-          city: data.city,
-          province: data.province,
-          rectangle: data.rectangle,
-        };
         res.send(resultData(result[0]));
       })
       .catch((err) => {
