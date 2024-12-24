@@ -12,6 +12,9 @@ exports.login = (req, res) => {
           res.send(resultData(null, 401, '用户名密码错误或已过期，请重新输入')); // 设置状态码为401
           return;
         }
+        if (result[0].del_flag === 1) {
+          res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
+        }
         const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
         const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
         const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
