@@ -99,7 +99,11 @@ exports.getUserInfo = (req, res) => {
         const { data } = await request.get(
           `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
         );
-        result[0].location = data;
+        result[0].location = {
+          city: data.city,
+          province: data.province,
+          rectangle: data.rectangle,
+        };
         res.send(resultData(result[0]));
       })
       .catch((err) => {
