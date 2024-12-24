@@ -88,10 +88,7 @@ exports.getUserInfo = async (req, res) => {
       province: data.province,
       rectangle: data.rectangle,
     };
-    await pool.query('update user set location=? where id=?', [
-      snakeCaseKeys(mergeExistingProperties(location, [], ['id'])),
-      id,
-    ]);
+    await pool.query('update user set location=? where id=?', [location, id]);
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
       .then(async ([result]) => {

@@ -3,7 +3,6 @@ const commonRouter = require('./router/common');
 const documentRouter = require('./router/document');
 const bookmarkRouter = require('./router/bookmark');
 const bodyParser = require('body-parser');
-
 // 建立一个Express服务器
 const express = require('express');
 const pool = require('./db');
