@@ -10,10 +10,11 @@ exports.login = (req, res) => {
       .then(async ([result]) => {
         if (result.length === 0) {
           res.send(resultData(null, 401, '用户名密码错误或已过期，请重新输入')); // 设置状态码为401
-          return;
+          return
         }
         if (result[0].del_flag === 1) {
           res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
+          return
         }
         const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
         const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
@@ -38,6 +39,7 @@ exports.registerUser = (req, res) => {
       .then(([result]) => {
         if (result?.length > 0) {
           res.send(resultData(null, 500, '账号已存在')); // 设置状态码为500
+          return;
         } else {
           const params = req.body;
           params.createTime = getCurrentTimeFormatted();
@@ -84,7 +86,7 @@ exports.getUserInfo = (req, res) => {
           res.send(resultData(null, 401, '用户不存在,请重新登录！')); // 设置状态码为401
           return;
         }
-        if (result[0].del_flag === 1) {
+        if (result[0].del_flag === '1') {
           res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
           return;
         }
