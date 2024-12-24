@@ -84,6 +84,10 @@ exports.getUserInfo = (req, res) => {
           res.send(resultData(null, 401, '用户不存在,请重新登录！')); // 设置状态码为401
           return;
         }
+        if (result[0].del_flag === 1) {
+          res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
+          return;
+        }
         const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
         const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [id]);
         const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
