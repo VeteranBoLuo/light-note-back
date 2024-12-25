@@ -125,7 +125,7 @@ exports.getUserInfo = async (req, res) => {
 exports.getUserList = (req, res) => {
   try {
     pool
-      .query(`SELECT alias,email,id,password,phone_number,role,theme,user_name FROM user where del_flag=0`)
+      .query(`SELECT alias,email,id,password,phone_number,role,theme,user_name,ip FROM user where del_flag=0`)
       .then(([result]) => {
         res.send(resultData(result));
       })

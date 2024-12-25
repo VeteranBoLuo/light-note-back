@@ -84,10 +84,10 @@ app.use(async (req, res, next) => {
           // 将日志保存到数据库
           const query = 'INSERT INTO api_logs SET ?';
           pool.query(query, [snakeCaseKeys(log)]).catch((err) => {
-            console.error('日志更新错误错误: ' + err.message);
+            console.error('日志更新sql错误: ' + err.message);
           });
         } catch (err1) {
-          console.error('日志更新错误错误：', err1);
+          console.error('日志更新错误：', err1);
         }
       }
     });
