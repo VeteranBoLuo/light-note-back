@@ -79,16 +79,19 @@ exports.registerUser = (req, res) => {
 exports.getUserInfo = async (req, res) => {
   try {
     const id = req.headers['x-user-id']; // 获取用户ID
-    const { data } = await request.get(
-      `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
-    );
-    const location = {
-      ip: req.headers['x-forwarded-for'],
-      city: data.city,
-      province: data.province,
-      rectangle: data.rectangle,
-    };
-    await pool.query('update user set location=? where id=?', [JSON.stringify(location), id]);
+    const [userRes] = await pool.query('SELECT * FROM user WHERE id = ?', [id]);
+    // 没有储存ip或者ip地址改变，则更新用户ip相关信息
+    if (userRes[0].ip === null || userRes[0].ip !== req.headers['x-forwarded-for']) {
+      const { data } = await request.get(
+        `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
+      );
+      const location = {
+        city: data.city,
+        province: data.province,
+        rectangle: data.rectangle,
+      };
+      await pool.query('update user set location=? and ip=? where id=?', [JSON.stringify(location),req.headers['x-forwarded-for'], id]);
+    }
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
       .then(async ([result]) => {
