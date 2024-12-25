@@ -68,7 +68,6 @@ app.use(async (req, res, next) => {
         try {
           const [locations] = await pool.query('SELECT location FROM user WHERE id = ?', [userId]);
           const location = locations[0].location;
-
           // 构造日志对象
           const log = {
             userId: userId,

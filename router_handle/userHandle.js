@@ -90,7 +90,11 @@ exports.getUserInfo = async (req, res) => {
         province: data.province,
         rectangle: data.rectangle,
       };
-      await pool.query('update user set location=? and ip=? where id=?', [JSON.stringify(location),req.headers['x-forwarded-for'], id]);
+      await pool.query('update user set location=? , ip=? where id=?', [
+        JSON.stringify(location),
+        req.headers['x-forwarded-for'],
+        id,
+      ]);
     }
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
@@ -115,7 +119,7 @@ exports.getUserInfo = async (req, res) => {
         res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常')); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
 };
 exports.getUserList = (req, res) => {
@@ -129,7 +133,7 @@ exports.getUserList = (req, res) => {
         res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常')); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
 };
 exports.saveUserInfo = (req, res) => {
