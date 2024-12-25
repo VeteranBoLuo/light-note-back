@@ -77,7 +77,6 @@ app.use(async (req, res, next) => {
             req: requestPayload === '{}' ? '' : requestPayload,
             os: req.headers.os,
             browser: req.headers['browser'],
-            ip: req.headers['x-forwarded-for'],
             location: location,
             requestTime: getCurrentTimeFormatted(), // 获取当前时间
             del_flag: 0,
