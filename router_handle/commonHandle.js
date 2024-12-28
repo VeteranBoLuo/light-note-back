@@ -14,24 +14,18 @@ exports.getApiLogs = (req, res) => {
       .query(sql, [filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
         result.forEach((row) => {
-          // 判断row.res是否是JSON字符串
-          if (typeof row.res === 'string') {
-            try {
-              row.res = JSON.parse(row.res);
-            } catch (e) {
-              // 如果解析失败，保持原样或者根据需要处理
-              console.error('Error parsing res:', e);
+          // 判断数据是否是JSON字符串
+          const fieldsToParse = ['req', 'system', 'location'];
+          fieldsToParse.forEach((field) => {
+            if (typeof row[field] === 'string') {
+              try {
+                row[field] = JSON.parse(row[field]);
+              } catch (e) {
+                // 如果解析失败，保持原样或者根据需要处理
+                console.error(`Error parsing ${field}:`, e);
+              }
             }
-          }
-          // 判断row.req是否是JSON字符串
-          if (typeof row.req === 'string') {
-            try {
-              row.req = JSON.parse(row.req);
-            } catch (e) {
-              // 如果解析失败，保持原样或者根据需要处理
-              console.error('Error parsing req:', e);
-            }
-          }
+          });
         });
         const [totalRes] = await pool.query(
           "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.user_name LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
@@ -74,8 +68,6 @@ exports.recordOperationLogs = (req, res) => {
       createBy: userId,
       createTime: getCurrentTimeFormatted(),
       ...req.body,
-      os: req.headers.os,
-      browser: req.headers['browser'],
       del_flag: 0,
     };
     pool
