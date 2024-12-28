@@ -71,7 +71,7 @@ app.use(async (req, res, next) => {
           const system = JSON.stringify({
             browserId: req.headers['browser-id'],
             browser: req.headers['browser'],
-            os: req.headers.os,
+            os: req.headers['os'],
           });
           // 构造日志对象
           const log = {
