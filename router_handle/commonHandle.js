@@ -22,7 +22,7 @@ exports.getApiLogs = (req, res) => {
                 row[field] = JSON.parse(row[field]);
               } catch (e) {
                 // 如果解析失败，保持原样或者根据需要处理
-                console.error(`Error parsing ${field}:`, e);
+                console.error(`JSON解析失败 ${field}:`, e);
               }
             }
           });
