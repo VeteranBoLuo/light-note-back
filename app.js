@@ -68,16 +68,20 @@ app.use(async (req, res, next) => {
         try {
           const [locations] = await pool.query('SELECT location FROM user WHERE id = ?', [userId]);
           const location = locations[0].location;
+          const system = JSON.stringify({
+            browserId: req.headers['browser-id'],
+            browser: req.headers['browser'],
+            os: req.headers.os,
+          });
           // 构造日志对象
           const log = {
             userId: userId,
             method: req.method,
             url: req.originalUrl,
             req: requestPayload === '{}' ? '' : requestPayload,
-            os: req.headers.os,
-            browser: req.headers['browser'],
             ip: req.headers['x-forwarded-for'],
             location: location,
+            system: system,
             requestTime: getCurrentTimeFormatted(), // 获取当前时间
             del_flag: 0,
           };
