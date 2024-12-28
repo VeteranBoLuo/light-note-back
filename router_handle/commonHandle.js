@@ -7,8 +7,8 @@ exports.getApiLogs = (req, res) => {
     const { filters, pageSize, currentPage } = req.body;
     const skip = pageSize * (currentPage - 1);
     let sql = `SELECT a.*,u.user_name 
-      FROM api_logs a left join user u on a.user_id=u.id  where (u.user_name LIKE CONCAT('%', ?, '%') 
-      OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
+      FROM api_logs a left join user u on a.user_id=u.id  where (u.user_name=? 
+      OR a.ip =?) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
     pool
       .query(sql, [filters.key, filters.key, pageSize, skip])
