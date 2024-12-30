@@ -20,24 +20,32 @@ app.use(express.json());
 // 日志记录中间件
 app.use(async (req, res, next) => {
   try {
-    // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
-    if (req.originalUrl.includes('login')) {
-      const { userName, password } = req.body;
-      const [userResult] = await pool.query('SELECT * FROM user WHERE user_name = ? AND password = ?', [
-        userName,
-        password,
-      ]);
-      if (!userResult[0]) {
-        throw new Error('用户名或密码错误');
-      }
-      if (userResult[0].del_flag === '1') {
-        throw new Error('账号已被删除');
-      }
-      req.headers['x-user-id'] = userResult[0].id;
-      // 角色为游客，需要查询获取
-    } else if (req.headers.role === 'visitor') {
+    // 角色为游客，需要查询获取
+    if (req.headers.role === 'visitor') {
       const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
       req.headers['x-user-id'] = visitorResult[0].id;
+    } else {
+      if (req.originalUrl.includes('login')) {
+        // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
+        const { userName, password } = req.body;
+        const [userResult] = await pool.query('SELECT * FROM user WHERE user_name = ? AND password = ?', [
+          userName,
+          password,
+        ]);
+        if (!userResult[0]) {
+          throw new Error('用户名或密码错误');
+        }
+        if (userResult[0].del_flag === '1') {
+          throw new Error('账号已被禁用');
+        }
+      } else {
+        const [userResult] = await pool.query('SELECT * FROM user WHERE id = ?', [req.headers['x-user-id']]);
+        // 用户删除或不存在则使用游客账号
+        if (!userResult[0] || userResult[0].del_flag === '1') {
+          const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
+          req.headers['x-user-id'] = visitorResult[0].id;
+        }
+      }
     }
     const userId = req.headers['x-user-id'];
     let skipUser = false;

@@ -14,7 +14,7 @@ exports.login = (req, res) => {
           return;
         }
         if (result[0].del_flag === 1) {
-          res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
+          res.send(resultData(null, 401, '账号已被禁用')); // 设置状态码为401
           return;
         }
         const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
@@ -108,7 +108,7 @@ exports.getUserInfo = async (req, res) => {
           return;
         }
         if (result[0].del_flag === '1') {
-          res.send(resultData(null, 401, '账号已被删除')); // 设置状态码为401
+          res.send(resultData(null, 401, '账号已被禁用')); // 设置状态码为401
           return;
         }
         const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
@@ -117,7 +117,11 @@ exports.getUserInfo = async (req, res) => {
         const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
         result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
-        res.send(resultData(result[0]));
+        if (result[0].role === 'visitor') {
+          res.send(resultData(result[0], 'visitor'));
+        } else {
+          res.send(resultData(result[0]));
+        }
       })
       .catch((err) => {
         res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
