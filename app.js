@@ -79,6 +79,7 @@ app.use(async (req, res, next) => {
           const system = JSON.stringify({
             browser: req.headers['browser'] ?? '未知',
             os: req.headers['os'] ?? '未知',
+            fingerprint: req.headers['fingerprint'],
           });
           // 构造日志对象
           const log = {
