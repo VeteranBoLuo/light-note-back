@@ -69,7 +69,6 @@ app.use(async (req, res, next) => {
           const [locations] = await pool.query('SELECT location FROM user WHERE id = ?', [userId]);
           const location = locations[0].location;
           const system = JSON.stringify({
-            browserId: req.headers['browser-id'] ?? '未知未知',
             browser: req.headers['browser'] ?? '未知',
             os: req.headers['os'] ?? '未知',
           });
