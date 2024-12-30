@@ -90,11 +90,15 @@ exports.getUserInfo = async (req, res) => {
         province: data.province,
         rectangle: data.rectangle,
       };
-      await pool.query('update user set location=? , ip=? where id=?', [
-        JSON.stringify(location),
-        req.headers['x-forwarded-for'],
-        id,
-      ]);
+      try {
+        await pool.query('update user set location=? , ip=? where id=?', [
+          JSON.stringify(location),
+          req.headers['x-forwarded-for'],
+          id,
+        ]);
+      } catch (e) {
+        res.send(resultData(null, 500, '地理信息配置失败' + e));
+      }
     }
     pool
       .query('SELECT * FROM user WHERE id = ?', [id])
