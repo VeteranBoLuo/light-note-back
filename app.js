@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 const http = require('http');
-// require('./http/websocket');
+require('./http/websocket');
 const userRouter = require('./router/user');
 const commonRouter = require('./router/common');
 const documentRouter = require('./router/document');
@@ -10,7 +10,6 @@ const bodyParser = require('body-parser');
 // 建立一个Express服务器
 const pool = require('./db');
 const { getCurrentTimeFormatted, snakeCaseKeys, resultData } = require('./util/result');
-const WebSocket = require('ws');
 
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
 //  解析请求体中的JSON数据
@@ -114,22 +113,6 @@ app.use('/bookmark', bookmarkRouter);
 
 // 启动 Express 服务器
 const server = http.createServer(app);
-
-const wss = new WebSocket.Server({ server: server });
-
-wss.on('connection', (ws) => {
-  ws.on('message', (message) => {
-    console.log(`Received message => ${message}`);
-  });
-
-  ws.on('close', () => {
-    console.log('WebSocket connection closed');
-  });
-});
-
-
 server.listen(9001, () => {
   console.log('Server is listening on port 9001');
 });
-
-
