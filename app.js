@@ -1,20 +1,17 @@
+const express = require('express');
+const app = express();
+const http = require('http');
+require('./http/websocket');
 const userRouter = require('./router/user');
 const commonRouter = require('./router/common');
 const documentRouter = require('./router/document');
 const bookmarkRouter = require('./router/bookmark');
 const bodyParser = require('body-parser');
 // 建立一个Express服务器
-const express = require('express');
 const pool = require('./db');
 const { getCurrentTimeFormatted, snakeCaseKeys, resultData } = require('./util/result');
-const app = express();
-app.use(bodyParser.json({ limit: '10mb', extended: true }));
-// 缓存中间件，为所有响应设置Cache-Control头
-// app.use((req, res, next) => {
-//     res.set('Cache-Control', 'public, max-age=3600'); // 缓存1小时
-//     next();
-// });
 
+app.use(bodyParser.json({ limit: '10mb', extended: true }));
 //  解析请求体中的JSON数据
 app.use(express.json());
 // 日志记录中间件
@@ -114,7 +111,8 @@ app.use('/common', commonRouter);
 app.use('/document', documentRouter);
 app.use('/bookmark', bookmarkRouter);
 
-//  启动服务器
-app.listen(9001, () => {
-  console.log('服务器已启动， 监听端口9001');
+// 启动 Express 服务器
+const server = http.createServer(app);
+server.listen(9001, () => {
+  console.log('Server is listening on port 9001');
 });
