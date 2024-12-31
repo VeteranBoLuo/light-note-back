@@ -1,12 +1,8 @@
-const https = require('https');
-const fs = require('fs');
+const http = require('http');
 const WebSocket = require('ws');
 
-// 加载 SSL 证书
-const server = https.createServer({
-  cert: fs.readFileSync('/www/server/panel/vhost/cert/www.boluo.com/fullchain.pem'),
-  key: fs.readFileSync('/www/server/panel/vhost/cert/www.boluo.com/privkey.pem')
-});
+// 创建 HTTP 服务器
+const server = http.createServer();
 
 // 创建 WebSocket 服务器
 const wss = new WebSocket.Server({ server });
@@ -28,7 +24,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-// 监听 HTTPS 服务器端口
+// 监听 HTTP 服务器端口
 server.listen(3000, () => {
   console.log('WSS server started on port 3000');
 });
