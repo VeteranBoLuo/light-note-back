@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 const http = require('http');
-// require('./http/websocket');
+require('./http/websocket');
 const userRouter = require('./router/user');
 const commonRouter = require('./router/common');
 const documentRouter = require('./router/document');
