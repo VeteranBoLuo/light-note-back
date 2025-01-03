@@ -15,11 +15,15 @@ jobs:
       - name: 安装Node.js
         uses: actions/setup-node@master
 
+      # 安装 pnpm
+      - name: 安装 pnpm
+        run: npm install -g pnpm
+
+      # 使用 pnpm 安装依赖
       - name: 安装依赖
-        run: npm install
+        run: pnpm install
 
       # 删除了打包步骤，因为不需要构建
-
       - name: 将项目同步到服务器
         uses: appleboy/scp-action@v0.1.7
         with:
