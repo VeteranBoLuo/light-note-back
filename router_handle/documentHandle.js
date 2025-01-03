@@ -1,9 +1,7 @@
 const con = require("../db");
 const {
   resultData,
-  convertISOToDatabaseFormat,
-  getCurrentTimeFormatted,
-} = require("../util/result");
+} = require("../util/common");
 const userHandle = require("./userHandle");
 // 用户操作日志
 exports.saveDocument = (req, res) => {
@@ -14,7 +12,7 @@ exports.saveDocument = (req, res) => {
     {
       ...filters,
       updateBy: userId,
-      updateTime: getCurrentTimeFormatted(),
+      updateTime: req.requestTime,
     },
     filters.id,
   ];
@@ -23,10 +21,9 @@ exports.saveDocument = (req, res) => {
     params = {
       ...filters,
       createBy: userId,
-      createTime: getCurrentTimeFormatted(),
+      createTime: req.requestTime,
     };
   }
-  console.log(params);
   try {
     con.query(sql, params, function (err, result) {
       if (err) {

@@ -1,4 +1,4 @@
-const { resultData, convertISOToDatabaseFormat, getCurrentTimeFormatted, snakeCaseKeys } = require('../util/result');
+const { resultData, snakeCaseKeys } = require('../util/common');
 const https = require('https');
 const pool = require('../db');
 
@@ -66,7 +66,7 @@ exports.recordOperationLogs = (req, res) => {
     const userId = req.headers['x-user-id'];
     const log = {
       createBy: userId,
-      createTime: getCurrentTimeFormatted(),
+      createTime: req.requestTime,
       ...req.body,
       del_flag: 0,
     };
@@ -190,7 +190,7 @@ exports.recordOpinion = async (req, res) => {
   const insertSql = 'INSERT INTO opinion SET ?';
   const params = req.body;
   params.userId = userId;
-  params.createTime = getCurrentTimeFormatted();
+  params.createTime = req.requestTime;
   try {
     pool
       .query(insertSql, [snakeCaseKeys(params)])

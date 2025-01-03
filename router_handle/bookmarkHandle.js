@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { resultData, snakeCaseKeys, getCurrentTimeFormatted, mergeExistingProperties } = require('../util/result');
+const { resultData, snakeCaseKeys,mergeExistingProperties } = require('../util/common');
 exports.queryTagList = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
@@ -110,7 +110,7 @@ exports.addTag = async (req, res) => {
       const userId = req.headers['x-user-id'];
       const params = {
         ...req.body,
-        createTime: getCurrentTimeFormatted(),
+        createTime: req.requestTime,
         userId: userId,
       };
       const sqlCheck = 'SELECT * FROM tag WHERE user_id=? AND name = ? AND del_flag = 0';
@@ -322,7 +322,7 @@ exports.addBookmark = async (req, res) => {
     const userId = req.headers['x-user-id'];
     const params = {
       ...req.body,
-      createTime: getCurrentTimeFormatted(),
+      createTime: req.requestTime,
       userId: userId,
     };
     const sqlCheck = 'SELECT * FROM bookmark WHERE user_id=? AND name = ? AND del_flag = 0';

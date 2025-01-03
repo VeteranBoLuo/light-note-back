@@ -80,17 +80,6 @@ exports.convertISOToDatabaseFormat = function (isoDate) {
   return databaseFormat;
 };
 
-exports.getCurrentTimeFormatted = function () {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
-  const hours = now.getHours().toString().padStart(2, '0');
-  const minutes = now.getMinutes().toString().padStart(2, '0');
-  const seconds = now.getSeconds().toString().padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-};
-
 // 前端没有传但后端定义了的参数过滤掉
 exports.mergeExistingProperties = function (source, outValue = [undefined], outKey = []) {
   let target = {};
@@ -111,4 +100,16 @@ exports.mergeExistingProperties = function (source, outValue = [undefined], outK
     target[key] = source[key];
   }
   return target;
+};
+
+exports.requestTime = function (req, res, next) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  req.requestTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  next();
 };
