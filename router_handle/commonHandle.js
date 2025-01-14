@@ -146,8 +146,15 @@ exports.analyzeImgUrl = async (req, res) => {
       if (bookmark.noCache) {
         return new Promise((resolve, reject) => {
           const fileBuffer = [];
+          const options = {
+            hostname: 'icon.bqb.cool',
+            path: '/?url=' + encodeURIComponent(bookmark.url),
+            method: 'GET',
+            // 以下是关键部分，忽略证书验证
+            rejectUnauthorized: false
+          };
           https
-            .get('https://icon.bqb.cool/?url=' + encodeURIComponent(bookmark.url), (response) => {
+            .get(options, (response) => {
               const contentType = response.headers['content-type'];
               response.on('data', (chunk) => {
                 fileBuffer.push(chunk);
