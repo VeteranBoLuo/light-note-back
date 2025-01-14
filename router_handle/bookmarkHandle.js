@@ -283,7 +283,9 @@ FROM
 `;
     params = [userId];
   } else if (type === 'search') {
-    sql = `SELECT b.*,(
+    sql = `SELECT 
+    b.*, 
+    (
         SELECT JSON_ARRAYAGG(
             JSON_OBJECT(
                 'id', t.id,
@@ -293,10 +295,27 @@ FROM
         FROM tag t
         INNER JOIN tag_bookmark_relation tb ON t.id = tb.tag_id
         WHERE tb.bookmark_id = b.id AND t.del_flag = 0
-    ) AS tagList FROM bookmark b WHERE b.user_id=? AND  b.del_flag=0 AND
-        (b.name LIKE CONCAT('%', ?, '%') OR b.description LIKE CONCAT('%', ?, '%')) 
-        ORDER BY b.create_time DESC`;
-    params = [userId, req.body.filters.value, req.body.filters.value];
+    ) AS tagList
+FROM 
+    bookmark b
+LEFT JOIN 
+    tag_bookmark_relation tb ON b.id = tb.bookmark_id
+LEFT JOIN 
+    tag t ON tb.tag_id = t.id AND t.name LIKE CONCAT('%', ?, '%') AND t.del_flag = 0
+WHERE 
+    b.user_id = ? AND 
+    b.del_flag = 0 AND
+    (
+        b.name LIKE CONCAT('%', ?, '%') OR
+        b.description LIKE CONCAT('%', ?, '%') OR
+        t.id IS NOT NULL
+    )
+GROUP BY 
+    b.id
+ORDER BY 
+    b.create_time DESC;
+`;
+    params = [req.body.filters.value,userId, req.body.filters.value, req.body.filters.value];
   }
   pool
     .query(sql, params)
