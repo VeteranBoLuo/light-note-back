@@ -135,7 +135,12 @@ exports.getUserList = (req, res) => {
     pool
       .query(`SELECT alias,email,id,password,phone_number,role,theme,user_name,ip FROM user where del_flag=0`)
       .then(([result]) => {
-        res.send(resultData(result));
+        res.send(
+          resultData({
+            items: result,
+            total: result.length,
+          }),
+        );
       })
       .catch((err) => {
         res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
