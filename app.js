@@ -1,7 +1,7 @@
 const express = require('express');
 const userRouter = require('./router/user');
 const commonRouter = require('./router/common');
-const documentRouter = require('./router/document');
+const noteLibraryRouter = require('./router/noteLibrary');
 const bookmarkRouter = require('./router/bookmark');
 const opinionRouter = require('./router/opinion');
 const bodyParser = require('body-parser');
@@ -20,10 +20,12 @@ app.use(logFunction);
 
 app.use('/user', userRouter);
 app.use('/common', commonRouter);
-app.use('/document', documentRouter);
+app.use('/note', noteLibraryRouter);
 app.use('/bookmark', bookmarkRouter);
 app.use('/opinion', opinionRouter);
-
+// 设置静态文件目录
+// app.use('/uploads', express.static('D:\\BMS_Back\\uploads'));
+app.use('/uploads', express.static('/www/wwwroot/images'));
 // 启动 Express 服务器
 app.listen(9001, () => {
   console.log('服务器已启动——端口：9001');
