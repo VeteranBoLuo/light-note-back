@@ -81,3 +81,21 @@ exports.getNoteDetail = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
 };
+
+
+exports.delNote = (req, res) => {
+  try {
+    const id = req.body.id; // 获取标签ID
+    let sql = `UPDATE note SET del_flag=1  WHERE id=?`;
+    pool
+      .query(sql, [id])
+      .then(([result]) => {
+        res.send(resultData(result));
+      })
+      .catch((e) => {
+        return res.send(resultData(null, 500, '服务器内部错误: ' + e));
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+  }
+};

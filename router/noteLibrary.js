@@ -7,7 +7,7 @@ const noteLibraryHandle = require('../router_handle/noteLibraryHandle');
 // 配置multer存储
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, '/www/wwwroot/images'); // 确保这个目录存在
+    cb(null, 'uploads/'); // 确保这个目录存在
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -37,5 +37,7 @@ router.post('/updateNote', noteLibraryHandle.updateNote);
 router.post('/addNote', noteLibraryHandle.addNote);
 router.post('/queryNoteList', noteLibraryHandle.queryNoteList);
 router.post('/getNoteDetail', noteLibraryHandle.getNoteDetail);
+router.post('/delNote', noteLibraryHandle.delNote);
+
 
 module.exports = router;
