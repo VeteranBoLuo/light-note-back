@@ -1,4 +1,6 @@
 const pool = require('../db');
+const fs = require('fs');
+const path = require('path');
 const { snakeCaseKeys, resultData, mergeExistingProperties } = require('../util/common');
 exports.addNote = (req, res) => {
   try {
@@ -91,9 +93,26 @@ exports.delNote = async (req, res) => {
       pool
         .query(sql, [id])
         .then(async ([result]) => {
+          // 查询关联的图片URLs
+          const selectImagesSql = `SELECT url FROM note_images WHERE note_id = ?`;
+          const [images] = await connection.query(selectImagesSql, [id]);
+
+          // 删除笔记关联的图片记录
           const deleteAssociationsSql = `DELETE FROM note_images WHERE note_id = ?`;
           await connection.query(deleteAssociationsSql, [id]);
+
           await connection.commit(); // 提交事务
+
+          // 删除服务器上的图片文件
+          const deletePromises = images.map((image) => {
+            // 替换URL中的代理路径为实际文件路径
+            const filePath = image.url.replace('/uploads/', '/www/wwwroot/images/');
+            return fs.unlink(path.join(__dirname, '..', filePath));
+          });
+
+          // 等待所有文件删除操作完成
+          await Promise.all(deletePromises);
+
           res.send(resultData(result));
         })
         .catch((e) => {
