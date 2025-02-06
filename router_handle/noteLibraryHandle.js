@@ -105,7 +105,7 @@ exports.delNote = async (req, res) => {
           // 删除服务器上的图片文件
           const deletePromises = images.map((image) => {
             // 替换URL中的代理路径为实际文件路径
-            const filePath = image.url.replace('/uploads/', '/www/wwwroot/images/');
+            const filePath = image.url.replace(new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`), '/www/wwwroot/images/');
             return new Promise((resolve, reject) => {
               fs.unlink(path.join(__dirname, '..', filePath), (err) => {
                 if (err) {
