@@ -101,17 +101,26 @@ exports.delNote = async (req, res) => {
           const deleteAssociationsSql = `DELETE FROM note_images WHERE note_id = ?`;
           await connection.query(deleteAssociationsSql, [id]);
 
-          await connection.commit(); // 提交事务
 
           // 删除服务器上的图片文件
           const deletePromises = images.map((image) => {
             // 替换URL中的代理路径为实际文件路径
             const filePath = image.url.replace('/uploads/', '/www/wwwroot/images/');
-            return fs.unlink(path.join(__dirname, '..', filePath));
+            return new Promise((resolve, reject) => {
+              fs.unlink(path.join(__dirname, '..', filePath), (err) => {
+                if (err) {
+                  reject(err);
+                } else {
+                  resolve();
+                }
+              });
+            });
           });
 
           // 等待所有文件删除操作完成
           await Promise.all(deletePromises);
+
+          await connection.commit(); // 提交事务
 
           res.send(resultData(result));
         })
