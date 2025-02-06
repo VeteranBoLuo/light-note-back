@@ -7,7 +7,7 @@ const noteLibraryHandle = require('../router_handle/noteLibraryHandle');
 // 配置multer存储
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // 确保这个目录存在
+    cb(null, '/www/wwwroot/images'); // 确保这个目录存在
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
