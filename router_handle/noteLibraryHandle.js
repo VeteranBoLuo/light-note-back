@@ -39,7 +39,6 @@ exports.updateNote = (req, res) => {
       updateBy: userId,
       updateTime: req.requestTime,
     };
-    console.log(snakeCaseKeys(mergeExistingProperties(params, [], ['id'])));
     pool
       .query('update note set ? where id=?', [snakeCaseKeys(mergeExistingProperties(params, [], ['id'])), req.body.id])
       .then(() => {
@@ -82,19 +81,30 @@ exports.getNoteDetail = (req, res) => {
   }
 };
 
-
-exports.delNote = (req, res) => {
+exports.delNote = async (req, res) => {
   try {
     const id = req.body.id; // 获取标签ID
     let sql = `UPDATE note SET del_flag=1  WHERE id=?`;
-    pool
-      .query(sql, [id])
-      .then(([result]) => {
-        res.send(resultData(result));
-      })
-      .catch((e) => {
-        return res.send(resultData(null, 500, '服务器内部错误: ' + e));
-      });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction(); // 开始事务
+      pool
+        .query(sql, [id])
+        .then(async ([result]) => {
+          const deleteAssociationsSql = `DELETE FROM note_images WHERE note_id = ?`;
+          await connection.query(deleteAssociationsSql, [id]);
+          await connection.commit(); // 提交事务
+          res.send(resultData(result));
+        })
+        .catch((e) => {
+          return res.send(resultData(null, 500, '服务器内部错误: ' + e));
+        });
+    } catch (error) {
+      await connection.rollback(); // 回滚事务
+      res.send(resultData(null, 500, '服务器内部错误: ' + error.message)); // 设置状态码为500
+    } finally {
+      connection.release(); // 释放连接
+    }
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
