@@ -62,6 +62,31 @@ exports.registerUser = (req, res) => {
               };
               // 新增默认书签
               await pool.query('INSERT INTO bookmark set ?', [snakeCaseKeys(bookmarkData)]);
+
+              const system = JSON.stringify({
+                browser: req.headers['browser'] ?? '未知',
+                os: req.headers['os'] ?? '未知',
+                fingerprint: req.headers['fingerprint'] ?? '未知',
+              });
+              const requestPayload = JSON.stringify(req.method === 'GET' ? req.query : req.body);
+              // 构造日志对象
+              const log = {
+                userId: userId,
+                method: req.method,
+                url: req.originalUrl,
+                req: requestPayload === '{}' ? '' : requestPayload,
+                ip: req.headers['x-forwarded-for'] ?? '未知',
+                location: '未知',
+                system: system,
+                requestTime: req.requestTime, // 获取当前时间
+                del_flag: 0,
+              };
+              // 将日志保存到数据库
+              const query = 'INSERT INTO api_logs SET ?';
+              await pool.query(query, [snakeCaseKeys(log)]).catch((err) => {
+                console.error('注册日志更新错误: ' + err.message);
+              });
+
               res.send(resultData(null, 200, '注册成功')); // 设置状态码为200
             })
             .catch((err) => {
