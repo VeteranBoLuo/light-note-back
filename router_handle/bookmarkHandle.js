@@ -441,9 +441,8 @@ const path = require('path');
 
 exports.delBookmark = async (req, res) => {
   try {
-    const id = req.body.id; // 获取书签ID
+    const id = req.body.id;
 
-    // 查询书签的icon_url
     const [result] = await pool.query(`SELECT * FROM bookmark WHERE id=?`, [id]);
     if (result.length === 0) {
       return res.send(resultData(null, 404, '书签不存在'));
@@ -451,24 +450,24 @@ exports.delBookmark = async (req, res) => {
 
     const iconUrl = result[0].icon_url;
 
-    // 替换URL中的代理路径为实际文件路径
-    const filePath = iconUrl.replace(
-      new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`),
-      '/www/wwwroot/images/',
-    );
+    // 提取文件名
+    const url = new URL(iconUrl);
+    const fileName = url.pathname.split('/').pop();
+    // 构造服务器上的文件路径
+    const filePath = path.join('/www/wwwroot/images/', fileName);
 
     // 删除文件
     try {
-      await fs.unlink(path.join(__dirname, '..', filePath));
+      await fs.unlink(filePath);
     } catch (e) {
       console.error('删除文件失败:', e);
-      // 继续执行更新操作
     }
+
     const params = {
       del_flag: 1,
       icon_url: null,
     };
-    // 更新del_flag
+
     const [updateResult] = await pool.query(`UPDATE bookmark SET ? WHERE id=?`, [params, id]);
 
     res.send(resultData(updateResult));
