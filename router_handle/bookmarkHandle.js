@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { resultData, snakeCaseKeys,mergeExistingProperties } = require('../util/common');
+const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/common');
 exports.queryTagList = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
@@ -315,7 +315,7 @@ GROUP BY
 ORDER BY 
     b.create_time DESC;
 `;
-    params = [req.body.filters.value,userId, req.body.filters.value, req.body.filters.value];
+    params = [req.body.filters.value, userId, req.body.filters.value, req.body.filters.value];
   }
   pool
     .query(sql, params)
@@ -417,23 +417,6 @@ exports.updateBookmark = async (req, res) => {
   }
 };
 
-exports.delBookmark = (req, res) => {
-  try {
-    const id = req.body.id; // 获取标签ID
-    let sql = `update  bookmark set del_flag=1  WHERE id=?`;
-    pool
-      .query(sql, [id])
-      .then(([result]) => {
-        res.send(resultData(result));
-      })
-      .catch((e) => {
-        return res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
-      });
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
-  }
-};
-
 exports.getBookmarkDetail = (req, res) => {
   try {
     let sql = `SELECT * FROM bookmark WHERE  id=? AND del_flag=0`;
@@ -450,5 +433,46 @@ exports.getBookmarkDetail = (req, res) => {
       });
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+  }
+};
+
+const fs = require('fs').promises;
+const path = require('path');
+
+exports.delBookmark = async (req, res) => {
+  try {
+    const id = req.body.id; // 获取书签ID
+
+    // 查询书签的icon_url
+    const [result] = await pool.query(`SELECT * FROM bookmark WHERE id=?`, [id]);
+    if (result.length === 0) {
+      return res.send(resultData(null, 404, '书签不存在'));
+    }
+
+    const iconUrl = result[0].icon_url;
+
+    // 替换URL中的代理路径为实际文件路径
+    const filePath = iconUrl.replace(
+      new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`),
+      '/www/wwwroot/images/',
+    );
+
+    // 删除文件
+    try {
+      await fs.unlink(path.join(__dirname, '..', filePath));
+    } catch (e) {
+      console.error('删除文件失败:', e);
+      // 继续执行更新操作
+    }
+    const params = {
+      del_flag: 1,
+      icon_url: null,
+    };
+    // 更新del_flag
+    const [updateResult] = await pool.query(`UPDATE bookmark SET ? WHERE id=?`, [params, id]);
+
+    res.send(resultData(updateResult));
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
   }
 };

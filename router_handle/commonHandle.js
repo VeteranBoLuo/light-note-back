@@ -142,6 +142,17 @@ exports.clearOperationLogs = (req, res) => {
 const fs = require('fs').promises;
 const path = require('path');
 
+// 定义支持的图片类型及其对应的扩展名
+const imageMimeTypes = {
+  'image/png': 'png',
+  'image/svg+xml': 'svg',
+  'image/jpeg': 'jpeg',
+  'image/gif': 'gif'
+};
+
+// 默认图片路径（可选）
+const defaultImagePath = '/images/default-icon.png';
+
 exports.analyzeImgUrl = async (req, res) => {
   const connection = await pool.getConnection();
   try {
@@ -163,49 +174,53 @@ exports.analyzeImgUrl = async (req, res) => {
               });
               response.on('end', async () => {
                 try {
-                  // 将二进制数据转换为 Base64 字符串
-                  const base64Image = Buffer.concat(fileBuffer).toString('base64');
-                  const uploadDir = '/www/wwwroot/images'; // 文件存储目录
-
-                  // 确保文件扩展名为 .png 或 .svg
-                  let fileExtension = 'png'; // 默认为 .png
-                  if (contentType.includes('svg')) {
-                    fileExtension = 'svg';
+                  const buffer = Buffer.concat(fileBuffer);
+                  // 确定文件扩展名
+                  let fileExtension = 'png';
+                  const mimeType = Object.entries(imageMimeTypes).find(([key, value]) =>
+                    contentType.includes(key)
+                  )?.[1];
+                  if (mimeType) {
+                    fileExtension = mimeType;
                   }
 
                   const fileName = `${bookmark.id}.${fileExtension}`;
-                  const imagePath = path.join(uploadDir, fileName);
+                  const uploadDir = '/www/wwwroot/images';
 
-                  // 确保上传目录存在
+                  // 确保目录存在
                   await fs.mkdir(uploadDir, { recursive: true });
 
-                  // 将 Base64 转换为 Buffer 并写入文件
-                  const buffer = Buffer.from(base64Image, 'base64');
+                  // 写入文件
+                  const imagePath = path.join(uploadDir, fileName);
                   await fs.writeFile(imagePath, buffer);
 
-                  // 生成完整的图片URL
+                  // 生成URL
                   const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
 
                   // 更新数据库中的 icon_url 字段为生成的URL
                   const insertIconUrlSql = `UPDATE bookmark SET icon_url=? WHERE id=?`;
                   await connection.query(insertIconUrlSql, [imageUrl, bookmark.id]);
-                  resolve();
+
+                  // 返回图片的 URL
+                  resolve(imageUrl);
                 } catch (err) {
                   console.error('处理过程中出错:', err);
-                  reject(err);
+                  // 返回默认图片的 URL
+                  resolve(`${req.protocol}://${req.get('host')}${defaultImagePath}`);
                 }
               });
             })
             .on('error', (err) => {
               console.error('Error downloading file:', err);
-              reject(err);
+              // 返回默认图片的 URL
+              reject(`${req.protocol}://${req.get('host')}${defaultImagePath}`);
             });
         });
       }
     });
 
-    await Promise.all(promises);
-    res.send(resultData(null, 200, '所有图标已更新成功'));
+    const results = await Promise.all(promises);
+    res.send(resultData(results, 200, '所有图标已更新成功'));
   } catch (err) {
     res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
   } finally {
