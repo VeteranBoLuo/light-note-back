@@ -57,7 +57,7 @@ exports.queryNoteList = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     pool
-      .query('select * from note where create_by=? and del_flag=0', [userId])
+      .query('select * from note where create_by=? and del_flag=0 ORDER BY update_time DESC', [userId])
       .then(([result]) => {
         res.send(resultData(result));
       })
