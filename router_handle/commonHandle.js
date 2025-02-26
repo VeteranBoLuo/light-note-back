@@ -17,7 +17,7 @@ exports.getApiLogs = (req, res) => {
           // 判断数据是否是JSON字符串
           const fieldsToParse = ['req', 'system', 'location'];
           fieldsToParse.forEach((field) => {
-            if (typeof row[field] === 'string') {
+            if (field && typeof row[field] === 'string') {
               try {
                 row[field] = JSON.parse(row[field]);
               } catch (e) {
@@ -147,7 +147,7 @@ const imageMimeTypes = {
   'image/png': 'png',
   'image/svg+xml': 'svg',
   'image/jpeg': 'jpeg',
-  'image/gif': 'gif'
+  'image/gif': 'gif',
 };
 
 // 默认图片路径（可选）
@@ -178,7 +178,7 @@ exports.analyzeImgUrl = async (req, res) => {
                   // 确定文件扩展名
                   let fileExtension = 'png';
                   const mimeType = Object.entries(imageMimeTypes).find(([key, value]) =>
-                    contentType.includes(key)
+                    contentType.includes(key),
                   )?.[1];
                   if (mimeType) {
                     fileExtension = mimeType;
@@ -227,4 +227,3 @@ exports.analyzeImgUrl = async (req, res) => {
     connection.release();
   }
 };
-
