@@ -17,12 +17,12 @@ exports.getApiLogs = (req, res) => {
           // 判断数据是否是JSON字符串
           const fieldsToParse = ['req', 'system', 'location'];
           fieldsToParse.forEach((field) => {
-            if (field && typeof row[field] === 'string') {
+            if (row[field] && typeof row[field] === 'string') {
               try {
                 row[field] = JSON.parse(row[field]);
               } catch (e) {
                 // 如果解析失败，保持原样或者根据需要处理
-                console.error(`JSON解析失败 ${field}:`, e);
+                console.error(`JSON解析失败 ${field}:${row[field]}--`, e);
               }
             }
           });
