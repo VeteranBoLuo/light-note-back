@@ -111,9 +111,9 @@ exports.getUserInfo = async (req, res) => {
         `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
       );
       const location = {
-        city: data.city,
-        province: data.province,
-        rectangle: data.rectangle,
+        city: data.city ?? '接口错误，获取失败',
+        province: data.province ?? '接口错误，获取失败',
+        rectangle: data.rectangle ?? '接口错误，获取失败',
       };
       try {
         await pool.query('update user set location=? , ip=? where id=?', [
