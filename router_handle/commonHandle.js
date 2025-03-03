@@ -1,5 +1,9 @@
-const { resultData, snakeCaseKeys } = require('../util/common');
+const { resultData, snakeCaseKeys, requestTime } = require('../util/common');
 const https = require('https');
+const fs = require('fs');
+const fsP = require('fs').promises;
+
+const path = require('path');
 const pool = require('../db');
 
 exports.getApiLogs = (req, res) => {
@@ -139,9 +143,6 @@ exports.clearOperationLogs = (req, res) => {
   }
 };
 
-const fs = require('fs').promises;
-const path = require('path');
-
 // 定义支持的图片类型及其对应的扩展名
 const imageMimeTypes = {
   'image/png': 'png',
@@ -188,11 +189,11 @@ exports.analyzeImgUrl = async (req, res) => {
                   const uploadDir = '/www/wwwroot/images';
 
                   // 确保目录存在
-                  await fs.mkdir(uploadDir, { recursive: true });
+                  await fsP.mkdir(uploadDir, { recursive: true });
 
                   // 写入文件
                   const imagePath = path.join(uploadDir, fileName);
-                  await fs.writeFile(imagePath, buffer);
+                  await fsP.writeFile(imagePath, buffer);
 
                   // 生成URL
                   const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
@@ -225,5 +226,90 @@ exports.analyzeImgUrl = async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
   } finally {
     connection.release();
+  }
+};
+
+exports.getImages = async (req, res) => {
+  const [bookmarkResult] = await pool.query('select icon_url from bookmark');
+  const [noteResult] = await pool.query('select url from note_images');
+  // 指定要读取的目录路径
+  const directoryPath = '/www/wwwroot/images';
+
+  try {
+    // 读取目录中的所有文件和子目录
+    const files = fs.readdirSync(directoryPath);
+
+    // 过滤并处理文件名和后缀
+    const fileList = files.map((file) => {
+      const ext = path.extname(file); // 获取文件后缀
+      const fileName = path.basename(file, ext); // 获取文件名（不带后缀）
+      return {
+        name: fileName,
+        extension: ext.split('.')[1],
+        fullFileName: file, // 如果需要完整的文件名（包括后缀）
+      };
+    });
+
+    const bookmarkImages = bookmarkResult.map((bookmark) => bookmark.icon_url);
+    const noteImages = noteResult.map((note) => note.url);
+    const images = bookmarkImages.concat(noteImages);
+    res.send(
+      resultData({
+        items: {
+          images: images,
+          usedImages: fileList.filter((file) => {
+            return images.some((data) => {
+              if (typeof data === 'string') {
+                return data.includes(file.name);
+              }
+              return false;
+            });
+          }),
+          unUsedImages: fileList.filter((file) => {
+            return !images.some((data) => {
+              if (typeof data === 'string') {
+                return data.includes(file.name);
+              }
+              return false;
+            });
+          }),
+        },
+        total: fileList.length,
+      }),
+    );
+  } catch (error) {
+    console.error('读取目录时出错：', error);
+  }
+};
+
+exports.clearImages = async (req, res) => {
+  const directoryPath = '/www/wwwroot/images';
+  const images = req.body.images;
+
+  // 定义删除文件的函数
+  const deleteFile = async (filePath) => {
+    try {
+      await fsP.unlink(filePath);
+      console.log(`文件删除成功: ${filePath}`);
+    } catch (error) {
+      console.error(`删除文件失败: ${filePath}`, error);
+      throw error; // 抛出错误以便Promise.all捕获
+    }
+  };
+
+  // 构造所有需要删除的文件路径
+  const deletePromises = images.map(async (data) => {
+    const filePath = path.join(directoryPath, data.fullFileName);
+    return deleteFile(filePath);
+  });
+
+  try {
+    // 等待所有删除操作完成
+    await Promise.all(deletePromises);
+    res.send(resultData(req.body, 200, '删除成功'));
+  } catch (error) {
+    // 如果有任何删除操作失败，返回错误响应
+    console.error('删除过程中出现错误:', error);
+    res.status(500).send(resultData(req.body, 500, '删除失败'));
   }
 };

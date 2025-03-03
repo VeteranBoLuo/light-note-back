@@ -14,4 +14,9 @@ router.get("/clearOperationLogs", commonHandle.clearOperationLogs);
 
 router.post("/analyzeImgUrl", commonHandle.analyzeImgUrl);
 
+router.post("/getImages", commonHandle.getImages);
+
+router.post("/clearImages", commonHandle.clearImages);
+
+
 module.exports = router;
