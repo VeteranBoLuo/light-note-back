@@ -240,7 +240,7 @@ exports.getImages = async (req, res) => {
     const files = fs.readdirSync(directoryPath);
 
     // 过滤并处理文件名和后缀
-    const fileList = files.map((file) => {
+    let fileList = files.map((file) => {
       const ext = path.extname(file); // 获取文件后缀
       const fileName = path.basename(file, ext); // 获取文件名（不带后缀）
       return {
@@ -253,6 +253,11 @@ exports.getImages = async (req, res) => {
     const bookmarkImages = bookmarkResult.map((bookmark) => bookmark.icon_url);
     const noteImages = noteResult.map((note) => note.url);
     const images = bookmarkImages.concat(noteImages);
+    if (req.body.name) {
+      fileList = fileList.filter((file) => {
+        return file.name.includes(req.body.name);
+      });
+    }
     res.send(
       resultData({
         items: {
