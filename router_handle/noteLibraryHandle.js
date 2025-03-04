@@ -109,8 +109,12 @@ exports.delNote = async (req, res) => {
               '/www/wwwroot/images/',
             );
             return new Promise((resolve, reject) => {
-              fs.unlink(filePath);
-              resolve();
+              try {
+                fs.unlink(filePath);
+                resolve();
+              } catch (e) {
+                resolve();
+              }
             });
           });
 
