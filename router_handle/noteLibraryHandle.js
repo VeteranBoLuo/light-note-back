@@ -108,9 +108,9 @@ exports.delNote = async (req, res) => {
               new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`),
               '/www/wwwroot/images/',
             );
-            return new Promise((resolve, reject) => {
+            return new Promise(async (resolve, reject) => {
               try {
-                fs.unlink(filePath);
+                await fs.unlink(filePath);
                 resolve();
               } catch (e) {
                 resolve();
