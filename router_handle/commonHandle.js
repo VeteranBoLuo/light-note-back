@@ -185,7 +185,7 @@ exports.analyzeImgUrl = async (req, res) => {
                     fileExtension = mimeType;
                   }
 
-                  const fileName = `${bookmark.id}.${fileExtension}`;
+                  const fileName = `bookmark-${bookmark.id}.${fileExtension}`;
                   const uploadDir = '/www/wwwroot/images';
 
                   // 确保目录存在
