@@ -101,7 +101,7 @@ exports.mergeExistingProperties = function (source, outValue = [undefined], outK
   }
   return target;
 };
-
+// 当前时间拼接
 exports.requestTime = function (req, res, next) {
   const now = new Date();
   const year = now.getFullYear();
@@ -113,6 +113,7 @@ exports.requestTime = function (req, res, next) {
   req.requestTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   next();
 };
+// 生成随机数
 exports.generateUUID = function () {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     let r = (Math.random() * 16) | 0,

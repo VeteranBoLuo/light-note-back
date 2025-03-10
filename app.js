@@ -24,7 +24,6 @@ app.use('/note', noteLibraryRouter);
 app.use('/bookmark', bookmarkRouter);
 app.use('/opinion', opinionRouter);
 // 设置静态文件目录
-// app.use('/uploads', express.static('D:\\BMS_Back\\uploads'));
 app.use('/uploads', express.static('/www/wwwroot/images'));
 // 启动 Express 服务器
 app.listen(9001, () => {

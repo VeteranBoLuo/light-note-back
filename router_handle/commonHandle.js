@@ -152,7 +152,7 @@ const imageMimeTypes = {
 };
 
 // 默认图片路径（可选）
-const defaultImagePath = '/images/default-icon.png';
+const defaultImagePath = '/uploads/default-icon.png';
 
 exports.analyzeImgUrl = async (req, res) => {
   const connection = await pool.getConnection();
@@ -316,5 +316,14 @@ exports.clearImages = async (req, res) => {
     // 如果有任何删除操作失败，返回错误响应
     console.error('删除过程中出现错误:', error);
     res.status(500).send(resultData(req.body, 500, '删除失败'));
+  }
+};
+
+exports.runSql = async (req, res) => {
+  try {
+    const [result] = await pool.query(req.body.sql);
+    res.send(resultData(result, 200));
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
   }
 };
