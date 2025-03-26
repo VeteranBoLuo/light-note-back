@@ -57,7 +57,7 @@ exports.logFunction = async function (req, res, next) {
       if (userId) {
         try {
           const [locations] = await pool.query('SELECT location FROM user WHERE id = ?', [userId]);
-          const location = locations[0].location;
+          const location = locations[0].location ?? '未知';
           const system = JSON.stringify({
             browser: req.headers['browser'] ?? '未知',
             os: req.headers['os'] ?? '未知',
@@ -69,7 +69,7 @@ exports.logFunction = async function (req, res, next) {
             method: req.method,
             url: req.originalUrl,
             req: requestPayload === '{}' ? '' : requestPayload,
-            ip: req.headers['x-forwarded-for'],
+            ip: req.headers['x-forwarded-for'] ?? '未知',
             location: location,
             system: system,
             requestTime: req.requestTime, // 获取当前时间
