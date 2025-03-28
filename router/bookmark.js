@@ -5,6 +5,9 @@ const bookmarkHandle = require("../router_handle/bookmarkHandle");
 
 router.post("/queryTagList", bookmarkHandle.queryTagList);
 
+router.post("/updateTagSort", bookmarkHandle.updateTagSort);
+
+
 router.post("/getTagDetail", bookmarkHandle.getTagDetail);
 
 router.post("/getRelatedTag", bookmarkHandle.getRelatedTag);

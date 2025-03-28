@@ -37,6 +37,7 @@ FROM
       GROUP BY 
     t.id
       ORDER BY
+      t.sort, 
       t.create_time DESC;
 `;
     pool
@@ -80,6 +81,26 @@ WHERE t.user_id=? AND tb.bookmark_id=? AND t.del_flag=0`;
       });
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+  }
+};
+
+exports.updateTagSort = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction(); // 开始事务
+    const tags = req.body.tags;
+    for (const tag of tags) {
+      const { id, sort } = tag;
+      const sql = 'UPDATE tag SET sort = ? WHERE id = ?';
+      await pool.query(sql, [sort, id]);
+    }
+    await connection.commit(); // 提交事务
+    res.send(resultData(null, 200, 'Sort updated successfully'));
+  } catch (e) {
+    await connection.rollback(); // 如果发生错误，回滚事务
+    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+  } finally {
+    connection.release(); // 释放连接回连接池
   }
 };
 
