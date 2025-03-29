@@ -48,11 +48,6 @@ const detectAttack = (req) => {
     detectedType = 'DIRECTORY_TRAVERSAL';
   }
 
-  // 4. CSRF检测（跨域请求）
-  if (method === 'POST' && !attackTypes.CSRF.test(headers.referer)) {
-    detectedType = 'CSRF';
-  }
-
   // 5. SSRF检测（请求参数含内网地址）
   if (attackTypes.SSRF.test(JSON.stringify(body))) {
     detectedType = 'SSRF';
@@ -75,18 +70,17 @@ const detectAttack = (req) => {
       source_ip: getClientIp(req),
       payload: JSON.stringify({ ...body, ...query }),
       user_agent: headers['user-agent'],
-      create_at: req.requestTime,
+      created_at: req.requestTime,
     };
-    // 将日志保存到数据库
-    const query = 'INSERT INTO attack_logs SET ?';
-    pool.query(query, [log]).catch((err) => {
+    // 将攻击日志保存到数据库
+    pool.query('INSERT INTO attack_logs SET ?', [log]).catch((err) => {
       console.error('攻击日志更新错误: ' + err.message);
     });
   }
 };
 exports.logFunction = async function (req, res, next) {
   try {
-    detectAttack(req, res);
+    detectAttack(req, res, next);
     // 角色为游客，需要查询获取
     if (req.headers.role === 'visitor') {
       const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
