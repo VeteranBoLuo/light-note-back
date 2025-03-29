@@ -50,18 +50,14 @@ exports.getApiLogs = (req, res) => {
   }
 };
 exports.clearApiLogs = (req, res) => {
-  try {
-    pool
-      .query('UPDATE api_logs set del_flag=1')
-      .then(() => {
-        res.send(resultData(null));
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
-      });
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
-  }
+  pool
+    .query('UPDATE api_logs set del_flag=1')
+    .then(() => {
+      res.send(resultData(null));
+    })
+    .catch((err) => {
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+    });
 };
 
 // 用户操作日志
@@ -129,18 +125,14 @@ AND o.del_flag=0 AND u.user_name!='wenjunqiu'`;
 };
 
 exports.clearOperationLogs = (req, res) => {
-  try {
-    pool
-      .query('UPDATE operation_logs set del_flag=1')
-      .then(() => {
-        res.send(resultData(null));
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
-      });
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
-  }
+  pool
+    .query('UPDATE operation_logs set del_flag=1')
+    .then(() => {
+      res.send(resultData(null));
+    })
+    .catch((err) => {
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+    });
 };
 
 // 定义支持的图片类型及其对应的扩展名

@@ -13,7 +13,7 @@ exports.queryTagList = (req, res) => {
             )
         )
         FROM bookmark b
-        INNER JOIN tag_bookmark_relation tb ON b.id = tb.bookmark_id
+        INNER JOIN tag_bookmark_associations tb ON b.id = tb.bookmark_id
         WHERE tb.tag_id = t.id AND b.del_flag = 0
     ) AS bookmarkList,COALESCE(
         (
@@ -23,15 +23,15 @@ exports.queryTagList = (req, res) => {
                     'name', related.name
                 )
             )
-            FROM tag_associations ta
-            INNER JOIN tag related ON ta.associated_tag_id = related.id
+            FROM tag_relations ta
+            INNER JOIN tag related ON ta.related_tag_id = related.id
             WHERE ta.tag_id = t.id
         ),
         JSON_ARRAY()
-    ) AS associatedTagList
+    ) AS relatedTagList
 FROM 
     tag t
-    LEFT JOIN tag_associations ta ON t.id = ta.tag_id
+    LEFT JOIN tag_relations ta ON t.id = ta.tag_id
       WHERE
       t.user_id = ? AND t.del_flag = 0
       GROUP BY 
@@ -65,10 +65,10 @@ FROM
 exports.getRelatedTag = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
-    let sql = `SELECT t.* FROM tag t LEFT JOIN tag_associations a on t.id=a.associated_tag_id 
+    let sql = `SELECT t.* FROM tag t LEFT JOIN tag_relations a on t.id=a.related_tag_id 
 WHERE t.user_id=? AND a.tag_id=? AND t.del_flag=0`;
     if (req.body.filters.type === 'bookmark') {
-      sql = `SELECT t.* FROM tag t LEFT JOIN tag_bookmark_relation tb on t.id=tb.tag_id 
+      sql = `SELECT t.* FROM tag t LEFT JOIN tag_bookmark_associations tb on t.id=tb.tag_id 
 WHERE t.user_id=? AND tb.bookmark_id=? AND t.del_flag=0`;
     }
     pool
@@ -88,7 +88,7 @@ exports.updateTagSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
-    const tags = req.body.tags;
+    const { tags } = req.body;
     for (const tag of tags) {
       const { id, sort } = tag;
       const sql = 'UPDATE tag SET sort = ? WHERE id = ?';
@@ -98,7 +98,7 @@ exports.updateTagSort = async (req, res) => {
     res.send(resultData(null, 200, 'Sort updated successfully'));
   } catch (e) {
     await connection.rollback(); // 如果发生错误，回滚事务
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
   } finally {
     connection.release(); // 释放连接回连接池
   }
@@ -106,9 +106,9 @@ exports.updateTagSort = async (req, res) => {
 
 exports.getTagDetail = (req, res) => {
   try {
-    let sql = `SELECT * FROM tag WHERE  id=? AND del_flag=0`;
+    const { filters } = req.body;
     pool
-      .query(sql, [req.body.filters.id])
+      .query(`SELECT * FROM tag WHERE  id=? AND del_flag=0`, [filters.id])
       .then(([result]) => {
         if (result.length === 0) {
           throw '标签不存在';
@@ -142,10 +142,11 @@ exports.addTag = async (req, res) => {
       // 插入新的标签
       let sql = `INSERT INTO Tag SET ?`;
       const [insertResult] = await connection.query(sql, [
-        mergeExistingProperties(snakeCaseKeys(params), [undefined, '', []], ['associated_tag_ids', 'bookmark_list']),
+        mergeExistingProperties(snakeCaseKeys(params), [undefined, '', []], ['related_tag_ids', 'bookmark_list']),
       ]);
       // 处理关联标签数量限制
-      if (req.body.associatedTagIds && req.body.associatedTagIds.length > 4) {
+      const { relatedTagIds, bookmarkList } = req.body;
+      if (relatedTagIds && relatedTagIds.length > 4) {
         throw new Error('最多选择4个相关标签');
       }
       // 获取新插入的标签ID
@@ -153,18 +154,17 @@ exports.addTag = async (req, res) => {
       const [tagResult] = await connection.query(getTagSql);
       const insertedTagId = tagResult[0].id;
       // 如果有相关标签，则插入新的关联
-      if (req.body.associatedTagIds && req.body.associatedTagIds.length > 0) {
-        const relatedTagIds = req.body.associatedTagIds;
+      if (relatedTagIds && relatedTagIds.length > 0) {
         for (const relatedTagId of relatedTagIds) {
-          const insertAssociationSql = `INSERT INTO tag_associations (tag_id, associated_tag_id) VALUES (?, ?), (?, ?)`;
+          const insertAssociationSql = `INSERT INTO tag_relations (tag_id, related_tag_id) VALUES (?, ?), (?, ?)`;
           await connection.query(insertAssociationSql, [insertedTagId, relatedTagId, relatedTagId, insertedTagId]);
         }
       }
 
       // 如果有书签列表，则插入新的关联
-      if (req.body.bookmarkList && req.body.bookmarkList.length > 0) {
-        const bookmarkIds = req.body.bookmarkList;
-        const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relation (tag_id, bookmark_id) VALUES ?`;
+      if (bookmarkList && bookmarkList.length > 0) {
+        const bookmarkIds = bookmarkList;
+        const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_associations (tag_id, bookmark_id) VALUES ?`;
         const bookmarkValues = bookmarkIds.map((bookmarkId) => [insertedTagId, bookmarkId]);
         await connection.query(insertBookmarkRelationsSql, [bookmarkValues]);
       }
@@ -202,8 +202,8 @@ exports.updateTag = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
-
-    const id = req.body.id; // 获取标签ID
+    const { relatedTagIds, id: id1, bookmarkList } = req.body;
+    const id = id1; // 获取标签ID
     const paramsData = JSON.parse(JSON.stringify(req.body));
     const params = {
       name: paramsData.name,
@@ -216,37 +216,36 @@ exports.updateTag = async (req, res) => {
       throw new Error('标签已存在');
     }
 
-    if (req.body.associatedTagIds && req.body.associatedTagIds.length > 4) {
+    if (relatedTagIds && relatedTagIds.length > 4) {
       throw new Error('最多选择4个相关标签');
     }
     // 更新tag表
     const updateTagSql = `UPDATE tag SET ? WHERE id = ?`;
     const [updateResult] = await connection.query(updateTagSql, [snakeCaseKeys(mergeExistingProperties(params)), id]);
-    // 只要传了associatedTagIds，就需要重新处理
-    if (req.body.associatedTagIds !== undefined) {
+    // 只要传了relatedTagIds，就需要重新处理
+    if (relatedTagIds !== undefined) {
       // 清空所有关联
-      const deleteAssociationsSql = `DELETE FROM tag_associations WHERE tag_id = ? OR associated_tag_id = ?`;
+      const deleteAssociationsSql = `DELETE FROM tag_relations WHERE tag_id = ? OR related_tag_id = ?`;
       await connection.query(deleteAssociationsSql, [id, id]);
 
       // 如果有相关标签，则插入新的关联
-      if (req.body.associatedTagIds) {
-        const relatedTagIds = req.body.associatedTagIds;
+      if (relatedTagIds) {
         for (const relatedTagId of relatedTagIds) {
-          const insertAssociationSql = `INSERT INTO tag_associations (tag_id, associated_tag_id) VALUES (?, ?), (?, ?)`;
+          const insertAssociationSql = `INSERT INTO tag_relations (tag_id, related_tag_id) VALUES (?, ?), (?, ?)`;
           await connection.query(insertAssociationSql, [id, relatedTagId, relatedTagId, id]);
         }
       }
     }
 
     // 只要传了bookmarkList，就需要重新处理
-    if (req.body.bookmarkList !== undefined) {
+    if (bookmarkList !== undefined) {
       // 清空标签和书签的关联
-      const deleteBookmarkRelationsSql = `DELETE FROM tag_bookmark_relation WHERE tag_id = ?`;
+      const deleteBookmarkRelationsSql = `DELETE FROM tag_bookmark_associations WHERE tag_id = ?`;
       await connection.query(deleteBookmarkRelationsSql, [id]);
       // 如果有书签列表，则插入新的关联
-      if (req.body.bookmarkList && req.body.bookmarkList.length > 0) {
-        const bookmarkIds = req.body.bookmarkList;
-        const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relation (tag_id, bookmark_id) VALUES ?`;
+      if (bookmarkList && bookmarkList.length > 0) {
+        const bookmarkIds = bookmarkList;
+        const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_associations (tag_id, bookmark_id) VALUES ?`;
         const bookmarkValues = bookmarkIds.map((bookmarkId) => [id, bookmarkId]);
         await connection.query(insertBookmarkRelationsSql, [bookmarkValues]);
       }
@@ -272,11 +271,11 @@ exports.getBookmarkList = (req, res) => {
             )
         )
         FROM tag t
-        INNER JOIN tag_bookmark_relation tb ON t.id = tb.tag_id
+        INNER JOIN tag_bookmark_associations tb ON t.id = tb.tag_id
         WHERE tb.bookmark_id = b.id AND t.del_flag = 0
     ) AS tagList
 FROM bookmark b
-JOIN tag_bookmark_relation tbr ON b.id = tbr.bookmark_id
+JOIN tag_bookmark_associations tbr ON b.id = tbr.bookmark_id
 WHERE b.user_id=? AND tbr.tag_id = ? AND  b.del_flag=0   ORDER BY b.create_time DESC`;
   let params = [userId, tagId];
   const type = req.body.filters.type;
@@ -291,7 +290,7 @@ WHERE b.user_id=? AND tbr.tag_id = ? AND  b.del_flag=0   ORDER BY b.create_time 
             )
         )
         FROM tag t
-        INNER JOIN tag_bookmark_relation tb ON t.id = tb.tag_id
+        INNER JOIN tag_bookmark_associations tb ON t.id = tb.tag_id
         WHERE tb.bookmark_id = b.id AND t.del_flag = 0
     ) AS tagList
 FROM 
@@ -314,13 +313,13 @@ FROM
             )
         )
         FROM tag t
-        INNER JOIN tag_bookmark_relation tb ON t.id = tb.tag_id
+        INNER JOIN tag_bookmark_associations tb ON t.id = tb.tag_id
         WHERE tb.bookmark_id = b.id AND t.del_flag = 0
     ) AS tagList
 FROM 
     bookmark b
 LEFT JOIN 
-    tag_bookmark_relation tb ON b.id = tb.bookmark_id
+    tag_bookmark_associations tb ON b.id = tb.bookmark_id
 LEFT JOIN 
     tag t ON tb.tag_id = t.id AND t.name LIKE CONCAT('%', ?, '%') AND t.del_flag = 0
 WHERE 
@@ -384,7 +383,7 @@ exports.addBookmark = async (req, res) => {
     }
     if (req.body.relatedTags && req.body.relatedTags.length > 0) {
       const tagIds = req.body.relatedTags;
-      const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relation (tag_id, bookmark_id) VALUES ?`;
+      const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_associations (tag_id, bookmark_id) VALUES ?`;
       const tagValues = tagIds.map((tagId) => [tagId, insertBookmarkId]);
       await connection.query(insertBookmarkRelationsSql, [tagValues]);
     }
@@ -416,7 +415,7 @@ exports.updateBookmark = async (req, res) => {
       id,
     ]);
     // 清空标签和书签的关联
-    const deleteBookmarkRelationsSql = `DELETE FROM tag_bookmark_relation WHERE bookmark_id = ?`;
+    const deleteBookmarkRelationsSql = `DELETE FROM tag_bookmark_associations WHERE bookmark_id = ?`;
     await connection.query(deleteBookmarkRelationsSql, [id]);
     // 如果有书签列表，则插入新的关联
     if (req.body.relatedTags && req.body.relatedTags.length > 4) {
@@ -424,7 +423,7 @@ exports.updateBookmark = async (req, res) => {
     }
     if (req.body.relatedTags && req.body.relatedTags.length > 0) {
       const tagIds = req.body.relatedTags;
-      const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relation (tag_id, bookmark_id) VALUES ?`;
+      const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_associations (tag_id, bookmark_id) VALUES ?`;
       const tagValues = tagIds.map((tagId) => [tagId, id]);
       await connection.query(insertBookmarkRelationsSql, [tagValues]);
     }

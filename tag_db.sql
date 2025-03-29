@@ -83,10 +83,10 @@ CREATE TABLE `tag`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8 COLLATE = utf8_general_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
--- Table structure for tag_associations
+-- Table structure for tag_relations
 -- ----------------------------
-DROP TABLE IF EXISTS `tag_associations`;
-CREATE TABLE `tag_associations`  (
+DROP TABLE IF EXISTS `tag_relations`;
+CREATE TABLE `tag_relations`  (
   `tag_id` varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   `associated_tag_id` varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL,
   PRIMARY KEY (`tag_id`, `associated_tag_id`) USING BTREE,
