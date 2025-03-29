@@ -142,6 +142,7 @@ exports.getUserInfo = async (req, res) => {
         const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
         result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
+        delete result[0].password;
         if (result[0].role === 'visitor') {
           res.send(resultData(result[0], 'visitor'));
         } else {
