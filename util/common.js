@@ -121,3 +121,15 @@ exports.generateUUID = function () {
     return v.toString(16);
   });
 };
+
+exports.getClientIp = function (req) {
+  // 处理多层代理场景
+  const xff = req.headers['x-forwarded-for'] || '';
+  const ips = xff.split(/, ?/g).filter((ip) => ip); // 拆分并过滤空值
+
+  // 排除内网 IP（防止伪造）
+  const isPrivate = (ip) => ip.match(/^(10\.|192\.168|172\.(1[6-9]|2\d|3[0-1]))/);
+
+  // 取第一个非内网 IP
+  return ips.find((ip) => !isPrivate(ip)) || req.ip;
+};

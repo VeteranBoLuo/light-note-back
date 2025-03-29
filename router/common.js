@@ -18,6 +18,11 @@ router.post('/getImages', commonHandle.getImages);
 
 router.post('/clearImages', commonHandle.clearImages);
 
-router.post('/runSql', commonHandle.runSql);
+router.post('/runSql', commonHandle.runSql)
+
+router.post('/getAttackLogs', commonHandle.getAttackLogs);
+
+
+
 
 module.exports = router;

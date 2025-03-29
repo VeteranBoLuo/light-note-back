@@ -1,7 +1,92 @@
 const pool = require('../db');
-const { snakeCaseKeys, resultData } = require('./common');
+const { snakeCaseKeys, resultData, getClientIp } = require('./common');
+const attackTypes = {
+  // 注入类攻击
+  SQL_INJECTION: /(\b(SELECT|UNION|DELETE|DROP|INSERT|UPDATE|EXEC)\b)|('|--|;|\/\*)/i,
+  COMMAND_INJECTION: /(\b(rm\s+-rf|wget\s+http|curl\s+http|exec$|spawn\()\b)/i,
+
+  // 跨站脚本攻击
+  XSS: /<script>|alert\(|document\.cookie|onerror=|javascript:/i,
+
+  // 协议层攻击
+  CSRF: /Referer:\s*(?!https?:\/\/yourdomain\.com)/i, // 检测Referer白名单
+  SSRF: /(http:\/\/127\.0\.0\.1|http:\/\/192\.168\.|http:\/\/10\.)/i, // 检测内网地址
+
+  // 路径遍历
+  DIRECTORY_TRAVERSAL: /(\.\.\/|\.\.\\|%2e%2e\/)/i,
+
+  // DDoS特征
+  HTTP_FLOOD: {
+    rateLimit: 100, // 单个IP每秒最大请求数
+  },
+
+  // 文件上传攻击
+  FILE_UPLOAD: /\.(php|jsp|asp|sh|exe)$/i,
+
+  // 其他攻击
+  HEADER_INJECTION: /\r\n/, // HTTP头换行符注入
+  JSON_HIJACKING: /^$\]\}'/, // JSON劫持前缀
+};
+const detectAttack = (req) => {
+  const { method, path, body, headers, query } = req;
+  let detectedType = null;
+
+  // 1. SQL/命令注入检测（基于内容）
+  if (attackTypes.SQL_INJECTION.test(JSON.stringify({ ...body, ...query }))) {
+    detectedType = 'SQL_INJECTION';
+  } else if (attackTypes.COMMAND_INJECTION.test(JSON.stringify(body))) {
+    detectedType = 'COMMAND_INJECTION';
+  }
+
+  // 2. XSS检测（参数和头部）
+  if (attackTypes.XSS.test(JSON.stringify({ ...body, ...headers }))) {
+    detectedType = 'XSS';
+  }
+
+  // 3. 路径遍历检测（URL路径）
+  if (attackTypes.DIRECTORY_TRAVERSAL.test(path)) {
+    detectedType = 'DIRECTORY_TRAVERSAL';
+  }
+
+  // 4. CSRF检测（跨域请求）
+  if (method === 'POST' && !attackTypes.CSRF.test(headers.referer)) {
+    detectedType = 'CSRF';
+  }
+
+  // 5. SSRF检测（请求参数含内网地址）
+  if (attackTypes.SSRF.test(JSON.stringify(body))) {
+    detectedType = 'SSRF';
+  }
+
+  // 6. 文件上传检测（文件类型黑名单）
+  if (req.files) {
+    req.files.forEach((file) => {
+      if (attackTypes.FILE_UPLOAD.test(file.originalname)) {
+        detectedType = 'FILE_UPLOAD';
+      }
+    });
+  }
+  // 记录攻击事件
+  if (detectedType) {
+    const log = {
+      attack_type: detectedType,
+      request_method: method,
+      request_path: path,
+      source_ip: getClientIp(req),
+      payload: JSON.stringify({ ...body, ...query }),
+      user_agent: headers['user-agent'],
+      create_at: req.requestTime,
+    };
+    // 将日志保存到数据库
+    const query = 'INSERT INTO attack_logs SET ?';
+    pool.query(query, [log]).catch((err) => {
+      console.error('攻击日志更新错误: ' + err.message);
+    });
+  }
+};
 exports.logFunction = async function (req, res, next) {
   try {
+    detectAttack(req, res);
     // 角色为游客，需要查询获取
     if (req.headers.role === 'visitor') {
       const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
@@ -69,7 +154,7 @@ exports.logFunction = async function (req, res, next) {
             method: req.method,
             url: req.originalUrl,
             req: requestPayload === '{}' ? '' : requestPayload,
-            ip: req.headers['x-forwarded-for'] ?? '未知',
+            ip: getClientIp(req),
             location: location,
             system: system,
             requestTime: req.requestTime, // 获取当前时间

@@ -59,6 +59,25 @@ exports.clearApiLogs = (req, res) => {
       res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
     });
 };
+exports.getAttackLogs = (req, res) => {
+  try {
+    pool
+      .query('SELECT * FROM attack_logs ORDER BY created_at DESC')
+      .then(async ([result]) => {
+        res.send(
+          resultData({
+            items: result,
+            total: result.length,
+          }),
+        );
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+  }
+};
 
 // 用户操作日志
 exports.recordOperationLogs = (req, res) => {
