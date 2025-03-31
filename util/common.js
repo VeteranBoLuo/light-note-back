@@ -128,15 +128,7 @@ exports.getClientIp = function (req) {
   const ips = xff.split(/, ?/g).filter((ip) => ip); // 拆分并过滤空值
 
   // 排除内网 IP（防止伪造）
-  const isPrivate = (ip) => {
-    // 检查是否是IPv4映射到IPv6的格式
-    const ipv4Part = ip.match(/::ffff:([0-9.]+)/)?.[1];
-    if (ipv4Part) {
-      return ipv4Part.match(/^(10\.|192\.168|172\.(1[6-9]|2\d|3[0-1]))/);
-    }
-    // 否则，检查是否是IPv4内网地址
-    return ip.match(/^(10\.|192\.168|172\.(1[6-9]|2\d|3[0-1]))/);
-  };
+  const isPrivate = (ip) => ip.match(/^(10\.|192\.168|172\.(1[6-9]|2\d|3[0-1]))/);
 
   // 取第一个非内网 IP
   return ips.find((ip) => !isPrivate(ip)) || req.ip;

@@ -66,12 +66,10 @@ const detectAttack = (req) => {
     });
   }
   const origin = req.headers.origin || req.headers.referer;
-  const isAllowedOrigin = ['http://localhost:5173', 'boluo66.top'].some((url) => origin?.includes(url));
 
-  if (detectedType || !isAllowedOrigin) {
-    const attackType = detectedType || '非法请求来源';
+  if (detectedType) {
     const log = {
-      attack_type: attackType,
+      attack_type: detectedType,
       request_method: method,
       request_path: origin + path,
       source_ip: getClientIp(req),
@@ -84,7 +82,7 @@ const detectAttack = (req) => {
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
   }
-  return detectedType || !isAllowedOrigin;
+  return detectedType;
 };
 exports.logFunction = async function (req, res, next) {
   try {
