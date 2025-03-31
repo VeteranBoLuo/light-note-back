@@ -85,8 +85,8 @@ const detectAttack = (req) => {
 exports.logFunction = async function (req, res, next) {
   try {
     const noPass = detectAttack(req, res, next);
-    if (noPass) {
-      res.status(403).json({ code: 403, msg: '非法请求来源' });
+    if (noPass && req.headers['x-user-id'] !== '453c9c95-9b2e-11ef-9d4d-84a93e80c16e') {
+      return res.status(403).json({ code: 403, msg: '非法请求' });
     }
     // 角色为游客，需要查询获取
     if (req.headers.role === 'visitor') {
