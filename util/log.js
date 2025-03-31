@@ -27,7 +27,7 @@ const attackTypes = {
   HEADER_INJECTION: /\r\n/, // HTTP头换行符注入
   JSON_HIJACKING: /^$\]\}'/, // JSON劫持前缀
 };
-const detectAttack = (req, res) => {
+const detectAttack = (req) => {
   const { method, path, body, headers, query } = req;
   let detectedType = null;
 
@@ -79,12 +79,15 @@ const detectAttack = (req, res) => {
     pool
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
-    return res.status(403).json({ code: 403, msg: '非法请求来源' });
   }
+  return detectedType || !isAllowedOrigin;
 };
 exports.logFunction = async function (req, res, next) {
   try {
-    detectAttack(req, res, next);
+    const noPass = detectAttack(req, res, next);
+    if (noPass) {
+      res.status(403).json({ code: 403, msg: '非法请求来源' });
+    }
     // 角色为游客，需要查询获取
     if (req.headers.role === 'visitor') {
       const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
