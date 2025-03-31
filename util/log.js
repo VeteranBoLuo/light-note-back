@@ -61,21 +61,24 @@ const detectAttack = (req) => {
       }
     });
   }
-  // 记录攻击事件
-  if (detectedType) {
+  const origin = req.headers.origin || req.headers.referer;
+  const isAllowedOrigin = ['http://localhost:5173', 'boluo66.top'].some((url) => origin?.includes(url));
+
+  if (detectedType || !isAllowedOrigin) {
+    const attackType = detectedType || '非法请求来源';
     const log = {
-      attack_type: detectedType,
+      attack_type: attackType,
       request_method: method,
-      request_path: path,
+      request_path: origin + path,
       source_ip: getClientIp(req),
       payload: JSON.stringify({ ...body, ...query }),
       user_agent: headers['user-agent'],
       created_at: req.requestTime,
     };
-    // 将攻击日志保存到数据库
-    pool.query('INSERT INTO attack_logs SET ?', [log]).catch((err) => {
-      console.error('攻击日志更新错误: ' + err.message);
-    });
+
+    pool
+      .query('INSERT INTO attack_logs SET ?', [log])
+      .catch((err) => console.error('攻击日志更新错误: ' + err.message));
   }
 };
 exports.logFunction = async function (req, res, next) {
