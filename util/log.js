@@ -27,7 +27,7 @@ const attackTypes = {
   HEADER_INJECTION: /\r\n/, // HTTP头换行符注入
   JSON_HIJACKING: /^$\]\}'/, // JSON劫持前缀
 };
-const detectAttack = (req) => {
+const detectAttack = (req, res) => {
   const { method, path, body, headers, query } = req;
   let detectedType = null;
 
@@ -79,6 +79,7 @@ const detectAttack = (req) => {
     pool
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
+    return res.status(403).json({ code: 403, msg: '非法请求来源' });
   }
 };
 exports.logFunction = async function (req, res, next) {
