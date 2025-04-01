@@ -66,10 +66,11 @@ const detectAttack = (req) => {
     });
   }
   const origin = req.headers.origin || req.headers.referer;
-
-  if (detectedType) {
+  const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
+  const illegalApi = allowApi.some((url) => path.includes(url));
+  if (detectedType || !illegalApi) {
     const log = {
-      attack_type: detectedType,
+      attack_type: detectedType || '非法请求地址',
       request_method: method,
       request_path: origin + path,
       source_ip: getClientIp(req),
