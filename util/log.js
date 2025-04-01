@@ -83,7 +83,7 @@ const detectAttack = (req) => {
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
   }
-  return detectedType;
+  return detectedType || !illegalApi;
 };
 exports.logFunction = async function (req, res, next) {
   try {
