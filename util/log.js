@@ -28,6 +28,7 @@ const attackTypes = {
   JSON_HIJACKING: /^$\]\}'/, // JSON劫持前缀
 };
 const detectAttack = (req) => {
+  // 白名单
   if (req.headers['x-user-id'] === '453c9c95-9b2e-11ef-9d4d-84a93e80c16e') {
     return false;
   }
@@ -66,11 +67,9 @@ const detectAttack = (req) => {
     });
   }
   const origin = req.headers.origin || req.headers.referer;
-  const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
-  const illegalApi = allowApi.some((url) => path.includes(url));
-  if (detectedType || !illegalApi) {
+  if (detectedType) {
     const log = {
-      attack_type: detectedType || '非法请求地址',
+      attack_type: detectedType,
       request_method: method,
       request_path: origin + path,
       source_ip: getClientIp(req),
@@ -83,7 +82,7 @@ const detectAttack = (req) => {
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
   }
-  return detectedType || !illegalApi;
+  return detectedType;
 };
 exports.logFunction = async function (req, res, next) {
   try {
@@ -123,11 +122,16 @@ exports.logFunction = async function (req, res, next) {
     if (userId) {
       skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
     }
+    const { path } = req;
+    const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
+    // 非法接口地址
+    const illegalApi = allowApi.some((url) => path.includes(url));
+    // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>
       req.originalUrl.includes(key),
     );
 
-    if (skipApi || skipUser) {
+    if (skipApi || skipUser || illegalApi) {
       next();
       return;
     }
