@@ -71,9 +71,9 @@ const detectAttack = (req) => {
   const illegalApi = allowApi.some((url) => path.includes(url));
   if (detectedType || !illegalApi) {
     const log = {
-      attack_type: detectedType || '扫描',
+      attack_type: detectedType || '非法请求地址',
       request_method: method,
-      request_path: origin + path,
+      request_path: origin + '_' + req.originalUrl + '_' + path,
       source_ip: getClientIp(req),
       payload: JSON.stringify({ ...body, ...query }),
       user_agent: headers['user-agent'],
