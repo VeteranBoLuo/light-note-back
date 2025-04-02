@@ -124,14 +124,14 @@ exports.logFunction = async function (req, res, next) {
     }
     const { path } = req;
     const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
-    // 非法接口地址
+    // 合法接口地址
     const illegalApi = allowApi.some((url) => path.includes(url));
     // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>
       req.originalUrl.includes(key),
     );
 
-    if (skipApi || skipUser || illegalApi) {
+    if (skipApi || skipUser || !illegalApi) {
       next();
       return;
     }
