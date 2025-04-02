@@ -2,11 +2,11 @@ const pool = require('../db');
 const { snakeCaseKeys, resultData, getClientIp } = require('./common');
 const attackTypes = {
   // 注入类攻击
-  SQL_INJECTION: /(\b(SELECT|UNION|DELETE|DROP|INSERT|UPDATE|EXEC)\b)|('|--|;|\/\*)/i,
+  SQL_INJECTION: /(\b(SELECT\s+.*FROM|UNION\s+SELECT|DELETE\s+FROM|DROP\s+TABLE|INSERT\s+INTO)\b)|(--\s+|\/\*.*\*\/)/i,
   COMMAND_INJECTION: /(\b(rm\s+-rf|wget\s+http|curl\s+http|exec$|spawn\()\b)/i,
 
   // 跨站脚本攻击
-  XSS: /<script>|alert\(|document\.cookie|onerror=|javascript:/i,
+  XSS: /<(script|iframe|img)|alert\(|document\.(cookie|write)|on(error|load|mouseover)|javascript:|&#\d+;|\\x[\da-f]{2}/i,
 
   // 协议层攻击
   CSRF: /Referer:\s*(?!https?:\/\/yourdomain\.com)/i, // 检测Referer白名单
@@ -66,7 +66,6 @@ const detectAttack = (req) => {
       }
     });
   }
-  const origin = req.headers.origin || req.headers.referer;
   const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
   const illegalApi = allowApi.some((url) => path.includes(url));
   if (detectedType || !illegalApi) {
