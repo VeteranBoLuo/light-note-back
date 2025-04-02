@@ -69,11 +69,15 @@ const detectAttack = (req) => {
   const origin = req.headers.origin || req.headers.referer;
   const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
   const illegalApi = allowApi.some((url) => path.includes(url));
+  const protocol = req.protocol;
+  const host = req.get('host');
+  const url = req.url; // 或者使用 req.originalUrl
+  const fullUrl = `${protocol}://${host}${url}`;
   if (detectedType || !illegalApi) {
     const log = {
       attack_type: detectedType || '非法请求地址',
       request_method: method,
-      request_path: origin + '_' + req.originalUrl + '_' + path,
+      request_path: fullUrl,
       source_ip: getClientIp(req),
       payload: JSON.stringify({ ...body, ...query }),
       user_agent: headers['user-agent'],
