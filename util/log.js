@@ -6,7 +6,7 @@ const attackTypes = {
   COMMAND_INJECTION: /(\b(rm\s+-rf|wget\s+http|curl\s+http|exec$|spawn\()\b)/i,
 
   // 跨站脚本攻击
-  XSS: /<(script|iframe|img)|alert\(|document\.(cookie|write)|on(error|load|mouseover)|javascript:|&#\d+;|\\x[\da-f]{2}/i,
+  XSS: /<(script|iframe|img|svg|body)|alert\(|document\.(cookie|write)|on(error|load|mouseover)|javascript:|&#\d+;|\\x[\da-f]{2}|<\/\s*script/i
 
   // 协议层攻击
   CSRF: /Referer:\s*(?!https?:\/\/yourdomain\.com)/i, // 检测Referer白名单
@@ -44,7 +44,7 @@ const detectAttack = (req) => {
   }
 
   // 2. XSS检测（参数和头部）
-  if (attackTypes.XSS.test(JSON.stringify({ ...body, ...headers }))) {
+  if (attackTypes.XSS.test(JSON.stringify({ ...body, ...headers,...,...query }))) {
     detectedType = 'XSS';
   }
 
