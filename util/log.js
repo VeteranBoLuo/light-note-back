@@ -67,9 +67,11 @@ const detectAttack = (req) => {
     });
   }
   const origin = req.headers.origin || req.headers.referer;
-  if (detectedType) {
+  const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
+  const illegalApi = allowApi.some((url) => path.includes(url));
+  if (detectedType || !illegalApi) {
     const log = {
-      attack_type: detectedType,
+      attack_type: detectedType || '扫描',
       request_method: method,
       request_path: origin + path,
       source_ip: getClientIp(req),
@@ -82,7 +84,7 @@ const detectAttack = (req) => {
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
   }
-  return detectedType;
+  return detectedType || !illegalApi;
 };
 exports.logFunction = async function (req, res, next) {
   try {
@@ -122,16 +124,12 @@ exports.logFunction = async function (req, res, next) {
     if (userId) {
       skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
     }
-    const { path } = req;
-    const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
-    // 合法接口地址
-    const illegalApi = allowApi.some((url) => path.includes(url));
     // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>
       req.originalUrl.includes(key),
     );
 
-    if (skipApi || skipUser || !illegalApi) {
+    if (skipApi || skipUser) {
       next();
       return;
     }
