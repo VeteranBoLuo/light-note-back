@@ -69,19 +69,11 @@ const detectAttack = (req) => {
   const origin = req.headers.origin || req.headers.referer;
   const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
   const illegalApi = allowApi.some((url) => path.includes(url));
-  // 获取原始协议（如果Nginx设置了X-Forwarded-Proto）
-  const protocol = req.get('x-forwarded-proto') || req.protocol;
-  // 获取原始主机名（如果Nginx设置了X-Forwarded-Host）
-  const host = req.get('x-forwarded-host') || req.get('host');
-  // 获取原始请求路径（使用req.originalUrl）
-  const url = req.originalUrl;
-
-  const fullUrl = `${protocol}://${host}${url}`;
   if (detectedType || !illegalApi) {
     const log = {
       attack_type: detectedType || '非法请求地址',
       request_method: method,
-      request_path: fullUrl,
+      request_path: path,
       source_ip: getClientIp(req),
       payload: JSON.stringify({ ...body, ...query }),
       user_agent: headers['user-agent'],
