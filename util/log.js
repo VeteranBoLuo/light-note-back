@@ -138,7 +138,7 @@ const detectAttack = (req) => {
     });
   });
   const illegalApi = allowApi.some((url) => {
-    return path.startsWith(url) || path.startsWith('/uploads');
+    return path.startsWith(url) || path.startsWith('/uploads') || path === '/' || path === '/favicon.ico';
   });
   if (detectedType || !illegalApi) {
     const log = {
