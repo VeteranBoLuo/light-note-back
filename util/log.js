@@ -2,12 +2,19 @@ const pool = require('../db');
 const { snakeCaseKeys, resultData, getClientIp } = require('./common');
 const attackTypes = {
   // 注入类攻击
-  SQL_INJECTION: /(\b(SELECT\s+.*FROM|UNION\s+SELECT|DELETE\s+FROM|DROP\s+TABLE|INSERT\s+INTO)\b)|(--\s+|\/\*.*\*\/)/i,
+  SQL_INJECTION: {
+    regex: /(\b(SELECT\s+.*FROM|UNION\s+SELECT|DELETE\s+FROM|DROP\s+TABLE|INSERT\s+INTO)\b)|(--\s+|\/\*.*\*\/)/i,
+    // 可选：添加白名单，排除合法的字段名或值
+    whitelist: ['pageSize', 'currentPage', 'level', 'filters', 'userId'],
+  },
   COMMAND_INJECTION: /(\b(rm\s+-rf|wget\s+http|curl\s+http|exec$|spawn\()\b)/i,
 
   // 跨站脚本攻击
-  XSS: /<(script|iframe|img|svg|body)|alert\(|document\.(cookie|write)|on(error|load|mouseover)|javascript:|&#\d+;|\\x[\da-f]{2}|<\/\s*script/i
-
+  XSS: {
+    regex:
+      /<\s*script\b[^>]*>([\s\S]*?)<\/\s*script\s*>|alert\(\s*['"]?[\s\S]*?['"]?\s*\)|javascript:\s*['"]?[\s\S]*?['"]?|on\w+\s*=\s*['"]?[\s\S]*?['"]?/i,
+    whitelist: ['description', 'content', 'comment'], // 添加合法字段白名单
+  },
   // 协议层攻击
   CSRF: /Referer:\s*(?!https?:\/\/yourdomain\.com)/i, // 检测Referer白名单
   SSRF: /(http:\/\/127\.0\.0\.1|http:\/\/192\.168\.|http:\/\/10\.)/i, // 检测内网地址
@@ -27,6 +34,33 @@ const attackTypes = {
   HEADER_INJECTION: /\r\n/, // HTTP头换行符注入
   JSON_HIJACKING: /^$\]\}'/, // JSON劫持前缀
 };
+// 1. SQL注入检测
+const sqlInjectionCheck = (data) => {
+  const str = JSON.stringify(data);
+  // 检查是否包含SQL注入特征
+  if (attackTypes.SQL_INJECTION.regex.test(str)) {
+    // 检查是否在白名单中
+    const keys = Object.keys(data).concat(Object.keys(query));
+    if (!keys.some((key) => attackTypes.SQL_INJECTION.whitelist.includes(key))) {
+      return true;
+    }
+  }
+  return false;
+};
+// 2. XSS检测（参数和头部）
+const xssCheck = (data) => {
+  const str = JSON.stringify(data);
+  // 检查是否包含XSS特征
+  if (attackTypes.XSS.regex.test(str)) {
+    // 检查是否在白名单中
+    const keys = Object.keys(data);
+    if (!keys.some((key) => attackTypes.XSS.whitelist.includes(key))) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const detectAttack = (req) => {
   // 白名单
   if (req.headers['x-user-id'] === '453c9c95-9b2e-11ef-9d4d-84a93e80c16e') {
@@ -37,14 +71,14 @@ const detectAttack = (req) => {
   let detectedType = null;
 
   // 1. SQL/命令注入检测（基于内容）
-  if (attackTypes.SQL_INJECTION.test(JSON.stringify({ ...body, ...query }))) {
+  if (sqlInjectionCheck(body) || sqlInjectionCheck(query)) {
     detectedType = 'SQL_INJECTION';
   } else if (attackTypes.COMMAND_INJECTION.test(JSON.stringify(body))) {
     detectedType = 'COMMAND_INJECTION';
   }
 
   // 2. XSS检测（参数和头部）
-  if (attackTypes.XSS.test(JSON.stringify({ ...body, ...headers,...,...query }))) {
+  if (xssCheck(body) || xssCheck(query) || xssCheck(headers)) {
     detectedType = 'XSS';
   }
 
