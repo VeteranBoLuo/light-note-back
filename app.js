@@ -20,13 +20,35 @@ app.use(requestTime);
 // 日志记录中间件
 app.use(logFunction);
 
-app.use('/user', userRouter);
-app.use('/common', commonRouter);
-app.use('/note', noteLibraryRouter);
-app.use('/bookmark', bookmarkRouter);
-app.use('/opinion', opinionRouter);
-// 设置静态文件目录
-app.use('/uploads', express.static('/www/wwwroot/images'));
+const allRouter = [
+  {
+    path: '/user',
+    router: userRouter,
+  },
+  {
+    path: '/common',
+    router: commonRouter,
+  },
+  {
+    path: '/note',
+    router: noteLibraryRouter,
+  },
+  {
+    path: '/bookmark',
+    router: bookmarkRouter,
+  },
+  {
+    path: '/opinion',
+    router: opinionRouter,
+  },
+  {
+    path: '/uploads',
+    router: express.static('/www/wwwroot/images'), // 设置静态文件目录
+  },
+];
+allRouter.forEach((item) => {
+  app.use(item.path, item.router);
+});
 // 启动 Express 服务器
 app.listen(9001, () => {
   console.log('服务器已启动——端口：9001');

@@ -5,6 +5,7 @@ const commonRouter = require('../router/common');
 const noteLibraryRouter = require('../router/noteLibrary');
 const bookmarkRouter = require('../router/bookmark');
 const opinionRouter = require('../router/opinion');
+const express = require('express');
 const attackTypes = {
   // 注入类攻击
   SQL_INJECTION: {
@@ -69,7 +70,7 @@ const xssCheck = (data) => {
 const detectAttack = (req) => {
   // 白名单
   if (req.headers['x-user-id'] === '453c9c95-9b2e-11ef-9d4d-84a93e80c16e') {
-    return false;
+    // return false;
   }
 
   const { method, path, body, headers, query } = req;
@@ -106,15 +107,39 @@ const detectAttack = (req) => {
     });
   }
   const allowApi = [];
-  const allRouter = [userRouter, commonRouter, noteLibraryRouter, bookmarkRouter, opinionRouter];
-  allRouter.forEach((router) => {
-    router.stack.forEach((route) => {
+  const allRouter = [
+    {
+      path: '/user',
+      router: userRouter,
+    },
+    {
+      path: '/common',
+      router: commonRouter,
+    },
+    {
+      path: '/note',
+      router: noteLibraryRouter,
+    },
+    {
+      path: '/bookmark',
+      router: bookmarkRouter,
+    },
+    {
+      path: '/opinion',
+      router: opinionRouter,
+    },
+  ];
+  allRouter.forEach((Router) => {
+    Object.keys(Router.router.stack).forEach((key) => {
+      const route = Router.router.stack[key];
       if (route.route) {
-        allowApi.push(route.route.path);
+        allowApi.push(Router.path + route.route.path);
       }
     });
   });
-  const illegalApi = allowApi.some((url) => path.includes(url));
+  const illegalApi = allowApi.some((url) => {
+    return path.startsWith(url) || path.startsWith('/uploads');
+  });
   if (detectedType || !illegalApi) {
     const log = {
       attack_type: detectedType || '非法请求地址',
@@ -125,7 +150,6 @@ const detectAttack = (req) => {
       user_agent: headers['user-agent'],
       created_at: req.requestTime,
     };
-
     pool
       .query('INSERT INTO attack_logs SET ?', [log])
       .catch((err) => console.error('攻击日志更新错误: ' + err.message));
