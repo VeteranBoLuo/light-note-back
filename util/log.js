@@ -1,5 +1,10 @@
 const pool = require('../db');
 const { snakeCaseKeys, resultData, getClientIp } = require('./common');
+const userRouter = require('../router/user');
+const commonRouter = require('../router/common');
+const noteLibraryRouter = require('../router/noteLibrary');
+const bookmarkRouter = require('../router/bookmark');
+const opinionRouter = require('../router/opinion');
 const attackTypes = {
   // 注入类攻击
   SQL_INJECTION: {
@@ -100,7 +105,15 @@ const detectAttack = (req) => {
       }
     });
   }
-  const allowApi = ['user', 'common', 'note', 'bookmark', 'opinion', 'uploads'];
+  const allowApi = [];
+  const allRouter = [userRouter, commonRouter, noteLibraryRouter, bookmarkRouter, opinionRouter];
+  allRouter.forEach((router) => {
+    router.stack.forEach((route) => {
+      if (route.route) {
+        allowApi.push(route.route.path);
+      }
+    });
+  });
   const illegalApi = allowApi.some((url) => path.includes(url));
   if (detectedType || !illegalApi) {
     const log = {
