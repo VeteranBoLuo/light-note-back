@@ -9,13 +9,14 @@ const pool = require('../db');
 exports.getApiLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = req.body;
+    const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
     let sql = `SELECT a.*,u.user_name 
       FROM api_logs a left join user u on a.user_id=u.id  where (u.user_name LIKE CONCAT('%', ?, '%') 
       OR a.ip LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
     pool
-      .query(sql, [filters.key, filters.key, pageSize, skip])
+      .query(sql, [key, key, pageSize, skip])
       .then(async ([result]) => {
         result.forEach((row) => {
           // 判断数据是否是JSON字符串
@@ -33,7 +34,7 @@ exports.getApiLogs = (req, res) => {
         });
         const [totalRes] = await pool.query(
           "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.user_name LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
-          [filters.key, filters.key],
+          [key, key],
         );
         res.send(
           resultData({
