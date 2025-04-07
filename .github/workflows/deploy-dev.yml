@@ -45,7 +45,5 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           script: |
-            # 停止旧服务
-            sudo systemctl stop BMS_Back
-            # 启动新服务
-            sudo systemctl start BMS_Back
+            pkill -f "node app.js"
+            cd /www/wwwroot/BMS_Back && node app.js &
