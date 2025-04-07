@@ -44,4 +44,4 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           script: |
-            cd /www/wwwroot/BMS_Back && (pkill -f "node app.js" || true) &&  node app.js
+            pm2 restart app
