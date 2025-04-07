@@ -35,3 +35,17 @@ jobs:
           source: "./*"
           # 目标目录根据你的服务器路径修改
           target: "/www/wwwroot/BMS_Back"
+
+      # 通过SSH连接到服务器并重启服务
+      - name: 重启Node.js服务
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
+          port: ${{ secrets.PORT }}
+          script: |
+            # 停止旧服务
+            sudo systemctl stop BMS_Back
+            # 启动新服务
+            sudo systemctl start BMS_Back
