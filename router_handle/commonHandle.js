@@ -5,10 +5,11 @@ const fsP = require('fs').promises;
 
 const path = require('path');
 const pool = require('../db');
+const { validateQueryParams } = require('../util/request');
 
 exports.getApiLogs = (req, res) => {
   try {
-    const { filters, pageSize, currentPage } = req.body;
+    const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
     let sql = `SELECT a.*,u.user_name 
@@ -16,7 +17,7 @@ exports.getApiLogs = (req, res) => {
       OR a.ip LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
     pool
-      .query(sql, [key, key, pageSize, skip])
+      .query(sql, [filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
         result.forEach((row) => {
           // 判断数据是否是JSON字符串
@@ -34,7 +35,7 @@ exports.getApiLogs = (req, res) => {
         });
         const [totalRes] = await pool.query(
           "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.user_name LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
-          [key, key],
+          [filters.key, filters.key],
         );
         res.send(
           resultData({
@@ -47,7 +48,7 @@ exports.getApiLogs = (req, res) => {
         res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
   }
 };
 exports.clearApiLogs = (req, res) => {
@@ -76,7 +77,7 @@ exports.getAttackLogs = (req, res) => {
         res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
   }
 };
 
@@ -99,7 +100,7 @@ exports.recordOperationLogs = (req, res) => {
         res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
   }
 };
 
@@ -140,7 +141,7 @@ AND o.del_flag=0 AND u.user_name!='wenjunqiu'`;
         res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
   }
 };
 

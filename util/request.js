@@ -1,108 +1,117 @@
 const { snakeCaseKeys } = require('./common');
 const pool = require('../db');
 
-// 基础查询请求
-exports.baseQuery = async function (req, tableName, options = { whereSign: 'AND' }) {
-  let { pageSize, currentPage, order, filters } = req.body;
+exports.validateQueryParams = function (queryBody) {
+  let { pageSize, currentPage, order, filters } = queryBody;
   order = snakeCaseKeys(order);
   filters = snakeCaseKeys(filters);
   // 检查必传参数
   if (!pageSize || !currentPage) {
     throw new Error('pageSize和currentPage是必传参数');
   }
+  return { pageSize, currentPage, order, filters };
+};
 
-  // 处理排序
-  let orderClause = '';
-  if (order && typeof order === 'object' && Object.keys(order).length > 0) {
-    const orderBy = [];
-    for (const [field, method] of Object.entries(order)) {
-      if (!['asc', 'desc'].includes(method.toLowerCase())) {
-        throw new Error(`排序方法${method}无效，必须是asc或desc`);
-      }
-      orderBy.push(`${field} ${method.toUpperCase()}`);
-    }
-    orderClause = `ORDER BY ${orderBy.join(', ')}`;
-  }
+// 基础查询请求
+exports.baseQuery = async function (req, tableName, options = { whereSign: 'AND' }) {
+  try {
+    const { pageSize, currentPage, order, filters } = exports.validateQueryParams(req.body);
 
-  // 处理分页
-  let limitClause = '';
-  let offset = 0;
-  if (pageSize !== -1) {
-    const totalPage = parseInt(pageSize);
-    const currentPageNum = parseInt(currentPage);
-    offset = (currentPageNum - 1) * totalPage;
-    limitClause = `LIMIT ${totalPage} OFFSET ${offset}`;
-  }
-
-  // 处理过滤条件
-  let whereClause = '';
-  const whereParams = [];
-
-  // 检查是否需要添加默认的del_flag条件
-  if (!filters || !filters.hasOwnProperty('del_flag')) {
-    whereClause += 'WHERE del_flag = 0';
-  }
-
-  if (filters && Object.keys(filters).length > 0) {
-    const conditions = [];
-    for (const [key, value] of Object.entries(filters)) {
-      if (value === null || value === undefined || value === '') {
-        continue;
-      }
-      // 检查是否有特殊操作符
-      const parts = key.split('__');
-      if (parts.length === 2) {
-        const [field, operator] = parts;
-        switch (operator.toLowerCase()) {
-          case 'startswith':
-            if (value === '') {
-              throw new Error('startswith操作符的值不能为空');
-            }
-            conditions.push(`${field} LIKE ?`);
-            whereParams.push(`${value}%`);
-            break;
-          case 'contains':
-            conditions.push(`${field} LIKE ?`);
-            whereParams.push(`%${value}%`);
-            break;
-          case 'endswith':
-            if (value === '') {
-              throw new Error('endswith操作符的值不能为空');
-            }
-            conditions.push(`${field} LIKE ?`);
-            whereParams.push(`%${value}`);
-            break;
-          default:
-            throw new Error(`无效的操作符${operator}`);
+    // 处理排序
+    let orderClause = '';
+    if (order && typeof order === 'object' && Object.keys(order).length > 0) {
+      const orderBy = [];
+      for (const [field, method] of Object.entries(order)) {
+        if (!['asc', 'desc'].includes(method.toLowerCase())) {
+          throw new Error(`排序方法${method}无效，必须是asc或desc`);
         }
-      } else {
-        // 普通等值条件
-        conditions.push(`${key} = ?`);
-        whereParams.push(value);
+        orderBy.push(`${field} ${method.toUpperCase()}`);
+      }
+      orderClause = `ORDER BY ${orderBy.join(', ')}`;
+    }
+
+    // 处理分页
+    let limitClause = '';
+    let offset = 0;
+    if (pageSize !== -1) {
+      const totalPage = parseInt(pageSize);
+      const currentPageNum = parseInt(currentPage);
+      offset = (currentPageNum - 1) * totalPage;
+      limitClause = `LIMIT ${totalPage} OFFSET ${offset}`;
+    }
+
+    // 处理过滤条件
+    let whereClause = '';
+    const whereParams = [];
+
+    // 检查是否需要添加默认的del_flag条件
+    if (!filters || !filters.hasOwnProperty('del_flag')) {
+      whereClause += 'WHERE del_flag = 0';
+    }
+
+    if (filters && Object.keys(filters).length > 0) {
+      const conditions = [];
+      for (const [key, value] of Object.entries(filters)) {
+        if (value === null || value === undefined || value === '') {
+          continue;
+        }
+        // 检查是否有特殊操作符
+        const parts = key.split('__');
+        if (parts.length === 2) {
+          const [field, operator] = parts;
+          switch (operator.toLowerCase()) {
+            case 'startswith':
+              if (value === '') {
+                throw new Error('startswith操作符的值不能为空');
+              }
+              conditions.push(`${field} LIKE ?`);
+              whereParams.push(`${value}%`);
+              break;
+            case 'contains':
+              conditions.push(`${field} LIKE ?`);
+              whereParams.push(`%${value}%`);
+              break;
+            case 'endswith':
+              if (value === '') {
+                throw new Error('endswith操作符的值不能为空');
+              }
+              conditions.push(`${field} LIKE ?`);
+              whereParams.push(`%${value}`);
+              break;
+            default:
+              throw new Error(`无效的操作符${operator}`);
+          }
+        } else {
+          // 普通等值条件
+          conditions.push(`${key} = ?`);
+          whereParams.push(value);
+        }
+      }
+      if (conditions.length > 0) {
+        if (whereClause === '') {
+          whereClause += 'WHERE ';
+        } else {
+          whereClause += ' AND ';
+        }
+        whereClause += conditions.join(` ${options.whereSign} `);
       }
     }
-    if (conditions.length > 0) {
-      if (whereClause === '') {
-        whereClause += 'WHERE ';
-      } else {
-        whereClause += ' AND ';
-      }
-      whereClause += conditions.join(` ${options.whereSign} `);
-    }
+    // 构建SQL查询
+    const querySql = `SELECT * FROM ${tableName} ${whereClause} ${orderClause} ${limitClause}`;
+    const [result] = await pool.query(querySql, whereParams);
+
+    // 计算总记录数
+    let totalSql = `SELECT COUNT(*) AS total FROM ${tableName} ${whereClause}`;
+    const [totalResult] = await pool.query(totalSql, whereParams);
+    const total = totalResult[0].total;
+
+    return {
+      items: result,
+      total: total,
+    };
+  } catch (e) {
+    throw e; // 将错误抛出，让上层处理
   }
-  // 构建SQL查询
-  const querySql = `SELECT * FROM ${tableName} ${whereClause} ${orderClause} ${limitClause}`;
-  const [result] = await pool.query(querySql, whereParams);
-
-  // 计算总记录数
-  let totalSql = `SELECT COUNT(*) AS total FROM ${tableName} ${whereClause}`;
-  const [totalResult] = await pool.query(totalSql, whereParams);
-  const total = totalResult[0].total;
-
-  return {
-    items: result,
-    total: total,
-  };
 };
 
 // 基础新增请求
