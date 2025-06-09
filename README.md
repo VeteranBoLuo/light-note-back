@@ -39,7 +39,7 @@ __轻笺: 轻笺是专为效率控设计的云端书签管理神器，以​​�
 - **灵感火花**：关联书签的智能内容推荐引擎  
 - **轻笺宇宙**：UGC书签合集共享
 
-#### 前端仓库：https://github.com/VeteranBoLuo/BMS_Font
+#### 前端仓库：https://github.com/VeteranBoLuo/BMS_Front
 #### 后端仓库：https://github.com/VeteranBoLuo/BMS_Back
 
 ## ⭐ Stargazers
