@@ -26,16 +26,37 @@ exports.recordOpinion = async (req, res) => {
 
 exports.getOpinionList = async (req, res) => {
   const connection = await pool.getConnection();
-  const { pageSize, currentPage } = req.body;
+  const { pageSize, currentPage, userId } = req.body; // 从请求体中解构出 userId
   const skip = pageSize * (currentPage - 1);
+
   try {
+    // 构建基础查询语句
+    let query = 'SELECT o.*, u.user_name FROM opinion o LEFT JOIN user u ON o.user_id = u.id WHERE o.del_flag = 0';
+    const params = [];
+
+    // 如果 userId 存在，则添加到查询条件中
+    if (userId !== undefined) {
+      query += ' AND o.user_id = ?';
+      params.push(userId);
+    }
+
+    // 添加分页
+    query += ' ORDER BY create_time DESC LIMIT ? OFFSET ? ';
+    params.push(pageSize, skip);
+    console.log(query);
     pool
-      .query(
-        'SELECT o.*,u.user_name FROM  opinion o  left join user u on o.user_id=u.id where  O.del_flag=0 LIMIT ? OFFSET ?',
-        [pageSize, skip],
-      )
+      .query(query, params)
       .then(async ([result]) => {
-        const [totalRes] = await pool.query('SELECT COUNT(*) FROM opinion where  del_flag=0');
+        // 构建总记录数查询
+        let totalQuery = 'SELECT COUNT(*) FROM opinion WHERE del_flag = 0';
+        const totalParams = [];
+
+        if (userId !== undefined) {
+          totalQuery += ' AND user_id = ?';
+          totalParams.push(userId);
+        }
+
+        const [totalRes] = await pool.query(totalQuery, totalParams);
         res.send(
           resultData({
             items: result,
@@ -47,7 +68,6 @@ exports.getOpinionList = async (req, res) => {
         res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (err) {
-    // 如果发生错误，发送错误响应给前端
     res.send(resultData(null, 500, '客户端请求异常: ' + err.message));
   } finally {
     connection.release(); // 释放连接
