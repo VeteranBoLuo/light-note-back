@@ -1,9 +1,9 @@
 # 轻笺 🌊 
 
 [![Vue flow](vue-flow.gif)](https://vueflow.dev/)
-![top-language](https://img.shields.io/github/languages/top/VeteranBoLuo/BMS_Front)
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/VeteranBoLuo/BMS_Front)
-![GitHub last commit](https://img.shields.io/github/last-commit/VeteranBoLuo/BMS_Front)
+![top-language](https://img.shields.io/github/languages/top/VeteranBoLuo/BMS_Back)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/VeteranBoLuo/BMS_Back)
+![GitHub last commit](https://img.shields.io/github/last-commit/VeteranBoLuo/BMS_Back)
 
 __轻笺: 轻笺是专为效率控设计的云端书签管理神器，以​​智能标签​​为核心，帮你瞬间归档网页、笔记与灵感碎片。通过动态关联的标签网络，实现书签/笔记的跨设备秒搜、多维分类与智能推荐，让知识管理像刷社交动态一样轻松有趣
 
