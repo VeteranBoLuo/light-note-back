@@ -80,4 +80,4 @@ npm run build
 
 非常感谢各位好心人留下的星星。非常感谢你们的支持！
 
-[![Stargazers for @vue-flow/core](https://reporoster.com/stars/VeteranBoLuo/BMS_Back)](https://github.com/VeteranBoLuo/BMS_Back/stargazers)
+[![Stargazers for BMS_Front](https://reporoster.com/stars/VeteranBoLuo/BMS_Back)](https://github.com/VeteranBoLuo/BMS_Back/stargazers)
