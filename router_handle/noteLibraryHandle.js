@@ -9,6 +9,7 @@ exports.addNote = (req, res) => {
       ...req.body,
       createBy: userId,
       createTime: req.requestTime,
+      updateTime: req.requestTime,
     };
     pool
       .query('INSERT INTO note SET ?', [snakeCaseKeys(params)])
@@ -85,49 +86,48 @@ exports.getNoteDetail = (req, res) => {
 
 exports.delNote = async (req, res) => {
   try {
-    const id = req.body.id; // 获取标签ID
-    let sql = `UPDATE note SET del_flag=1  WHERE id=?`;
+    const ids = req.body.ids; // 获取标签ID数组
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.send(resultData(null, 400, '无效的请求参数'));
+    }
+
+    const sql = `UPDATE note SET del_flag=1 WHERE id IN (?)`;
     const connection = await pool.getConnection();
+
     try {
       await connection.beginTransaction(); // 开始事务
-      pool
-        .query(sql, [id])
-        .then(async ([result]) => {
-          // 查询关联的图片URLs
-          const selectImagesSql = `SELECT url FROM note_images WHERE note_id = ?`;
-          const [images] = await connection.query(selectImagesSql, [id]);
 
-          // 删除笔记关联的图片记录
-          const deleteAssociationsSql = `DELETE FROM note_images WHERE note_id = ?`;
-          await connection.query(deleteAssociationsSql, [id]);
+      // 批量更新笔记的 del_flag
+      const [updateResult] = await connection.query(sql, [ids]);
 
-          // 删除服务器上的图片文件
-          const deletePromises = images.map((image) => {
-            // 替换URL中的代理路径为实际文件路径
-            const filePath = image.url.replace(
-              new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`),
-              '/www/wwwroot/images/',
-            );
-            return new Promise(async (resolve, reject) => {
-              try {
-                await fs.unlink(filePath);
-                resolve();
-              } catch (e) {
-                resolve();
-              }
-            });
-          });
+      // 查询所有关联的图片URLs
+      const selectImagesSql = `SELECT url FROM note_images WHERE note_id IN (?)`;
+      const [images] = await connection.query(selectImagesSql, [ids]);
+      // 删除笔记关联的图片记录
+      const deleteAssociationsSql = `DELETE FROM note_images WHERE note_id IN (?)`;
+      await connection.query(deleteAssociationsSql, [ids]);
 
-          // 等待所有文件删除操作完成
-          await Promise.all(deletePromises);
+      // 删除服务器上的图片文件
+      const deletePromises = images.map(async (image) => {
+        // 替换URL中的代理路径为实际文件路径
+        const filePath = image.url.replace(
+          new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`),
+          '/www/wwwroot/images/',
+        );
+        try {
+          console.log('delete filePath', filePath);
+          await fs.unlink(filePath);
+        } catch (e) {
+          console.error(`删除文件 ${filePath} 时出错: ${e.message}`);
+        }
+      });
 
-          await connection.commit(); // 提交事务
+      // 等待所有文件删除操作完成
+      await Promise.all(deletePromises);
 
-          res.send(resultData(result));
-        })
-        .catch((e) => {
-          return res.send(resultData(null, 500, '服务器内部错误: ' + e));
-        });
+      await connection.commit(); // 提交事务
+
+      res.send(resultData(updateResult));
     } catch (error) {
       await connection.rollback(); // 回滚事务
       res.send(resultData(null, 500, '服务器内部错误: ' + error.message)); // 设置状态码为500
@@ -135,6 +135,6 @@ exports.delNote = async (req, res) => {
       connection.release(); // 释放连接
     }
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常: ' + e.message)); // 设置状态码为400
   }
 };

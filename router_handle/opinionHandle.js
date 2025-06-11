@@ -43,7 +43,6 @@ exports.getOpinionList = async (req, res) => {
     // 添加分页
     query += ' ORDER BY create_time DESC LIMIT ? OFFSET ? ';
     params.push(pageSize, skip);
-    console.log(query);
     pool
       .query(query, params)
       .then(async ([result]) => {

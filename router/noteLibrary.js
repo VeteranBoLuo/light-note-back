@@ -4,14 +4,15 @@ const multer = require('multer');
 const path = require('path');
 const noteLibraryHandle = require('../router_handle/noteLibraryHandle');
 
-// 配置multer存储
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, '/www/wwwroot/images'); // 确保这个目录存在
+  destination: (req, file, cb) => {
+    cb(null, '/www/wwwroot/images');
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, 'note-' + file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  filename: (req, file, cb) => {
+    // 关键步骤：转换中文编码
+    const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf-8');
+    const uniqueSuffix = Date.now();
+    cb(null, 'note-' + uniqueSuffix + '-' + decodedName);
   },
 });
 
@@ -19,7 +20,7 @@ const upload = multer({ storage: storage });
 const { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } = require('../util/common');
 const pool = require('../db');
 
-router.post('/uploadFile', upload.single('file'), async (req, res) => {
+router.post('/uploadImage', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.send(resultData(null, 400, '没有上传文件'));
