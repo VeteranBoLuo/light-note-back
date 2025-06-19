@@ -140,8 +140,14 @@ exports.getUserInfo = async (req, res) => {
         const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [id]);
         const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
         const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
+        const noteTotalSql = `SELECT COUNT(*) FROM note WHERE create_by=? and del_flag = 0`;
+        const [noteTotalRes] = await pool.query(noteTotalSql, [id]);
+        const opinionTotalSql = `SELECT COUNT(*) FROM opinion WHERE  del_flag = 0`;
+        const [opinionTotalRes] = await pool.query(opinionTotalSql, [id]);
         result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
+        result[0].noteTotal = noteTotalRes[0]['COUNT(*)'];
+        result[0].opinionTotal = opinionTotalRes[0]['COUNT(*)'];
         delete result[0].password;
         if (result[0].role === 'visitor') {
           res.send(resultData(result[0], 'visitor'));
