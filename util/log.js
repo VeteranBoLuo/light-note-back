@@ -6,6 +6,7 @@ const noteLibraryRouter = require('../router/noteLibrary');
 const bookmarkRouter = require('../router/bookmark');
 const opinionRouter = require('../router/opinion');
 const express = require('express');
+const fileRouter = require('../router/file');
 const attackTypes = {
   // 注入类攻击
   SQL_INJECTION: {
@@ -127,6 +128,10 @@ const detectAttack = (req) => {
     {
       path: '/opinion',
       router: opinionRouter,
+    },
+    {
+      path: '/file',
+      router: fileRouter,
     },
   ];
   allRouter.forEach((Router) => {

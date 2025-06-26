@@ -40,7 +40,7 @@ exports.registerUser = (req, res) => {
       .then(([result]) => {
         if (result?.length > 0) {
           res.send(resultData(null, 500, '账号已存在')); // 设置状态码为500
-          return;
+
         } else {
           const params = req.body;
           params.createTime = req.requestTime;

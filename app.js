@@ -4,11 +4,11 @@ const commonRouter = require('./router/common');
 const noteLibraryRouter = require('./router/noteLibrary');
 const bookmarkRouter = require('./router/bookmark');
 const opinionRouter = require('./router/opinion');
+const fileRouter = require('./router/file');
 const bodyParser = require('body-parser');
 const { logFunction } = require('./util/log');
 const { requestTime, getClientIp } = require('./util/common');
-const pool = require('./db/index');
-
+require('./db/index');
 // 建立一个Express服务器
 const app = express();
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
@@ -42,6 +42,10 @@ const allRouter = [
     router: opinionRouter,
   },
   {
+    path: '/file',
+    router: fileRouter,
+  },
+  {
     path: '/uploads',
     router: express.static('/www/wwwroot/images'), // 设置静态文件目录
   },
@@ -51,5 +55,5 @@ allRouter.forEach((item) => {
 });
 // 启动 Express 服务器
 app.listen(9001, () => {
-  console.log('服务器已启动--' + requestTime);
+  console.log('服务器已启动');
 });
