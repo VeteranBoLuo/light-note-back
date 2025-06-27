@@ -158,8 +158,43 @@ router.post('/downloadFileById', async (req, res) => {
     });
   } catch (error) {
     console.error('下载文件时出错:', error);
-    res.status(500).send({ code: 500, message: '服务器内部错误' });
+    res.send(resultData(null, 500, '服务器内部错误')); // 设置状态码为500
   }
+});
+
+// 根据id删除文件，同时删除服务器上数据
+router.post('/deleteFileById', async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    // 查询文件信息
+    const sql = 'SELECT * FROM files WHERE id = ?';
+    const [results] = await pool.query(sql, [id]);
+
+    if (results.length === 0) {
+      return res.send(resultData(null, 404, '文件未找到'));
+    }
+
+    const file = results[0];
+    const filePath = path.join('/www/wwwroot/files', file.file_name);
+
+    // 检查文件是否存在
+    fs.access(filePath, fs.constants.F_OK, async (err) => {
+      if (err) {
+        return res.send(resultData(null, 404, '文件不存在'));
+      }
+
+      // 删除数据库中的文件记录
+      const deleteSql = 'DELETE FROM files WHERE id = ?';
+      await pool.query(deleteSql, [id]);
+
+      // 删除服务器上的文件
+      fs.unlinkSync(filePath);
+
+      res.send(resultData({ id }));
+
+    });
+  } catch (e) {}
 });
 
 module.exports = router;

@@ -235,7 +235,7 @@ exports.logFunction = async function (req, res, next) {
             method: req.method,
             url: req.originalUrl,
             req: requestPayload === '{}' ? '' : requestPayload,
-            ip: getClientIp(req),
+            ip: getClientIp(req) || '',
             location: location,
             system: system,
             requestTime: req.requestTime, // 获取当前时间
