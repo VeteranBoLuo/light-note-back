@@ -38,7 +38,6 @@ const upload = multer({
 
 router.post('/uploadFile', upload.single('file'), async (req, res) => {
   try {
-    console.log('req.file', req.file);
     if (!req.file) {
       return res.send(resultData(null, 400, '没有上传文件'));
     }
@@ -98,13 +97,14 @@ router.post('/queryFiles', async (req, res) => {
   try {
     // 获取用户ID
     const userId = req.headers['x-user-id'];
+    const { filters } = req.body;
 
     // 构建SQL查询
     const sql = 'SELECT * FROM files WHERE create_by = ?';
     const [files] = await pool.query(sql, [userId]);
 
     // 格式化结果
-    const formattedFiles = files.map((file) => ({
+    let formattedFiles = files.map((file) => ({
       id: file.id,
       fileName: getFileName(file.file_name),
       fileType: file.file_type,
@@ -112,7 +112,9 @@ router.post('/queryFiles', async (req, res) => {
       fileUrl: file.url,
       uploadTime: file.create_time,
     }));
-
+    formattedFiles = formattedFiles.filter((file) => {
+      return file.fileName.includes(filters.fileName);
+    });
     // 返回结果
     res.send(resultData(formattedFiles));
   } catch (error) {
@@ -192,9 +194,29 @@ router.post('/deleteFileById', async (req, res) => {
       fs.unlinkSync(filePath);
 
       res.send(resultData({ id }));
-
     });
   } catch (e) {}
+});
+
+// 查询某个人下的文件的总共大小（单位MB）
+router.post('/queryTotalFileSize', async (req, res) => {
+  try {
+    // 获取用户ID
+    const userId = req.headers['x-user-id'];
+
+    // 构建SQL查询
+    const sql = 'SELECT SUM(file_size) as total_size FROM files WHERE create_by = ?';
+    const [result] = await pool.query(sql, [userId]);
+    console.log(result[0].total_size / 1024);
+    // 提取总大小（MB）保留两位小数
+    const totalSizeMB = parseFloat((result[0].total_size / (1024 * 1024)).toFixed(2));
+    // 返回结果
+    res.send(resultData({ totalSizeMB }));
+  } catch (error) {
+    // 处理错误
+    console.error('查询文件总大小时出错:', error);
+    res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
+  }
 });
 
 module.exports = router;
