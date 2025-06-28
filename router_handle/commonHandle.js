@@ -384,7 +384,7 @@ exports.addFolder = async (req, res) => {
     const { name } = req.body;
     const createBy = req.headers['x-user-id'];
     const folder = {
-      folderName: name,
+      name: name,
       createBy,
       createTime: req.requestTime,
       del_flag: 0,
