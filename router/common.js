@@ -18,11 +18,13 @@ router.post('/getImages', commonHandle.getImages);
 
 router.post('/clearImages', commonHandle.clearImages);
 
-router.post('/runSql', commonHandle.runSql)
+router.post('/runSql', commonHandle.runSql);
 
 router.post('/getAttackLogs', commonHandle.getAttackLogs);
 
-
-
+router.post('/queryFolder', commonHandle.queryFolder);
+router.post('/addFolder', commonHandle.addFolder);
+// router.post('/updateFolder', commonHandle.updateFolder);
+// router.post('/deleteFolder', commonHandle.deleteFolder);
 
 module.exports = router;

@@ -6,10 +6,6 @@ const pool = require('../db');
 const express = require('express');
 const router = express.Router();
 
-function getFileName(filename) {
-  return filename.split('-').slice(1).join('-');
-}
-
 // 配置multer存储
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -18,8 +14,7 @@ const storage = multer.diskStorage({
   filename: function (req, file, cb) {
     // 关键步骤：转换中文编码
     const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf-8');
-    const uniqueSuffix = Date.now();
-    cb(null, uniqueSuffix + '-' + decodedName);
+    cb(null, decodedName);
   },
 });
 
@@ -66,12 +61,18 @@ router.post('/uploadFile', upload.single('file'), async (req, res) => {
     try {
       await connection.beginTransaction();
 
-      // 插入文件信息到数据库
-      const insertSql = 'INSERT INTO files SET ?';
-      const [result] = await connection.query(insertSql, [snakeCaseKeys(fileInfo)]);
+      const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ?';
+      const [existingRows] = await connection.query(selectSql, [userId, filename]);
 
+      if (existingRows.length > 0) {
+        res.send(resultData('上传成功'));
+      } else {
+        // 插入文件信息到数据库
+        const insertSql = 'INSERT INTO files SET ?';
+        const [result] = await connection.query(insertSql, [snakeCaseKeys(fileInfo)]);
+        res.send(resultData(result[0]));
+      }
       await connection.commit();
-      res.send(resultData(result[0]));
     } catch (error) {
       await connection.rollback();
       // 删除上传的文件
@@ -106,7 +107,7 @@ router.post('/queryFiles', async (req, res) => {
     // 格式化结果
     let formattedFiles = files.map((file) => ({
       id: file.id,
-      fileName: getFileName(file.file_name),
+      fileName: file.file_name,
       fileType: file.file_type,
       fileSize: file.file_size,
       fileUrl: file.url,
@@ -147,12 +148,12 @@ router.post('/downloadFileById', async (req, res) => {
       }
 
       // 设置自定义响应头来传递元信息
-      res.setHeader('X-File-Name', encodeURIComponent(getFileName(file.file_name))); // 文件名
+      res.setHeader('X-File-Name', encodeURIComponent(file.file_name)); // 文件名
       res.setHeader('X-File-Size', file.file_size); // 文件大小
       res.setHeader('X-File-Type', file.file_type); // 文件类型
 
       // 设置标准的 Content-Disposition 下载头
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(getFileName(file.file_name))}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.file_name)}"`);
 
       // 流式传输文件
       const fileStream = fs.createReadStream(filePath);
