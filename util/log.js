@@ -143,7 +143,13 @@ const detectAttack = (req) => {
     });
   });
   const illegalApi = allowApi.some((url) => {
-    return path.startsWith(url) || path.startsWith('/uploads') || path === '/' || path === '/favicon.ico';
+    return (
+      path.startsWith(url) ||
+      path.startsWith('/uploads') ||
+      path.startsWith('/files') ||
+      path === '/' ||
+      path === '/favicon.ico'
+    );
   });
   if (detectedType || !illegalApi) {
     const log = {
@@ -165,7 +171,7 @@ exports.logFunction = async function (req, res, next) {
   try {
     const noPass = detectAttack(req, res, next);
     if (noPass) {
-      return res.status(403).json({ code: 403, msg: '非法请求' });
+      return res.status(403).json({ code: 403, msg: '系统检测为非法请求' });
     }
     // 角色为游客，需要查询获取
     if (req.headers.role === 'visitor') {

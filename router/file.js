@@ -102,12 +102,13 @@ router.post('/queryFiles', async (req, res) => {
     const { filters } = req.body;
     const params = [userId];
     // 1. 查询所有该用户创建的文件
-    let sql = 'SELECT * FROM files WHERE create_by = ? ORDER BY create_time DESC';
+    let sql = 'SELECT * FROM files WHERE create_by = ?';
     // 添加文件夹ID条件
     if (filters.folderId !== 'all') {
       sql += ' AND folder_id = ?';
       params.push(filters.folderId);
     }
+    sql += ' ORDER BY create_time DESC';
     const [files] = await pool.query(sql, params);
 
     // 2. 格式化结果
@@ -265,6 +266,5 @@ router.post('/addFolder', fileHandle.addFolder);
 router.post('/associateFile', fileHandle.associateFile);
 router.post('/updateFolder', fileHandle.updateFolder);
 router.post('/deleteFolder', fileHandle.deleteFolder);
-
 
 module.exports = router;

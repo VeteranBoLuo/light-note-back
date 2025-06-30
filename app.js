@@ -46,6 +46,10 @@ const allRouter = [
     router: fileRouter,
   },
   {
+    path: '/files',
+    router: express.static('/www/wwwroot/files'), // 设置静态文件目录,
+  },
+  {
     path: '/uploads',
     router: express.static('/www/wwwroot/images'), // 设置静态文件目录
   },
