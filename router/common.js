@@ -22,8 +22,7 @@ router.post('/runSql', commonHandle.runSql);
 
 router.post('/getAttackLogs', commonHandle.getAttackLogs);
 
-router.post('/queryFolder', commonHandle.queryFolder);
-router.post('/addFolder', commonHandle.addFolder);
+
 // router.post('/updateFolder', commonHandle.updateFolder);
 // router.post('/deleteFolder', commonHandle.deleteFolder);
 

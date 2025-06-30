@@ -4,6 +4,8 @@ const fs = require('fs');
 const { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } = require('../util/common');
 const pool = require('../db');
 const express = require('express');
+const commonHandle = require('../router_handle/commonHandle');
+const fileHandle = require('../router_handle/fileHandle');
 const router = express.Router();
 
 // 配置multer存储
@@ -96,15 +98,19 @@ router.post('/uploadFile', upload.single('file'), async (req, res) => {
 // 查询所有文件
 router.post('/queryFiles', async (req, res) => {
   try {
-    // 获取用户ID
     const userId = req.headers['x-user-id'];
     const { filters } = req.body;
+    const params = [userId];
+    // 1. 查询所有该用户创建的文件
+    let sql = 'SELECT * FROM files WHERE create_by = ?';
+    // 添加文件夹ID条件
+    if (filters.folderId !== 'all') {
+      sql += ' AND folder_id = ?';
+      params.push(filters.folderId);
+    }
+    const [files] = await pool.query(sql, params);
 
-    // 构建SQL查询
-    const sql = 'SELECT * FROM files WHERE create_by = ?';
-    const [files] = await pool.query(sql, [userId]);
-
-    // 格式化结果
+    // 2. 格式化结果
     let formattedFiles = files.map((file) => ({
       id: file.id,
       fileName: file.file_name,
@@ -112,14 +118,48 @@ router.post('/queryFiles', async (req, res) => {
       fileSize: file.file_size,
       fileUrl: file.url,
       uploadTime: file.create_time,
+      folderId: file.folder_id,
     }));
-    formattedFiles = formattedFiles.filter((file) => {
-      return file.fileName.includes(filters.fileName);
-    });
-    // 返回结果
-    res.send(resultData(formattedFiles));
+
+    // 3. 应用文件名过滤
+    if (filters?.fileName) {
+      formattedFiles = formattedFiles.filter((file) => file.fileName.includes(filters.fileName));
+    }
+
+    // 4. 应用文件类型过滤
+    if (filters?.type && filters.type.length > 0) {
+      // 定义文件类型到 MIME 类型的映射
+      const mimeTypeMap = {
+        image: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'],
+        pdf: ['application/pdf'],
+        word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        audio: ['audio/mpeg', 'audio/wav'],
+        video: ['video/mp4', 'video/quicktime'],
+      };
+
+      // 提取用户选择的类型
+      const selectedNonOtherTypes = filters.type.filter((t) => t !== 'other');
+      const hasOther = filters.type.includes('other');
+
+      // 构建需要包含的 MIME 类型（非 other 类型）
+      const includeMimeTypes = selectedNonOtherTypes.flatMap((type) => mimeTypeMap[type] || []);
+
+      // 构建需要排除的 MIME 类型（用于 other 逻辑）
+      const excludeMimeTypes = ['image', 'pdf', 'word', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
+
+      // 过滤文件
+      formattedFiles = formattedFiles.filter((file) => {
+        const matchesSelected = includeMimeTypes.includes(file.fileType);
+        const matchesOther = hasOther && !excludeMimeTypes.includes(file.fileType);
+        return matchesSelected || matchesOther;
+      });
+    }
+    if (filters.type.length === 0) {
+      res.send(resultData([]));
+    } else {
+      res.send(resultData(formattedFiles));
+    }
   } catch (error) {
-    // 处理错误
     console.error('查询文件时出错:', error);
     res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
   }
@@ -219,5 +259,12 @@ router.post('/queryTotalFileSize', async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
   }
 });
+
+router.post('/queryFolder', fileHandle.queryFolder);
+router.post('/addFolder', fileHandle.addFolder);
+router.post('/associateFile', fileHandle.associateFile);
+router.post('/updateFolder', fileHandle.updateFolder);
+router.post('/deleteFolder', fileHandle.deleteFolder);
+
 
 module.exports = router;
