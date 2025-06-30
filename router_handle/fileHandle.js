@@ -59,7 +59,10 @@ exports.addFolder = async (req, res) => {
 exports.associateFile = async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const { folderId, fileId } = req.body;
+    let { folderId, fileId } = req.body;
+    if (!folderId) {
+      folderId = null;
+    }
     const [result] = await connection.query(`UPDATE files SET folder_id = ? WHERE id = ?`, [folderId, fileId]);
     res.send(resultData(result.affectedRows, 200, '关联成功'));
   } catch (e) {
