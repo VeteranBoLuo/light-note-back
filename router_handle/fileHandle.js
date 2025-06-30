@@ -1,5 +1,42 @@
 const pool = require('../db');
 const { resultData, snakeCaseKeys } = require('../util/common');
+const fs = require('fs');
+const path = require('path');
+// 修改文件（名字）同时修改服务器上的本地文件的名字
+exports.updateFile = async (req, res) => {
+  try {
+    const { id, fileName } = req.body;
+
+    // 查询文件信息
+    const sql = 'SELECT * FROM files WHERE id = ?';
+    const [results] = await pool.query(sql, [id]);
+
+    if (results.length === 0) {
+      return res.send(resultData(null, 404, '数据库中未找到文件'));
+    }
+
+    const file = results[0];
+    const filePath = path.join('/www/wwwroot/files', file.file_name);
+
+    // 检查文件是否存在
+    fs.access(filePath, fs.constants.F_OK, async (err) => {
+      if (err) {
+        return res.send(resultData(null, 404, '服务器上文件不存在'));
+      }
+
+      // 修改数据库中的文件记录
+      const updateSql = 'UPDATE files SET file_name = ? WHERE id = ?';
+      await pool.query(updateSql, [fileName, id]);
+
+      // 修改服务器上的文件名
+      const newFilePath = path.join('/www/wwwroot/files', fileName);
+      fs.renameSync(filePath, newFilePath);
+
+      res.send(resultData({ id, fileName }));
+    });
+  } catch (e) {}
+};
+
 exports.queryFolder = async (req, res) => {
   const { filters } = req.body;
   const connection = await pool.getConnection();

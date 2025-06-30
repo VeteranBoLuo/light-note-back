@@ -108,7 +108,7 @@ router.post('/queryFiles', async (req, res) => {
       sql += ' AND folder_id = ?';
       params.push(filters.folderId);
     }
-    sql += ' ORDER BY create_time DESC';
+    sql += ' AND del_flag=0 ORDER BY create_time DESC';
     const [files] = await pool.query(sql, params);
 
     // 2. 格式化结果
@@ -260,6 +260,8 @@ router.post('/queryTotalFileSize', async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
   }
 });
+
+router.post('/updateFile', fileHandle.updateFile);
 
 router.post('/queryFolder', fileHandle.queryFolder);
 router.post('/addFolder', fileHandle.addFolder);
