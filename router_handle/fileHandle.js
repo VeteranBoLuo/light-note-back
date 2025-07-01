@@ -24,9 +24,9 @@ exports.updateFile = async (req, res) => {
         return res.send(resultData(null, 404, '服务器上文件不存在'));
       }
 
-      // 修改数据库中的文件记录
-      const updateSql = 'UPDATE files SET file_name = ? WHERE id = ?';
-      await pool.query(updateSql, [fileName, id]);
+      // 修改数据库中的文件记录（名称和路径）
+      const updateSql = 'UPDATE files SET file_name = ? AND file_path = ?  WHERE id = ?';
+      await pool.query(updateSql, [fileName, filePath, id]);
 
       // 修改服务器上的文件名
       const newFilePath = path.join('/www/wwwroot/files', fileName);
