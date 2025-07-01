@@ -11,7 +11,7 @@ const router = express.Router();
 // 配置multer存储
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, '/www/wwwroot/files');
+    cb(null, '/www/wwwroot/files/');
   },
   filename: function (req, file, cb) {
     // 关键步骤：转换中文编码
@@ -44,7 +44,7 @@ router.post('/uploadFile', upload.single('file'), async (req, res) => {
     const { mimetype, size, filename, path: filePath } = file;
 
     // 构建文件的URL
-    const fileUrl = `${req.protocol}://${req.get('host')}/files/${filename}`;
+    const directory = `${req.protocol}://${req.get('host')}/files/`;
 
     // 获取用户信息
     const userId = req.headers['x-user-id'];
@@ -56,7 +56,7 @@ router.post('/uploadFile', upload.single('file'), async (req, res) => {
       file_name: filename,
       file_type: mimetype,
       file_size: size,
-      url: fileUrl,
+      directory: directory,
     };
 
     const connection = await pool.getConnection();
@@ -117,7 +117,7 @@ router.post('/queryFiles', async (req, res) => {
       fileName: file.file_name,
       fileType: file.file_type,
       fileSize: file.file_size,
-      fileUrl: file.url,
+      fileUrl: file.directory + file.file_name,
       uploadTime: file.create_time,
       folderId: file.folder_id,
     }));

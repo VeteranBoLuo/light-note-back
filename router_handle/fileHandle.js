@@ -24,17 +24,42 @@ exports.updateFile = async (req, res) => {
         return res.send(resultData(null, 404, '服务器上文件不存在'));
       }
 
-      // 修改数据库中的文件记录（名称和路径）
-      const updateSql = 'UPDATE files SET file_name = ? , url = ?  WHERE id = ?';
-      await pool.query(updateSql, [fileName, filePath, id]);
+      // 获取原始文件后缀名 [5](@ref)
+      const originalExt = path.extname(file.file_name);
+
+      // 检查用户提供的新文件名是否包含后缀 [3,5](@ref)
+      const newExt = path.extname(fileName);
+      let finalFileName = fileName;
+
+      // 如果用户输入的文件名没有后缀，自动添加原始后缀 [5,6](@ref)
+      if (!newExt) {
+        finalFileName = fileName + originalExt;
+      }
+      // 如果用户输入了后缀但与原后缀不同，保留用户输入（允许修改文件类型）
+      else if (newExt !== originalExt) {
+        finalFileName = fileName;
+      }
+
+      // 检查文件名安全性（防止路径遍历攻击）[3](@ref)
+      if (finalFileName.includes('/') || finalFileName.includes('\\') ||
+        finalFileName.includes('>') || finalFileName.includes('<')) {
+        return res.send(resultData(null, 400, '文件名不能包含特殊字符或路径分隔符'));
+      }
+
+      // 修改数据库中的文件记录
+      const updateSql = 'UPDATE files SET file_name = ? WHERE id = ?';
+      await pool.query(updateSql, [finalFileName, id]);
 
       // 修改服务器上的文件名
-      const newFilePath = path.join('/www/wwwroot/files', fileName);
+      const newFilePath = path.join('/www/wwwroot/files', finalFileName);
       fs.renameSync(filePath, newFilePath);
 
-      res.send(resultData({ id, fileName }));
+      res.send(resultData({ id, fileName: finalFileName }));
     });
-  } catch (e) {}
+  } catch (e) {
+    console.error('修改文件名时出错:', e);
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
 };
 
 exports.queryFolder = async (req, res) => {
