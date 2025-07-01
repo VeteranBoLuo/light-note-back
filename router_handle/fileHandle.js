@@ -25,7 +25,7 @@ exports.updateFile = async (req, res) => {
       }
 
       // 修改数据库中的文件记录（名称和路径）
-      const updateSql = 'UPDATE files SET file_name = ? AND file_path = ?  WHERE id = ?';
+      const updateSql = 'UPDATE files SET file_name = ? AND url = ?  WHERE id = ?';
       await pool.query(updateSql, [fileName, filePath, id]);
 
       // 修改服务器上的文件名
