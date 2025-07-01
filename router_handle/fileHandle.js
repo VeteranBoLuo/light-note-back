@@ -41,8 +41,12 @@ exports.updateFile = async (req, res) => {
       }
 
       // 检查文件名安全性（防止路径遍历攻击）[3](@ref)
-      if (finalFileName.includes('/') || finalFileName.includes('\\') ||
-        finalFileName.includes('>') || finalFileName.includes('<')) {
+      if (
+        finalFileName.includes('/') ||
+        finalFileName.includes('\\') ||
+        finalFileName.includes('>') ||
+        finalFileName.includes('<')
+      ) {
         return res.send(resultData(null, 400, '文件名不能包含特殊字符或路径分隔符'));
       }
 
@@ -67,9 +71,11 @@ exports.queryFolder = async (req, res) => {
   const connection = await pool.getConnection();
 
   try {
-    const params = [];
+    const userId = req.headers['x-user-id'];
+    const params = [userId];
+    // 获取用户ID
     let query = `SELECT * FROM folders`;
-    let whereClauses = [];
+    let whereClauses = ['create_by = ?'];
 
     const key = filters?.name?.trim() || '';
 
