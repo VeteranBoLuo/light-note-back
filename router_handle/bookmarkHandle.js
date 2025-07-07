@@ -391,7 +391,7 @@ exports.addBookmark = async (req, res) => {
     res.send(resultData(result));
   } catch (err) {
     await connection.rollback();
-    res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+    res.send(resultData(null, 500, err.message)); // 设置状态码为500
   } finally {
     connection.release();
   }
@@ -431,7 +431,7 @@ exports.updateBookmark = async (req, res) => {
     res.send(resultData(updateResult)); // 发送成功响应
   } catch (error) {
     await connection.rollback(); // 回滚事务
-    res.send(resultData(null, 500, '服务器内部错误: ' + error.message)); // 设置状态码为500
+    res.send(resultData(null, 500, error.message)); // 设置状态码为500
   } finally {
     await connection.release(); // 释放连接
   }

@@ -33,59 +33,105 @@ const upload = multer({
   },
 });
 
-router.post('/uploadFile', upload.single('file'), async (req, res) => {
+router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
   try {
-    if (!req.file) {
+    // 检查是否有文件上传
+    if (!req.files || req.files.length === 0) {
       return res.send(resultData(null, 400, '没有上传文件'));
     }
 
-    // 获取文件信息
-    const file = req.file;
-    const { mimetype, size, filename, path: filePath } = file;
-
-    // 构建文件的URL
-    const directory = `${req.protocol}://${req.get('host')}/files/`;
-
-    // 获取用户信息
+    const files = req.files;
     const userId = req.headers['x-user-id'];
-
-    // 准备文件信息
-    const fileInfo = {
-      create_by: userId,
-      create_time: req.requestTime,
-      file_name: filename,
-      file_type: mimetype,
-      file_size: size,
-      directory: directory,
-    };
+    const results = [];
 
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
-      const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ?';
-      const [existingRows] = await connection.query(selectSql, [userId, filename]);
-
-      if (existingRows.length > 0) {
-        res.send(resultData('上传成功'));
-      } else {
-        // 插入文件信息到数据库
-        const insertSql = 'INSERT INTO files SET ?';
-        const [result] = await connection.query(insertSql, [snakeCaseKeys(fileInfo)]);
-        res.send(resultData(result[0]));
-      }
-      await connection.commit();
-    } catch (error) {
-      await connection.rollback();
-      // 删除上传的文件
-      if (file) {
+      for (const file of files) {
         try {
-          fs.unlinkSync(filePath);
-          console.log(`文件 ${filePath} 已删除。`);
-        } catch (deleteError) {
-          console.error(`删除文件 ${filePath} 时出错: ${deleteError.message}`);
+          // 获取文件信息
+          const { mimetype, size, filename, path: filePath } = file;
+
+          // 构建文件的URL
+          const directory = `${req.protocol}://${req.get('host')}/files/`;
+
+          // 准备文件信息
+          const fileInfo = {
+            create_by: userId,
+            create_time: req.requestTime,
+            file_name: filename,
+            file_type: mimetype,
+            file_size: size,
+            directory: directory,
+          };
+
+          // 检查是否已存在同名文件
+          const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ?';
+          const [existingRows] = await connection.query(selectSql, [userId, filename]);
+
+          if (existingRows.length > 0) {
+            const oldFile = existingRows[0];
+            const oldFilePath = oldFile.directory;
+
+            // 1. 删除旧文件（物理文件）
+            try {
+              fs.unlinkSync(oldFilePath);
+              console.log(`旧文件 ${oldFilePath} 已删除`);
+            } catch (deleteError) {
+              console.error(`删除旧文件 ${oldFilePath} 失败: ${deleteError.message}`);
+              // 即使删除失败，继续执行覆盖逻辑
+            }
+
+            // 2. 删除数据库旧记录
+            const deleteSql = 'DELETE FROM files WHERE id = ?';
+            await connection.query(deleteSql, [oldFile.id]);
+
+            // 3. 插入新文件记录
+            const insertSql = 'INSERT INTO files SET ?';
+            const [insertResult] = await connection.query(insertSql, [snakeCaseKeys(fileInfo)]);
+
+            results.push({
+              filename,
+              status: '已覆盖',
+              fileId: insertResult.insertId
+            });
+          } else {
+            // 插入新文件记录
+            const insertSql = 'INSERT INTO files SET ?';
+            const [insertResult] = await connection.query(insertSql, [snakeCaseKeys(fileInfo)]);
+
+            results.push({
+              filename,
+              status: '已上传',
+              fileId: insertResult.insertId
+            });
+          }
+        } catch (fileError) {
+          console.error(`处理文件 ${file.filename} 时出错: ${fileError.message}`);
+          results.push({
+            filename: file.filename,
+            status: '处理失败',
+            error: fileError.message
+          });
         }
       }
+
+      await connection.commit();
+      res.send(resultData(results));
+    } catch (error) {
+      await connection.rollback();
+
+      // 回滚时删除所有已上传的文件
+      for (const file of files) {
+        try {
+          fs.unlinkSync(file.path);
+          console.log(`回滚时删除文件 ${file.path}`);
+        } catch (deleteError) {
+          console.error(`回滚时删除文件 ${file.path} 失败: ${deleteError.message}`);
+        }
+      }
+
       res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
     } finally {
       connection.release();
@@ -94,7 +140,6 @@ router.post('/uploadFile', upload.single('file'), async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
   }
 });
-
 // 查询所有文件
 router.post('/queryFiles', async (req, res) => {
   try {
