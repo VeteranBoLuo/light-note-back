@@ -230,7 +230,6 @@ async function fetchGitHubToken(code) {
     }
 
     const tokenData = await response.json();
-    console.log('tokenData', tokenData);
 
     // 关键：检查 GitHub 返回的错误[6](@ref)
     if (tokenData.error) {
@@ -258,7 +257,7 @@ exports.github = async (req, res) => {
   const githubUser = await fetch('https://api.github.com/user', {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   }).then((res) => res.json());
-
+  console.log('githubUser',githubUser);
   // 3. 根据 github_id 查找或创建用户
   const [userRows] = await pool.query(
     `
