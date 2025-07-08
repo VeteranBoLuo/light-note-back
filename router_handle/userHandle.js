@@ -210,14 +210,14 @@ exports.deleteUserById = (req, res) => {
 exports.github = async (req, res) => {
   const { code } = req.body;
   if (!code) {
-    return res.status(400).json({ error: "Missing authorization code" });
+    return res.status(400).json({ error: 'Missing authorization code' });
   }
 
   try {
     // 1. 用 code 换取 GitHub Token
     const tokenData = await fetchGitHubToken(code);
     if (!tokenData.access_token) {
-      throw new Error("Failed to obtain access token");
+      throw new Error('Failed to obtain access token');
     }
 
     // 2. 获取 GitHub 用户信息
@@ -227,19 +227,19 @@ exports.github = async (req, res) => {
     // 3. 数据库操作（查找/创建用户）
     const user = await handleUserDatabaseOperation(githubUser);
 
-    // 4. 返回前端所需数据
-    res.json({
-      user_info: {
-        id: user.id,
-        user_name: user.user_name,
-        head_picture: user.head_picture,
-        role: 'admin',
-      }
-    });
-
+    res.send(
+      resultData({
+        user_info: {
+          id: user.id,
+          user_name: user.user_name,
+          head_picture: user.head_picture,
+          role: 'admin',
+        },
+      }),
+    );
   } catch (error) {
-    console.error("GitHub Auth Error:", error);
-    res.status(500).json({ error: error.message || "Authorization failed" });
+    console.error('GitHub Auth Error:', error);
+    res.status(500).json({ error: error.message || 'Authorization failed' });
   }
 };
 
@@ -253,7 +253,7 @@ const fetchGitHubToken = async (code) => {
   const response = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: { Accept: 'application/json' },
-    body: params
+    body: params,
   });
 
   if (!response.ok) {
@@ -265,7 +265,7 @@ const fetchGitHubToken = async (code) => {
 
 const getGitHubUser = async (accessToken) => {
   const response = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${accessToken}` }
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!response.ok) {
@@ -276,25 +276,19 @@ const getGitHubUser = async (accessToken) => {
 
 const handleUserDatabaseOperation = async (githubUser) => {
   // 优先使用 github_id 查询（避免邮箱冲突）[2,4](@ref)
-  const [existingUser] = await pool.query(
-    `SELECT * FROM user WHERE github_id = ? LIMIT 1`,
-    [githubUser.id]
-  );
+  const [existingUser] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
 
   if (existingUser.length > 0) return existingUser[0];
 
   // 无 github_id 时尝试邮箱匹配（需处理邮箱为 null 的情况）
   if (githubUser.email) {
-    const [emailUser] = await pool.query(
-      `SELECT * FROM user WHERE email = ? LIMIT 1`,
-      [githubUser.email]
-    );
+    const [emailUser] = await pool.query(`SELECT * FROM user WHERE email = ? LIMIT 1`, [githubUser.email]);
     if (emailUser.length > 0) {
       // 绑定 GitHub ID 到已有账户
-      await pool.query(
-        `UPDATE user SET github_id = ?, login_type = 'github' WHERE id = ?`,
-        [githubUser.id, emailUser[0].id]
-      );
+      await pool.query(`UPDATE user SET github_id = ?, login_type = 'github' WHERE id = ?`, [
+        githubUser.id,
+        emailUser[0].id,
+      ]);
       return { ...emailUser[0], github_id: githubUser.id };
     }
   }
@@ -306,10 +300,10 @@ const handleUserDatabaseOperation = async (githubUser) => {
      VALUES (?, ?, ?, 'github', ?)`,
     [
       githubUser.login,
-      githubUser.email || null,  // 防止空邮箱报错
+      githubUser.email || null, // 防止空邮箱报错
       githubUser.id,
-      githubUser.avatar_url
-    ]
+      githubUser.avatar_url,
+    ],
   );
   return { id: result.insertId, ...githubUser };
 };
