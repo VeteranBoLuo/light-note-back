@@ -243,7 +243,7 @@ exports.github = async (req, res) => {
   }).then((res) => res.json());
 
   // 3. 根据 github_id 查找或创建用户
-  let user = await db.query(
+  let user = await pool.query(
     `
     SELECT * FROM user 
     WHERE github_id = ? OR email = ? 
