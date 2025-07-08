@@ -15,7 +15,7 @@ router.post('/saveUserInfo',userHandle.saveUserInfo)
 
 router.get('/deleteUserById',userHandle.deleteUserById)
 
-router.get('/github',userHandle.github)
+router.post('/github',userHandle.github)
 
 
 module.exports = router
