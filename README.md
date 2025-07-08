@@ -67,6 +67,7 @@
 
 
 ## 🚀 快速开始
+项目已经配置好了后端环境，想要快速体验只需下载前端仓库即可
 ```bash
 # 克隆前端仓库
 git clone https://github.com/VeteranBoLuo/BMS_Front
@@ -80,7 +81,7 @@ npm run dev
 # 生产环境构建
 npm run build
 
-# 克隆后端仓库
+# 克隆后端仓库（按需）
 git clone https://github.com/VeteranBoLuo/BMS_Back
 
 # 将根目录下的sql文件导入mysql数据库中
