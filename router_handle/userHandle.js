@@ -247,8 +247,8 @@ exports.github = async (req, res) => {
 // --- 工具函数 ---
 const fetchGitHubToken = async (code) => {
   const params = new URLSearchParams();
-  params.append('client_id', process.env.GITHUB_CLIENT_ID); // 改用环境变量
-  params.append('client_secret', process.env.GITHUB_CLIENT_SECRET);
+  params.append('client_id', 'Ov23liuOPhDka7KkXrpQ');
+  params.append('client_secret', '9c899f7920f8385275f35076fdf6a6b4beb3d7c6');
   params.append('code', code);
 
   const response = await fetch('https://github.com/login/oauth/access_token', {
