@@ -209,6 +209,7 @@ exports.deleteUserById = (req, res) => {
 };
 
 exports.github = async (req, res) => {
+  console.log('access');
   async function fetchGitHubToken(code) {
     const params = {
       client_id: 'Ov23liuOPhDka7KkXrpQ', // 你的 GitHub 应用 ID
