@@ -205,22 +205,24 @@ exports.deleteUserById = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
   }
 };
+
 exports.github = async (req, res) => {
   const { code } = req.body;
-  if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
-  }
+  if (!code) return res.status(400).json({ error: 'Missing authorization code' });
 
   try {
     // 1. 用 code 换取 GitHub Token
     const tokenData = await fetchGitHubToken(code);
-    if (!tokenData.access_token) {
-      throw new Error('Failed to obtain access token');
-    }
+    if (!tokenData.access_token) throw new Error('Failed to obtain access token');
 
-    // 2. 获取 GitHub 用户信息
-    const githubUser = await getGitHubUser(tokenData.access_token);
-    console.log('GitHub User:', githubUser);
+    // 2. 获取基础用户信息和邮箱信息
+    const [baseUser, email] = await Promise.all([
+      getGitHubUser(tokenData.access_token),
+      getGitHubEmail(tokenData.access_token), // 单独获取邮箱
+    ]);
+
+    // 合并用户对象
+    const githubUser = { ...baseUser, email };
 
     // 3. 数据库操作（查找/创建用户）
     const user = await handleUserDatabaseOperation(githubUser);
@@ -233,6 +235,7 @@ exports.github = async (req, res) => {
           head_picture: user.head_picture,
           role: 'admin',
         },
+        requires_email: !githubUser.email, // 标识是否需要补全邮箱
       }),
     );
   } catch (error) {
@@ -244,13 +247,16 @@ exports.github = async (req, res) => {
 // --- 工具函数 ---
 const fetchGitHubToken = async (code) => {
   const params = new URLSearchParams();
-  params.append('client_id', 'Ov23liuOPhDka7KkXrpQ');
-  params.append('client_secret', '9c899f7920f8385275f35076fdf6a6b4beb3d7c6');
+  params.append('client_id', process.env.GITHUB_CLIENT_ID); // 改用环境变量
+  params.append('client_secret', process.env.GITHUB_CLIENT_SECRET);
   params.append('code', code);
 
   const response = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'MyApp', // GitHub要求User-Agent头
+    },
     body: params,
   });
 
@@ -263,7 +269,10 @@ const fetchGitHubToken = async (code) => {
 
 const getGitHubUser = async (accessToken) => {
   const response = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'User-Agent': 'MyApp',
+    },
   });
 
   if (!response.ok) {
@@ -272,38 +281,61 @@ const getGitHubUser = async (accessToken) => {
   return response.json();
 };
 
+// 新增：专门获取邮箱的API调用
+const getGitHubEmail = async (accessToken) => {
+  try {
+    const response = await fetch('https://api.github.com/user/emails', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'MyApp',
+      },
+    });
+
+    if (!response.ok) return null;
+
+    const emails = await response.json();
+    // 筛选主邮箱且已验证的邮箱
+    const primaryEmail = emails.find((e) => e.primary && e.verified);
+    return primaryEmail?.email || null;
+  } catch (error) {
+    console.error('GitHub Email API Error:', error);
+    return null;
+  }
+};
+
 const handleUserDatabaseOperation = async (githubUser) => {
-  // 优先使用 github_id 查询（避免邮箱冲突）[2,4](@ref)
-  const [existingUser] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
+  // 邮箱降级策略：使用GitHub提供的备用邮箱格式
+  const safeEmail = githubUser.email || `${githubUser.login}@users.noreply.github.com`;
 
-  if (existingUser.length > 0) return existingUser[0];
+  // 1. 优先使用github_id查询
+  const [existingByGithub] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
+  if (existingByGithub.length > 0) return existingByGithub[0];
 
-  // 无 github_id 时尝试邮箱匹配（需处理邮箱为 null 的情况）
-  if (githubUser.email) {
-    const [emailUser] = await pool.query(`SELECT * FROM user WHERE email = ? LIMIT 1`, [githubUser.email]);
-    if (emailUser.length > 0) {
-      // 绑定 GitHub ID 到已有账户
-      await pool.query(`UPDATE user SET github_id = ?, login_type = 'github' WHERE id = ?`, [
-        githubUser.id,
-        emailUser[0].id,
-      ]);
-      return { ...emailUser[0], github_id: githubUser.id };
-    }
+  // 2. 使用邮箱查询现有账户
+  const [existingByEmail] = await pool.query(`SELECT * FROM user WHERE email = ? LIMIT 1`, [safeEmail]);
+
+  if (existingByEmail.length > 0) {
+    // 绑定GitHub ID到现有账户
+    await pool.query(`UPDATE user SET github_id = ?, login_type = 'github' WHERE id = ?`, [
+      githubUser.id,
+      existingByEmail[0].id,
+    ]);
+
+    // 返回更新后的完整用户数据
+    const [updatedUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [existingByEmail[0].id]);
+    return updatedUser[0];
   }
 
-  // 创建新用户（处理邮箱可能为空）
+  // 3. 创建新用户
   const [result] = await pool.query(
     `INSERT INTO user 
       (user_name, email, github_id, login_type, head_picture)
      VALUES (?, ?, ?, 'github', ?)`,
-    [
-      githubUser.login,
-      githubUser.email || null, // 防止空邮箱报错
-      githubUser.id,
-      githubUser.avatar_url,
-    ],
+    [githubUser.login, safeEmail, githubUser.id, githubUser.avatar_url],
   );
-  const [user] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [result.insertId]);
 
-  return user[0];
+  // 返回新插入的完整用户数据
+  const [newUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [result.insertId]);
+  return newUser[0];
 };
