@@ -207,97 +207,109 @@ exports.deleteUserById = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
   }
 };
-async function fetchGitHubToken(code) {
-  const params = {
-    client_id: 'Ov23liuOPhDka7KkXrpQ',
-    client_secret: '9c899f7920f8385275f35076fdf6a6b4beb3d7c6',
-    code,
-    redirect_uri: 'https://boluo66.top/#/auth/callback' // 移除 # 符号！[6,7](@ref)
-  };
-
-  try {
-    const response = await fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams(params)
-    });
-
-    if (!response.ok) { // 检查 HTTP 状态码
-      throw new Error(`GitHub 响应异常: ${response.status}`);
-    }
-
-    const tokenData = await response.json();
-
-    // 关键：检查 GitHub 返回的错误[6](@ref)
-    if (tokenData.error) {
-      const errorMsg = tokenData.error_description || tokenData.error;
-      throw new Error(`GitHub 错误: ${errorMsg}`);
-    }
-
-    if (!tokenData.access_token) { // 确保 Token 存在
-      throw new Error('GitHub 未返回 access_token');
-    }
-
-    return tokenData.access_token;
-  } catch (error) {
-    console.error('换取 Token 失败详情:', error.message);
-    throw new Error(`换取 Token 失败: ${error.message}`);
-  }
-}
-
 exports.github = async (req, res) => {
   const { code } = req.body;
-  // 1. 用 code 换取 GitHub Token
-  const tokenData = await fetchGitHubToken(code); // 复用你现有的 token 获取逻辑
-
-  // 2. 获取 GitHub 用户信息
-  const githubUser = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-  }).then((res) => res.json());
-  console.log('githubUser',githubUser);
-  // 3. 根据 github_id 查找或创建用户
-  const [userRows] = await pool.query(
-    `
-    SELECT * FROM user 
-    WHERE github_id = ? OR email = ? 
-    LIMIT 1
-  `,
-    [githubUser.id, githubUser.email],
-  );
-  let user = userRows[0];
-  if (!user) {
-    // 首次登录：创建新用户
-    user = await pool.query(
-      `INSERT INTO user 
-        (user_name, email, github_id, login_type, head_picture)
-      VALUES (?, ?, ?, 'github', ?)
-    `,
-      [githubUser.login, githubUser.email || null, githubUser.id, githubUser.avatar_url],
-    );
-  } else if (!user.github_id) {
-    // 已存在邮箱用户：绑定 GitHub ID
-    await pool.query(
-      `
-      UPDATE user 
-      SET github_id = ?, login_type = 'github'
-      WHERE id = ?
-    `,
-      [githubUser.id, user.id],
-    );
+  if (!code) {
+    return res.status(400).json({ error: "Missing authorization code" });
   }
 
-  // 4. 返回前端所需数据（避免返回敏感信息）
-  res.send(
-    resultData({
+  try {
+    // 1. 用 code 换取 GitHub Token
+    const tokenData = await fetchGitHubToken(code);
+    if (!tokenData.access_token) {
+      throw new Error("Failed to obtain access token");
+    }
+
+    // 2. 获取 GitHub 用户信息
+    const githubUser = await getGitHubUser(tokenData.access_token);
+    console.log('GitHub User:', githubUser);
+
+    // 3. 数据库操作（查找/创建用户）
+    const user = await handleUserDatabaseOperation(githubUser);
+
+    // 4. 返回前端所需数据
+    res.json({
       user_info: {
         id: user.id,
         user_name: user.user_name,
         head_picture: user.head_picture,
         role: 'admin',
-      },
-    }),
+      }
+    });
+
+  } catch (error) {
+    console.error("GitHub Auth Error:", error);
+    res.status(500).json({ error: error.message || "Authorization failed" });
+  }
+};
+
+// --- 工具函数 ---
+const fetchGitHubToken = async (code) => {
+  const params = new URLSearchParams();
+  params.append('client_id', 'Ov23liuOPhDka7KkXrpQ');
+  params.append('client_secret', '9c899f7920f8385275f35076fdf6a6b4beb3d7c6');
+  params.append('code', code);
+
+  const response = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: params
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`GitHub token request failed: ${response.status} - ${errorBody}`);
+  }
+  return response.json();
+};
+
+const getGitHubUser = async (accessToken) => {
+  const response = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+  return response.json();
+};
+
+const handleUserDatabaseOperation = async (githubUser) => {
+  // 优先使用 github_id 查询（避免邮箱冲突）[2,4](@ref)
+  const [existingUser] = await pool.query(
+    `SELECT * FROM user WHERE github_id = ? LIMIT 1`,
+    [githubUser.id]
   );
+
+  if (existingUser.length > 0) return existingUser[0];
+
+  // 无 github_id 时尝试邮箱匹配（需处理邮箱为 null 的情况）
+  if (githubUser.email) {
+    const [emailUser] = await pool.query(
+      `SELECT * FROM user WHERE email = ? LIMIT 1`,
+      [githubUser.email]
+    );
+    if (emailUser.length > 0) {
+      // 绑定 GitHub ID 到已有账户
+      await pool.query(
+        `UPDATE user SET github_id = ?, login_type = 'github' WHERE id = ?`,
+        [githubUser.id, emailUser[0].id]
+      );
+      return { ...emailUser[0], github_id: githubUser.id };
+    }
+  }
+
+  // 创建新用户（处理邮箱可能为空）
+  const [result] = await pool.query(
+    `INSERT INTO user 
+      (user_name, email, github_id, login_type, head_picture)
+     VALUES (?, ?, ?, 'github', ?)`,
+    [
+      githubUser.login,
+      githubUser.email || null,  // 防止空邮箱报错
+      githubUser.id,
+      githubUser.avatar_url
+    ]
+  );
+  return { id: result.insertId, ...githubUser };
 };
