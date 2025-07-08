@@ -229,6 +229,7 @@ exports.github = async (req, res) => {
       });
 
       const tokenData = await response.json();
+      console.log('tokenData',tokenData);
       return tokenData.access_token; // 返回 access_token
     } catch (error) {
       throw new Error('换取 Token 失败: ' + error.message);
