@@ -215,7 +215,7 @@ exports.github = async (req, res) => {
       client_id: 'Ov23liuOPhDka7KkXrpQ', // 你的 GitHub 应用 ID
       client_secret: '9c899f7920f8385275f35076fdf6a6b4beb3d7c6', // 你的 GitHub 密钥（保密！）
       code, // 前端传来的授权码
-      redirect_uri: 'https://boluo66.top/#/auth/callback',
+      redirect_uri: 'https://boluo66.top/auth/callback',
     };
 
     try {
@@ -244,7 +244,7 @@ exports.github = async (req, res) => {
   }).then((res) => res.json());
 
   // 3. 根据 github_id 查找或创建用户
-  let user = await pool.query(
+  const [userRows] = await pool.query(
     `
     SELECT * FROM user 
     WHERE github_id = ? OR email = ? 
@@ -252,7 +252,7 @@ exports.github = async (req, res) => {
   `,
     [githubUser.id, githubUser.email],
   );
-
+  let user = userRows[0];
   if (!user) {
     // 首次登录：创建新用户
     user = await pool.query(
