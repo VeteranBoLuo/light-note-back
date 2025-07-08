@@ -9,7 +9,8 @@ exports.queryTagList = (req, res) => {
         SELECT JSON_ARRAYAGG(
             JSON_OBJECT(
                 'id', b.id,
-                'name', b.name
+                'name', b.name,
+                'url',b.url
             )
         )
         FROM bookmark b

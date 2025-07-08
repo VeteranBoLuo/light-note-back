@@ -1,6 +1,7 @@
 const pool = require('../db');
 const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/common');
 const request = require('../http/request');
+const { query } = require('express');
 
 exports.login = (req, res) => {
   try {
@@ -40,7 +41,6 @@ exports.registerUser = (req, res) => {
       .then(([result]) => {
         if (result?.length > 0) {
           res.send(resultData(null, 500, '账号已存在')); // 设置状态码为500
-
         } else {
           const params = req.body;
           params.createTime = req.requestTime;
@@ -206,4 +206,82 @@ exports.deleteUserById = (req, res) => {
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
   }
+};
+
+exports.github = async (req, res) => {
+  async function fetchGitHubToken(code) {
+    const params = {
+      client_id: 'Ov23liuOPhDka7KkXrpQ', // 你的 GitHub 应用 ID
+      client_secret: '9c899f7920f8385275f35076fdf6a6b4beb3d7c6', // 你的 GitHub 密钥（保密！）
+      code, // 前端传来的授权码
+      redirect_uri: 'https://boluo66.top/#/auth/callback',
+    };
+
+    try {
+      const response = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json', // 要求返回 JSON 格式
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(params), // 编码为 URL 查询字符串
+      });
+
+      const tokenData = await response.json();
+      return tokenData.access_token; // 返回 access_token
+    } catch (error) {
+      throw new Error('换取 Token 失败: ' + error.message);
+    }
+  }
+  const { code } = req.body;
+  // 1. 用 code 换取 GitHub Token
+  const tokenData = await fetchGitHubToken(code); // 复用你现有的 token 获取逻辑
+
+  // 2. 获取 GitHub 用户信息
+  const githubUser = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  }).then((res) => res.json());
+
+  // 3. 根据 github_id 查找或创建用户
+  let user = await db.query(
+    `
+    SELECT * FROM user 
+    WHERE github_id = ? OR email = ? 
+    LIMIT 1
+  `,
+    [githubUser.id, githubUser.email],
+  );
+
+  if (!user) {
+    // 首次登录：创建新用户
+    user = await pool.query(
+      `INSERT INTO user 
+        (user_name, email, github_id, login_type, head_picture)
+      VALUES (?, ?, ?, 'github', ?)
+    `,
+      [githubUser.login, githubUser.email || null, githubUser.id, githubUser.avatar_url],
+    );
+  } else if (!user.github_id) {
+    // 已存在邮箱用户：绑定 GitHub ID
+    await pool.query(
+      `
+      UPDATE user 
+      SET github_id = ?, login_type = 'github'
+      WHERE id = ?
+    `,
+      [githubUser.id, user.id],
+    );
+  }
+
+  // 4. 返回前端所需数据（避免返回敏感信息）
+  res.send(
+    resultData({
+      user_info: {
+        id: user.id,
+        user_name: user.user_name,
+        head_picture: user.head_picture,
+        role: 'admin',
+      },
+    }),
+  );
 };
