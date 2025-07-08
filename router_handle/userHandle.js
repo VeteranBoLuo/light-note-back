@@ -1,8 +1,6 @@
 const pool = require('../db');
 const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/common');
 const request = require('../http/request');
-const { query } = require('express');
-
 exports.login = (req, res) => {
   try {
     const { userName, password } = req.body;
@@ -305,5 +303,7 @@ const handleUserDatabaseOperation = async (githubUser) => {
       githubUser.avatar_url,
     ],
   );
-  return { id: result.insertId, ...githubUser };
+  const [user] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [result.insertId]);
+
+  return user[0];
 };
