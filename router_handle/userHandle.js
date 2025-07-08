@@ -215,7 +215,7 @@ exports.github = async (req, res) => {
       client_id: 'Ov23liuOPhDka7KkXrpQ', // 你的 GitHub 应用 ID
       client_secret: '9c899f7920f8385275f35076fdf6a6b4beb3d7c6', // 你的 GitHub 密钥（保密！）
       code, // 前端传来的授权码
-      redirect_uri: 'https://boluo66.top/auth/callback',
+      redirect_uri: 'https://boluo66.top/#/auth/callback',
     };
 
     try {
