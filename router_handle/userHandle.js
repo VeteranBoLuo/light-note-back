@@ -207,34 +207,49 @@ exports.deleteUserById = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
   }
 };
+async function fetchGitHubToken(code) {
+  const params = {
+    client_id: 'Ov23liuOPhDka7KkXrpQ',
+    client_secret: '9c899f7920f8385275f35076fdf6a6b4beb3d7c6',
+    code,
+    redirect_uri: 'https://boluo66.top/#/auth/callback' // 移除 # 符号！[6,7](@ref)
+  };
+
+  try {
+    const response = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams(params)
+    });
+
+    if (!response.ok) { // 检查 HTTP 状态码
+      throw new Error(`GitHub 响应异常: ${response.status}`);
+    }
+
+    const tokenData = await response.json();
+    console.log('tokenData', tokenData);
+
+    // 关键：检查 GitHub 返回的错误[6](@ref)
+    if (tokenData.error) {
+      const errorMsg = tokenData.error_description || tokenData.error;
+      throw new Error(`GitHub 错误: ${errorMsg}`);
+    }
+
+    if (!tokenData.access_token) { // 确保 Token 存在
+      throw new Error('GitHub 未返回 access_token');
+    }
+
+    return tokenData.access_token;
+  } catch (error) {
+    console.error('换取 Token 失败详情:', error.message);
+    throw new Error(`换取 Token 失败: ${error.message}`);
+  }
+}
 
 exports.github = async (req, res) => {
-  console.log('access');
-  async function fetchGitHubToken(code) {
-    const params = {
-      client_id: 'Ov23liuOPhDka7KkXrpQ', // 你的 GitHub 应用 ID
-      client_secret: '9c899f7920f8385275f35076fdf6a6b4beb3d7c6', // 你的 GitHub 密钥（保密！）
-      code, // 前端传来的授权码
-      redirect_uri: 'https://boluo66.top/#/auth/callback',
-    };
-
-    try {
-      const response = await fetch('https://github.com/login/oauth/access_token', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json', // 要求返回 JSON 格式
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(params), // 编码为 URL 查询字符串
-      });
-
-      const tokenData = await response.json();
-      console.log('tokenData',tokenData);
-      return tokenData.access_token; // 返回 access_token
-    } catch (error) {
-      throw new Error('换取 Token 失败: ' + error.message);
-    }
-  }
   const { code } = req.body;
   // 1. 用 code 换取 GitHub Token
   const tokenData = await fetchGitHubToken(code); // 复用你现有的 token 获取逻辑
