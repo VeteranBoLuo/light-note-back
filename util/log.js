@@ -174,7 +174,7 @@ exports.logFunction = async function (req, res, next) {
       return res.status(403).json({ code: 403, msg: '系统检测为非法请求' });
     }
     // 角色为游客，需要查询获取
-    if (req.headers.role === 'visitor') {
+    if (!req.headers['x-user-id'] && req.headers.role === 'visitor') {
       const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
       req.headers['x-user-id'] = visitorResult[0].id;
     } else {
