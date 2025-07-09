@@ -240,7 +240,7 @@ exports.github = async (req, res) => {
     );
   } catch (error) {
     console.error('GitHub Auth Error:', error);
-    res.status(500).json({ error: error.message || 'Authorization failed' });
+    res.send(resultData(null, 500, 'GitHub认证失败：' + error));
   }
 };
 
