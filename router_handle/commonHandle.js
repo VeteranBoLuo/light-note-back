@@ -337,7 +337,7 @@ exports.runSql = async (req, res) => {
     const [result] = await pool.query(req.body.sql);
     res.send(resultData(result, 200));
   } catch (e) {
-    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+    res.send(resultData(null, 200, '服务器内部错误: ' + e.message));
   }
 };
 
