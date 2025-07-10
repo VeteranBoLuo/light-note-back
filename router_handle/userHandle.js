@@ -146,7 +146,7 @@ exports.getUserInfo = async (req, res) => {
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
         result[0].noteTotal = noteTotalRes[0]['COUNT(*)'];
         result[0].opinionTotal = opinionTotalRes[0]['COUNT(*)'];
-        delete result[0].password;
+        result[0].password = result[0].password ? '******' : '';
         if (result[0].role === 'visitor') {
           res.send(resultData(result[0], 'visitor'));
         } else {
@@ -233,7 +233,7 @@ exports.github = async (req, res) => {
           id: user.id,
           user_name: user.user_name,
           head_picture: user.head_picture,
-          role: 'admin',
+          role: user.role ?? 'admin',
         },
         requires_email: !githubUser.email, // 标识是否需要补全邮箱
       }),
@@ -338,4 +338,33 @@ const handleUserDatabaseOperation = async (githubUser) => {
   // 返回新插入的完整用户数据
   const [newUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [result.insertId]);
   return newUser[0];
+};
+
+// 修改密码或者设置密码configPassword
+
+exports.configPassword = async (req, res) => {
+  try {
+    const id = req.headers['x-user-id']; // 获取用户ID
+    const { password, type } = req.body;
+    const [oldUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [id]);
+    if (type === 'update') {
+      const { oldPassword } = req.body;
+      if (oldUser[0].password !== oldPassword) {
+        throw new Error('原密码错误');
+      }
+      if (oldUser[0].password === password) {
+        throw new Error('新密码不能与原密码相同');
+      }
+    }
+    pool
+      .query('update user set password=? where id=?', [password, id])
+      .then(([result]) => {
+        res.send(resultData(result));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, e.message)); // 设置状态码为400
+  }
 };
