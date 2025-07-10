@@ -94,7 +94,7 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
             results.push({
               filename,
               status: '已覆盖',
-              fileId: insertResult.insertId
+              fileId: insertResult.insertId,
             });
           } else {
             // 插入新文件记录
@@ -104,7 +104,7 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
             results.push({
               filename,
               status: '已上传',
-              fileId: insertResult.insertId
+              fileId: insertResult.insertId,
             });
           }
         } catch (fileError) {
@@ -112,7 +112,7 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
           results.push({
             filename: file.filename,
             status: '处理失败',
-            error: fileError.message
+            error: fileError.message,
           });
         }
       }
@@ -140,20 +140,22 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
   }
 });
+
 // 查询所有文件
 router.post('/queryFiles', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const { filters } = req.body;
     const params = [userId];
-    // 1. 查询所有该用户创建的文件
-    let sql = 'SELECT * FROM files WHERE create_by = ?';
+    // 1. 查询所有该用户创建的文件，并关联文件夹名称
+    let sql =
+      'SELECT files.*, folders.name AS folderName FROM files LEFT JOIN folders ON files.folder_id = folders.id WHERE files.create_by = ?';
     // 添加文件夹ID条件
     if (filters.folderId !== 'all') {
-      sql += ' AND folder_id = ?';
+      sql += ' AND files.folder_id = ?';
       params.push(filters.folderId);
     }
-    sql += ' AND del_flag=0 ORDER BY create_time DESC';
+    sql += ' AND files.del_Flag=0 ORDER BY files.create_time DESC';
     const [files] = await pool.query(sql, params);
 
     // 2. 格式化结果
@@ -165,6 +167,7 @@ router.post('/queryFiles', async (req, res) => {
       fileUrl: file.directory + file.file_name,
       uploadTime: file.create_time,
       folderId: file.folder_id,
+      folderName: file.folderName, // 添加文件夹名称
     }));
 
     // 3. 应用文件名过滤
