@@ -94,7 +94,7 @@ exports.queryFolder = async (req, res) => {
     }
 
     // 固定排序
-    query += ` ORDER BY create_time DESC`;
+    query += ` ORDER BY sort, create_time DESC`;
 
     const [result] = await connection.query(query, params);
     res.send(resultData({ items: result, total: result.length }, 200));
@@ -159,5 +159,25 @@ exports.updateFolder = async (req, res) => {
     res.send(resultData(result.affectedRows, 200, '修改成功'));
   } catch (e) {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+};
+
+exports.updateFolderSort = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction(); // 开始事务
+    const { tags } = req.body;
+    for (const tag of tags) {
+      const { id, sort } = tag;
+      const sql = 'UPDATE folders SET sort = ? WHERE id = ?';
+      await pool.query(sql, [sort, id]);
+    }
+    await connection.commit(); // 提交事务
+    res.send(resultData(null, 200, 'Sort updated successfully'));
+  } catch (e) {
+    await connection.rollback(); // 如果发生错误，回滚事务
+    res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
+  } finally {
+    connection.release(); // 释放连接回连接池
   }
 };

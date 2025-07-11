@@ -316,5 +316,5 @@ router.post('/addFolder', fileHandle.addFolder);
 router.post('/associateFile', fileHandle.associateFile);
 router.post('/updateFolder', fileHandle.updateFolder);
 router.post('/deleteFolder', fileHandle.deleteFolder);
-
+router.post('/updateFolderSort', fileHandle.updateFolderSort);
 module.exports = router;
