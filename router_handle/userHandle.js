@@ -20,8 +20,11 @@ exports.login = (req, res) => {
         const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
         const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
         const [tagTotalRes] = await pool.query(tagTotalSql, [result[0].id]);
+        const noteTotalSql = `SELECT COUNT(*) FROM note WHERE create_by=? and del_flag = 0`;
+        const [noteTotalRes] = await pool.query(noteTotalSql, [result[0].id]);
         result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
         result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
+        result[0].noteTotal = noteTotalRes[0]['COUNT(*)'];
         res.send(resultData(result[0]));
       })
       .catch((err) => {
