@@ -59,5 +59,5 @@ allRouter.forEach((item) => {
 });
 // 启动 Express 服务器
 app.listen(9001, () => {
-  console.log('服务器已启动');
+  console.log('服务器已启动' + new Date());
 });
