@@ -142,18 +142,20 @@ const detectAttack = (req) => {
       }
     });
   });
-  const illegalApi = allowApi.some((url) => {
-    return (
-      path.startsWith(url) ||
-      path.startsWith('/uploads') ||
-      path.startsWith('/files') ||
-      path === '/' ||
-      path === '/favicon.ico'
-    );
-  });
-  if (detectedType || !illegalApi) {
+  // const illegalApi = allowApi.some((url) => {
+  //   return (
+  //     path.startsWith(url) ||
+  //     path.startsWith('/uploads') ||
+  //     path.startsWith('/files') ||
+  //     path === '/' ||
+  //     path === '/favicon.ico'
+  //   );
+  // });
+  // if (detectedType || !illegalApi) {
+  if (detectedType) {
     const log = {
-      attack_type: detectedType || '非法请求地址',
+      // attack_type: detectedType || '非法请求地址',
+      attack_type: detectedType,
       request_method: method,
       request_path: path,
       source_ip: getClientIp(req),
