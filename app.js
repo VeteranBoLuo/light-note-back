@@ -11,8 +11,12 @@ const { requestTime, getClientIp } = require('./util/common');
 require('./db/index');
 const dotenv = require('dotenv');
 const path = require('path');
-const mode = process.env.NODE_ENV || 'development';
-
+// 判断是否是生产环境（比如：运行在 Linux 上）
+function isProduction() {
+  return process.platform === 'linux';
+}
+// 设置 mode
+const mode = isProduction() ? 'production' : 'development';
 // 根据 NODE_ENV 加载对应的 .env 文件
 const envPath = path.resolve(__dirname, `.env.${mode}`);
 
