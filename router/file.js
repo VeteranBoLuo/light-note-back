@@ -54,7 +54,7 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
           const { mimetype, size, filename, path: filePath } = file;
 
           // 构建文件的URL
-          const directory = `${req.protocol}://${req.get('host')}/files/`;
+          const directory = `${process.env.BASE_URL}/files/`;
 
           // 准备文件信息
           const fileInfo = {

@@ -9,6 +9,18 @@ const bodyParser = require('body-parser');
 const { logFunction } = require('./util/log');
 const { requestTime, getClientIp } = require('./util/common');
 require('./db/index');
+const dotenv = require('dotenv');
+const path = require('path');
+const mode = process.env.NODE_ENV || 'development';
+
+// 根据 NODE_ENV 加载对应的 .env 文件
+const envPath = path.resolve(__dirname, `.env.${mode}`);
+
+dotenv.config({ path: envPath });
+// 打印当前加载的环境变量（可选）
+console.log(`Running in ${mode} mode`);
+console.log(`Loaded env from: ${envPath}`);
+console.log('BASE_URL:', process.env.BASE_URL);
 // 建立一个Express服务器
 const app = express();
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
