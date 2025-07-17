@@ -203,3 +203,27 @@ exports.baseDelete = async function (req, tableName) {
   const [result] = await pool.query(deleteSql, whereParams);
   return result;
 };
+
+// 工具函数：带超时的 fetch 请求
+exports.fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'MyApp',
+        ...(options.headers || {})
+      }
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error.name === 'AbortError'
+      ? new Error('Request timed out')
+      : error;
+  }
+};

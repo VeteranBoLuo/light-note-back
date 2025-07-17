@@ -1,6 +1,7 @@
 const pool = require('../db');
 const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/common');
 const request = require('../http/request');
+const { fetchWithTimeout } = require('../util/request');
 exports.login = (req, res) => {
   try {
     const { userName, password } = req.body;
@@ -223,9 +224,9 @@ exports.github = async (req, res) => {
       getGitHubUser(tokenData.access_token),
       getGitHubEmail(tokenData.access_token), // 单独获取邮箱
     ]);
-
+    const safeEmail = email || `${baseUser.login}@users.noreply.github.com`;
     // 合并用户对象
-    const githubUser = { ...baseUser, email };
+    const githubUser = { ...baseUser, email: safeEmail };
 
     // 3. 数据库操作（查找/创建用户）
     const user = await handleUserDatabaseOperation(githubUser);
@@ -250,24 +251,30 @@ exports.github = async (req, res) => {
 // --- 工具函数 ---
 const fetchGitHubToken = async (code) => {
   const params = new URLSearchParams();
-  params.append('client_id', 'Ov23liuOPhDka7KkXrpQ');
-  params.append('client_secret', '9c899f7920f8385275f35076fdf6a6b4beb3d7c6');
+  params.append('client_id', process.env.GITHUB_CLIENT_ID); // 改用环境变量
+  params.append('client_secret', process.env.GITHUB_CLIENT_SECRET);
   params.append('code', code);
 
-  const response = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'MyApp', // GitHub要求User-Agent头
-    },
-    body: params,
-  });
+  try {
+    const response = await fetchWithTimeout(
+      'https://github.com/login/oauth/access_token',
+      {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: params,
+      },
+      8000, // 8秒超时
+    );
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`GitHub token request failed: ${response.status} - ${errorBody}`);
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`GitHub token request failed: ${response.status} - ${errorBody}`);
+    }
+    return response.json();
+  } catch (error) {
+    console.error('fetchGitHubToken Error:', error.message);
+    throw error;
   }
-  return response.json();
 };
 
 const getGitHubUser = async (accessToken) => {
@@ -285,25 +292,31 @@ const getGitHubUser = async (accessToken) => {
 };
 
 // 新增：专门获取邮箱的API调用
-const getGitHubEmail = async (accessToken) => {
-  try {
-    const response = await fetch('https://api.github.com/user/emails', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'MyApp',
-      },
-    });
+const getGitHubEmail = async (accessToken, retries = 2) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(
+        'https://api.github.com/user/emails',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+          },
+        },
+        5000, // 5秒超时
+      );
 
-    if (!response.ok) return null;
+      if (!response.ok) continue; // 重试
 
-    const emails = await response.json();
-    // 筛选主邮箱且已验证的邮箱
-    const primaryEmail = emails.find((e) => e.primary && e.verified);
-    return primaryEmail?.email || null;
-  } catch (error) {
-    console.error('GitHub Email API Error:', error);
-    return null;
+      const emails = await response.json();
+      const primaryEmail = emails.find((e) => e.primary && e.verified);
+      return primaryEmail?.email || null;
+    } catch (error) {
+      if (attempt === retries) {
+        console.warn('Fallback to no-reply email after retries');
+        return null; // 由调用方统一降级
+      }
+    }
   }
 };
 
