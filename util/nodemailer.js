@@ -8,6 +8,7 @@ let nodeMail = nodemailer.createTransport({
     user: '1902013368@qq.com', // 发送方的邮箱，可以选择你自己的qq邮箱
     pass: 'vqmyhzpyuxujefgf', // stmp授权码
   },
+  logger: true,
 });
 
 module.exports = nodeMail;
