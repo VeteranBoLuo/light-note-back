@@ -3,7 +3,7 @@ const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/
 const request = require('../http/request');
 const { fetchWithTimeout } = require('../util/request');
 const nodeMail = require('../util/nodemailer');
-const { redisClient } = require('../app');
+const { setEx, get, del } = require('../util/redisClient');
 
 exports.login = (req, res) => {
   try {
@@ -388,8 +388,6 @@ exports.configPassword = async (req, res) => {
   }
 };
 
-
-
 // 发送验证码接口
 exports.sendEmail = async (req, res) => {
   try {
@@ -397,7 +395,7 @@ exports.sendEmail = async (req, res) => {
     const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6位数字验证码
 
     // 1. 存储验证码到Redis（5分钟过期）
-    await redisClient.setEx(`email:code:${email}`, 300, code);
+    await setEx(`email:code:${email}`, 300, code);
 
     // 2. 发送邮件
     const mailOptions = {
@@ -426,7 +424,7 @@ exports.verifyCode = async (req, res) => {
     const { email, code } = req.body;
 
     // 1. 从Redis获取存储的验证码
-    const storedCode = await redisClient.get(`email:code:${email}`);
+    const storedCode = await get(`email:code:${email}`);
 
     // 2. 验证逻辑
     if (!storedCode) {
@@ -437,7 +435,7 @@ exports.verifyCode = async (req, res) => {
     }
 
     // 3. 验证成功处理
-    await redisClient.del(`email:code:${email}`); // 删除已用验证码
+    await del(`email:code:${email}`); // 删除已用验证码
     res.json({ success: true, message: '验证成功' });
   } catch (e) {
     console.error('验证异常:', e);
