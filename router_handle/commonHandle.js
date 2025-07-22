@@ -12,7 +12,7 @@ exports.getApiLogs = (req, res) => {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT a.*,u.alias,,u.email 
+    let sql = `SELECT a.*,u.alias,u.email 
       FROM api_logs a left join user u on a.user_id=u.id  where (u.alias LIKE CONCAT('%', ?, '%') 
       OR a.ip LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
