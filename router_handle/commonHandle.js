@@ -12,7 +12,7 @@ exports.getApiLogs = (req, res) => {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT a.*,u.alias 
+    let sql = `SELECT a.*,u.alias,,u.email 
       FROM api_logs a left join user u on a.user_id=u.id  where (u.alias LIKE CONCAT('%', ?, '%') 
       OR a.ip LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
@@ -111,7 +111,7 @@ exports.getOperationLogs = (req, res) => {
     // 查询总数据条数
     pool
       .query(
-        `SELECT o.*, u.alias
+        `SELECT o.*, u.alias,u.email
 FROM operation_logs o
 LEFT JOIN user u ON o.create_by = u.id
 WHERE (u.alias LIKE CONCAT('%', ?, '%') 
