@@ -436,7 +436,7 @@ exports.verifyCode = async (req, res) => {
 
     // 3. 验证成功处理
     await redisClient.del(`email:code:${email}`); // 删除已用验证码
-    res.json({ success: true, message: '验证成功' });
+    res.send(resultData('验证成功'));
   } catch (e) {
     res.send(resultData(null, 500, '验证服务异常:' + e.message)); // 设置状态码为400
   }
