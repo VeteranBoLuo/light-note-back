@@ -12,8 +12,8 @@ exports.getApiLogs = (req, res) => {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT a.*,u.user_name 
-      FROM api_logs a left join user u on a.user_id=u.id  where (u.user_name LIKE CONCAT('%', ?, '%') 
+    let sql = `SELECT a.*,u.alias 
+      FROM api_logs a left join user u on a.user_id=u.id  where (u.alias LIKE CONCAT('%', ?, '%') 
       OR a.ip LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
     pool
@@ -34,7 +34,7 @@ exports.getApiLogs = (req, res) => {
           });
         });
         const [totalRes] = await pool.query(
-          "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.user_name LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
+          "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.alias LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
           [filters.key, filters.key],
         );
         res.send(
@@ -111,13 +111,13 @@ exports.getOperationLogs = (req, res) => {
     // 查询总数据条数
     pool
       .query(
-        `SELECT o.*, u.user_name
+        `SELECT o.*, u.alias
 FROM operation_logs o
 LEFT JOIN user u ON o.create_by = u.id
-WHERE (u.user_name LIKE CONCAT('%', ?, '%') 
+WHERE (u.alias LIKE CONCAT('%', ?, '%') 
 OR o.operation LIKE CONCAT('%', ?, '%') 
 OR o.module LIKE CONCAT('%', ?, '%')) 
-AND o.del_flag = 0 AND u.user_name!='wenjunqiu'
+AND o.del_flag = 0 AND u.alias!='菠萝'
 ORDER BY o.create_time DESC
 LIMIT ? OFFSET ?;
 `,
@@ -125,10 +125,10 @@ LIMIT ? OFFSET ?;
       )
       .then(async ([result]) => {
         const totalSql = `SELECT COUNT(*) FROM operation_logs o left join user u on o.create_by=u.id WHERE 
-(u.user_name LIKE CONCAT('%', ?, '%') 
+(u.alias LIKE CONCAT('%', ?, '%') 
 OR o.operation LIKE CONCAT('%', ?, '%') 
 OR o.module LIKE CONCAT('%', ?, '%'))
-AND o.del_flag=0 AND u.user_name!='wenjunqiu'`;
+AND o.del_flag=0 AND u.alias!='菠萝'`;
         const [totalRes] = await pool.query(totalSql, [filters.key, filters.key, filters.key]);
         res.send(
           resultData({

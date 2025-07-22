@@ -31,7 +31,7 @@ exports.getOpinionList = async (req, res) => {
 
   try {
     // 构建基础查询语句
-    let query = 'SELECT o.*, u.user_name FROM opinion o LEFT JOIN user u ON o.user_id = u.id WHERE o.del_flag = 0';
+    let query = 'SELECT o.*, u.alias FROM opinion o LEFT JOIN user u ON o.user_id = u.id WHERE o.del_flag = 0';
     const params = [];
 
     // 如果 userId 存在，则添加到查询条件中

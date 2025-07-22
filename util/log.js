@@ -180,9 +180,9 @@ exports.logFunction = async function (req, res, next) {
     } else {
       if (req.originalUrl.includes('login')) {
         // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
-        const { userName, password } = req.body;
-        const [userResult] = await pool.query('SELECT * FROM user WHERE user_name = ? AND password = ?', [
-          userName,
+        const { email, password } = req.body;
+        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [
+          email,
           password,
         ]);
         if (!userResult[0]) {

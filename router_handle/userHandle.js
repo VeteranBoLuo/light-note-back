@@ -7,10 +7,10 @@ const redisClient = require('../util/redisClient');
 
 exports.login = (req, res) => {
   try {
-    const { userName, password } = req.body;
-    const sql = 'SELECT * FROM user WHERE user_name = ? AND password = ?';
+    const { email, password } = req.body;
+    const sql = 'SELECT * FROM user WHERE email = ? AND password = ?';
     pool
-      .query(sql, [userName, password])
+      .query(sql, [email, password])
       .then(async ([result]) => {
         if (result.length === 0) {
           res.send(resultData(null, 401, '用户名密码错误或已过期，请重新输入')); // 设置状态码为401
@@ -42,7 +42,7 @@ exports.login = (req, res) => {
 exports.registerUser = (req, res) => {
   try {
     pool
-      .query('SELECT * FROM user WHERE user_name = ?', [req.body.userName])
+      .query('SELECT * FROM user WHERE email = ?', [req.body.email])
       .then(([result]) => {
         if (result?.length > 0) {
           res.send(resultData(null, 500, '账号已存在')); // 设置状态码为500
@@ -53,7 +53,7 @@ exports.registerUser = (req, res) => {
           pool
             .query('INSERT INTO user set ?', [snakeCaseKeys(params)])
             .then(async () => {
-              const [userRes] = await pool.query('SELECT * FROM USER WHERE user_name=?', [req.body.userName]);
+              const [userRes] = await pool.query('SELECT * FROM USER WHERE email=?', [req.body.email]);
               const userId = userRes[0].id;
               const bookmarkData = {
                 name: 'iconify',
@@ -170,7 +170,7 @@ exports.getUserInfo = async (req, res) => {
 exports.getUserList = (req, res) => {
   try {
     pool
-      .query(`SELECT alias,email,id,password,phone_number,role,theme,user_name,ip FROM user where del_flag=0`)
+      .query(`SELECT alias,email,id,password,phone_number,role,theme,ip FROM user where del_flag=0`)
       .then(([result]) => {
         res.send(
           resultData({
@@ -238,7 +238,7 @@ exports.github = async (req, res) => {
       resultData({
         user_info: {
           id: user.id,
-          user_name: user.user_name,
+          alias: user.alias,
           head_picture: user.head_picture,
           role: user.role ?? 'admin',
         },
@@ -349,7 +349,7 @@ const handleUserDatabaseOperation = async (githubUser) => {
   // 3. 创建新用户
   const [result] = await pool.query(
     `INSERT INTO user 
-      (user_name, email, github_id, login_type, head_picture)
+      (email, github_id, login_type, head_picture)
      VALUES (?, ?, ?, 'github', ?)`,
     [githubUser.login, safeEmail, githubUser.id, githubUser.avatar_url],
   );
