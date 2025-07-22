@@ -10,4 +10,4 @@ let nodeMail = nodemailer.createTransport({
   },
 });
 
-export default nodeMail;
+module.exports = nodeMail;
