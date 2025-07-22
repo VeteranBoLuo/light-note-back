@@ -2,6 +2,9 @@ const pool = require('../db');
 const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/common');
 const request = require('../http/request');
 const { fetchWithTimeout } = require('../util/request');
+const nodeMail = require('../util/nodemailer');
+import { createClient } from 'redis';
+
 exports.login = (req, res) => {
   try {
     const { userName, password } = req.body;
@@ -382,5 +385,71 @@ exports.configPassword = async (req, res) => {
       });
   } catch (e) {
     res.send(resultData(null, 400, e.message)); // 设置状态码为400
+  }
+};
+
+
+// 创建Redis客户端（建议使用环境变量配置连接信息）
+const redisClient = createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379'
+});
+
+redisClient.on('error', err => console.error('Redis连接错误:', err));
+await redisClient.connect();
+
+// 发送验证码接口
+exports.sendEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6位数字验证码
+
+    // 1. 存储验证码到Redis（5分钟过期）
+    await redisClient.setEx(`email:code:${email}`, 300, code);
+
+    // 2. 发送邮件
+    const mailOptions = {
+      from: '轻笺<1902013368@qq.com>',
+      to: email,
+      subject: '验证邮件',
+      html: `
+        <p>您好！</p>
+        <p>您的验证码是：<strong style="color:orangered;">${code}</strong></p>
+        <p>有效期5分钟，请勿泄露</p>
+        <p>如果不是您本人操作，请无视此邮件</p>
+      `
+    };
+
+    await nodeMail.sendMail(mailOptions);
+    res.status(200).json({ success: true, message: '验证码发送成功' });
+
+  } catch (e) {
+    console.error('邮件发送异常:', e);
+    res.status(500).json({ error: '邮件发送失败', details: e.message });
+  }
+};
+
+// 验证验证码接口
+exports.verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    // 1. 从Redis获取存储的验证码
+    const storedCode = await redisClient.get(`email:code:${email}`);
+
+    // 2. 验证逻辑
+    if (!storedCode) {
+      return res.status(400).json({ error: "验证码已过期或未发送" });
+    }
+    if (storedCode !== code) {
+      return res.status(400).json({ error: "验证码错误" });
+    }
+
+    // 3. 验证成功处理
+    await redisClient.del(`email:code:${email}`); // 删除已用验证码
+    res.json({ success: true, message: "验证成功" });
+
+  } catch (e) {
+    console.error('验证异常:', e);
+    res.status(500).json({ error: '验证服务异常', details: e.message });
   }
 };
