@@ -44,5 +44,4 @@ jobs:
           password: ${{ secrets.PASSWORD }}
           port: ${{ secrets.PORT }}
           script: |
-            cd /www/wwwroot/BMS_Back &&  node app.js
-#            pm2 restart app
+            pm2 restart app
