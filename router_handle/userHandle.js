@@ -3,7 +3,7 @@ const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/
 const request = require('../http/request');
 const { fetchWithTimeout } = require('../util/request');
 const nodeMail = require('../util/nodemailer');
-const { createClient } = require('redis');
+const { redisClient } = require('../app');
 
 exports.login = (req, res) => {
   try {
@@ -388,13 +388,7 @@ exports.configPassword = async (req, res) => {
   }
 };
 
-// 创建Redis客户端（建议使用环境变量配置连接信息）
-const redisClient = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
-});
 
-redisClient.on('error', (err) => console.error('Redis连接错误:', err));
-await redisClient.connect();
 
 // 发送验证码接口
 exports.sendEmail = async (req, res) => {

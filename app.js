@@ -11,6 +11,7 @@ const { requestTime, getClientIp } = require('./util/common');
 require('./db/index');
 const dotenv = require('dotenv');
 const path = require('path');
+const { createClient } = require('redis');
 // 判断是否是生产环境（比如：运行在 Linux 上）
 function isProduction() {
   return process.platform === 'linux';
@@ -21,6 +22,7 @@ const mode = isProduction() ? 'production' : 'development';
 const envPath = path.resolve(__dirname, `.env.${mode}`);
 
 dotenv.config({ path: envPath });
+
 // 打印当前加载的环境变量（可选）
 console.log(`Running in ${mode} mode`);
 console.log(`Loaded env from: ${envPath}`);
@@ -35,6 +37,14 @@ app.use(express.json());
 app.use(requestTime);
 // 日志记录中间件
 app.use(logFunction);
+
+// 创建Redis客户端（建议使用环境变量配置连接信息）
+export const redisClient = createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+});
+
+redisClient.on('error', (err) => console.error('Redis连接错误:', err));
+redisClient.connect().then();
 
 const allRouter = [
   {
