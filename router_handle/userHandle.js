@@ -421,7 +421,7 @@ exports.sendEmail = async (req, res) => {
 // 验证验证码接口
 exports.verifyCode = async (req, res) => {
   try {
-    const { email, code } = req.body;
+    const { email, code, password } = req.body;
 
     // 1. 从Redis获取存储的验证码
     const storedCode = await redisClient.get(`email:code:${email}`);
@@ -429,16 +429,22 @@ exports.verifyCode = async (req, res) => {
     // 2. 验证逻辑
     if (!storedCode) {
       res.send(resultData(null, 400, '验证码已过期或未发送'));
-      return
+      return;
     }
     if (storedCode !== code) {
       res.send(resultData(null, 400, '验证码错误'));
-      return
+      return;
     }
-
-    // 3. 验证成功处理
-    await redisClient.del(`email:code:${email}`); // 删除已用验证码
-    res.send(resultData('验证成功'));
+    // 3. 验证成功后，删除已用验证码并且设置新密码
+    await redisClient.del(`email:code:${email}`);
+    pool
+      .query('update user set password=? where email=?', [password, email])
+      .then(() => {
+        res.send(resultData('重置密码成功'));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+      });
   } catch (e) {
     res.send(resultData(null, 500, '验证服务异常:' + e.message)); // 设置状态码为400
   }
