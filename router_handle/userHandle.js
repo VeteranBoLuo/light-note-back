@@ -429,9 +429,11 @@ exports.verifyCode = async (req, res) => {
     // 2. 验证逻辑
     if (!storedCode) {
       res.send(resultData(null, 400, '验证码已过期或未发送'));
+      return
     }
     if (storedCode !== code) {
       res.send(resultData(null, 400, '验证码错误'));
+      return
     }
 
     // 3. 验证成功处理
