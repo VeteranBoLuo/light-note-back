@@ -401,7 +401,7 @@ exports.sendEmail = async (req, res) => {
     const mailOptions = {
       from: '"轻笺"<1902013368@qq.com>',
       to: email,
-      subject: '验证邮件',
+      subject: '【轻笺】验证邮件',
       html: `
         <p>您好！</p>
         <p>您的验证码是：<strong style="color:orangered;">${code}</strong></p>
@@ -428,17 +428,16 @@ exports.verifyCode = async (req, res) => {
 
     // 2. 验证逻辑
     if (!storedCode) {
-      return res.status(400).json({ error: '验证码已过期或未发送' });
+      res.send(resultData(null, 400, '验证码已过期或未发送'));
     }
     if (storedCode !== code) {
-      return res.status(400).json({ error: '验证码错误' });
+      res.send(resultData(null, 400, '验证码错误'));
     }
 
     // 3. 验证成功处理
     await redisClient.del(`email:code:${email}`); // 删除已用验证码
     res.json({ success: true, message: '验证成功' });
   } catch (e) {
-    console.error('验证异常:', e);
-    res.status(500).json({ error: '验证服务异常', details: e.message });
+    res.send(resultData(null, 500, '验证服务异常:' + e.message)); // 设置状态码为400
   }
 };
