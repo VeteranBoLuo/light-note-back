@@ -186,7 +186,7 @@ exports.logFunction = async function (req, res, next) {
           password,
         ]);
         if (!userResult[0]) {
-          throw new Error('用户名或密码错误');
+          throw new Error('邮箱或密码错误');
         }
         if (userResult[0].del_flag === '1') {
           throw new Error('账号已被禁用');

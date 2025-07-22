@@ -13,7 +13,7 @@ exports.login = (req, res) => {
       .query(sql, [email, password])
       .then(async ([result]) => {
         if (result.length === 0) {
-          res.send(resultData(null, 401, '用户名密码错误或已过期，请重新输入')); // 设置状态码为401
+          res.send(resultData(null, 401, '邮箱或密码错误或已过期，请重新输入')); // 设置状态码为401
           return;
         }
         if (result[0].del_flag === 1) {
