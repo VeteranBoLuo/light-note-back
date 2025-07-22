@@ -1,4 +1,4 @@
-const pool = require('../db');
+require('../db');
 exports.resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
     console.error(status, msg);
