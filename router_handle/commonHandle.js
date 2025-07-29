@@ -341,3 +341,21 @@ exports.runSql = async (req, res) => {
   }
 };
 
+exports.getHelpConfig = async (req, res) => {
+  try {
+    const [result] = await pool.query('SELECT * FROM help_config');
+    res.send(resultData(result, 200));
+  } catch (e) {
+    res.send(resultData(e.message, 200));
+  }
+};
+
+exports.updateHelp = async (req, res) => {
+  try {
+    const { id, content } = req.body;
+    const [result] = await pool.query('UPDATE help_config SET content=? WHERE id=?', [content, id]);
+    res.send(resultData(result, 200));
+  } catch (e) {
+    res.send(resultData(e.message, 200));
+  }
+};
