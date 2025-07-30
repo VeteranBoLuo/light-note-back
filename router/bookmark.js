@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const bookmarkHandle = require("../router_handle/bookmarkHandle");
+const commonHandle = require('../router_handle/commonHandle');
 
 router.post("/queryTagList", bookmarkHandle.queryTagList);
 
@@ -24,11 +25,11 @@ router.post("/addBookmark", bookmarkHandle.addBookmark);
 
 router.post("/getBookmarkDetail", bookmarkHandle.getBookmarkDetail);
 
-
 router.post("/delBookmark", bookmarkHandle.delBookmark);
 
 router.post("/updateBookmark", bookmarkHandle.updateBookmark);
 
+router.post('/getCommonBookmarks', bookmarkHandle.getCommonBookmarks);
 
 
 module.exports = router;

@@ -496,3 +496,19 @@ exports.delBookmark = async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
   }
 };
+
+exports.getCommonBookmarks = async (req, res) => {
+  try {
+    const [result] = await pool.query(
+      "SELECT REPLACE(operation, '点击书签卡片', '') AS name,COUNT(*) as count FROM `operation_logs` WHERE operation LIKE '点击书签卡片%' GROUP  BY operation ORDER BY count DESC LIMIT 10",
+    );
+    res.send(
+      resultData({
+        items: result,
+        total: 10,
+      }),
+    );
+  } catch (e) {
+    res.send(resultData(e.message, 200));
+  }
+};
