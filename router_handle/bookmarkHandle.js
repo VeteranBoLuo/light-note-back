@@ -334,7 +334,7 @@ WHERE
 GROUP BY 
     b.id
 ORDER BY 
-    b.create_time DESC;
+    b.sort, b.create_time DESC;
 `;
     params = [req.body.filters.value, userId, req.body.filters.value, req.body.filters.value];
   }
@@ -510,5 +510,25 @@ exports.getCommonBookmarks = async (req, res) => {
     );
   } catch (e) {
     res.send(resultData(e.message, 200));
+  }
+};
+
+exports.updateBookmarkSort = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction(); // 开始事务
+    const { bookmarks } = req.body;
+    for (const bookmark of bookmarks) {
+      const { id, sort } = bookmark;
+      const sql = 'UPDATE bookmark SET sort = ? WHERE id = ?';
+      await pool.query(sql, [sort, id]);
+    }
+    await connection.commit(); // 提交事务
+    res.send(resultData(null, 200, 'Sort updated successfully'));
+  } catch (e) {
+    await connection.rollback(); // 如果发生错误，回滚事务
+    res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
+  } finally {
+    connection.release(); // 释放连接回连接池
   }
 };

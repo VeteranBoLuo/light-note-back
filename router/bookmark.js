@@ -31,5 +31,8 @@ router.post("/updateBookmark", bookmarkHandle.updateBookmark);
 
 router.post('/getCommonBookmarks', bookmarkHandle.getCommonBookmarks);
 
+router.post('/updateBookmarkSort', bookmarkHandle.updateBookmarkSort);
+
+
 
 module.exports = router;
