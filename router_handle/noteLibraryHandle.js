@@ -138,3 +138,23 @@ exports.delNote = async (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常: ' + e.message)); // 设置状态码为400
   }
 };
+
+exports.updateNoteSort = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction(); // 开始事务
+    const { notes } = req.body;
+    for (const note of notes) {
+      const { id, sort } = note;
+      const sql = 'UPDATE note SET sort = ? WHERE id = ?';
+      await pool.query(sql, [sort, id]);
+    }
+    await connection.commit(); // 提交事务
+    res.send(resultData(null, 200, 'Sort updated successfully'));
+  } catch (e) {
+    await connection.rollback(); // 如果发生错误，回滚事务
+    res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
+  } finally {
+    connection.release(); // 释放连接回连接池
+  }
+};

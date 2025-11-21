@@ -79,5 +79,6 @@ router.post('/addNote', noteLibraryHandle.addNote);
 router.post('/queryNoteList', noteLibraryHandle.queryNoteList);
 router.post('/getNoteDetail', noteLibraryHandle.getNoteDetail);
 router.post('/delNote', noteLibraryHandle.delNote);
+router.post("/updateNoteSort", bookmarkHandle.updateNoteSort);
 
 module.exports = router;
