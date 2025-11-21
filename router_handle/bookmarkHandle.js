@@ -277,7 +277,7 @@ exports.getBookmarkList = (req, res) => {
     ) AS tagList
 FROM bookmark b
 JOIN tag_bookmark_relations tbr ON b.id = tbr.bookmark_id
-WHERE b.user_id=? AND tbr.tag_id = ? AND  b.del_flag=0   ORDER BY b.create_time DESC`;
+WHERE b.user_id=? AND tbr.tag_id = ? AND  b.del_flag=0   ORDER BY b.sort, b.create_time DESC`;
   let params = [userId, tagId];
   const type = req.body.filters.type;
   if (type === 'all') {
@@ -299,7 +299,7 @@ FROM
       WHERE
       b.user_id = ? AND b.del_flag = 0
       ORDER BY
-      b.create_time DESC;
+      b.sort, b.create_time DESC;
 
 `;
     params = [userId];
