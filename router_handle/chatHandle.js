@@ -6,22 +6,27 @@ const { resultData } = require('../util/common');
 exports.receiveMessage = (req, res) => {
   try {
     const { message, stream = false } = req.body; // 添加stream参数
-
+    const APP_ID = "01e9e79a38d9433aa0e9795154b06704"
     const BAILIAN_CONFIG = {
       hostname: 'dashscope.aliyuncs.com',
-      path: '/compatible-mode/v1/chat/completions',
+      path: `/api/v1/apps/${APP_ID}/completion`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DASHSCOPE_API_KEY}`
+        'Authorization': `Bearer ${process.env.DASHSCOPE_API_KEY}`,
+        'X-DashScope-SSE': 'enable', // 必须启用流式输出
       }
     };
 
     // 构建请求数据，启用流式输出
     const requestData = JSON.stringify({
-      model: "qwen-plus",
-      messages: [{ role: "user", content: message }],
-      stream: stream // 根据前端请求决定是否启用流式
+      input: {
+        messages: [{ role: "user", content: message }],
+      },
+      parameters: {
+        stream: stream,
+        // incremental_output: true, // 根据需求选择是否增量输出
+      },
     });
 
     // 设置SSE响应头
@@ -31,7 +36,7 @@ exports.receiveMessage = (req, res) => {
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
-        'X-Accel-Buffering': 'no'
+        'X-Accel-Buffering': 'no',
       });
     }
 
