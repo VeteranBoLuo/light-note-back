@@ -6,6 +6,7 @@ const bookmarkRouter = require('./router/bookmark');
 const opinionRouter = require('./router/opinion');
 const fileRouter = require('./router/file');
 const bodyParser = require('body-parser');
+const chatRouter = require('./router/chat');
 const { logFunction } = require('./util/log');
 const { requestTime, getClientIp } = require('./util/common');
 require('./db/index');
@@ -60,6 +61,9 @@ const allRouter = [
   {
     path: '/file',
     router: fileRouter,
+  },{
+    path:'/chat',
+    router: chatRouter
   },
   {
     path: '/files',
@@ -68,11 +72,18 @@ const allRouter = [
   {
     path: '/uploads',
     router: express.static('/www/wwwroot/images'), // 设置静态文件目录
-  },
+  }
 ];
 allRouter.forEach((item) => {
   app.use(item.path, item.router);
 });
+
+
+
+
+
+
+
 // 启动 Express 服务器
 app.listen(9001, () => {
   console.log('服务器已启动' + new Date());

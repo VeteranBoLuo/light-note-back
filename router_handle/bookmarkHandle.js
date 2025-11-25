@@ -332,6 +332,7 @@ WHERE
         t.id IS NOT NULL
     )
 GROUP BY 
+
     b.id
 ORDER BY 
     b.sort, b.create_time DESC;
