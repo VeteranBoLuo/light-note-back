@@ -31,7 +31,7 @@ exports.receiveMessage = async (req, res) => {
   req.setTimeout(0);
 
   try {
-    const { message, stream = false } = req.body;
+    const { message, sessionId = '', stream = false } = req.body;
     const APP_ID = "01e9e79a38d9433aa0e9795154b06704";
 
     if (stream) {
@@ -48,7 +48,7 @@ exports.receiveMessage = async (req, res) => {
     }
 
     const requestData = {
-      input: { prompt: message },
+      input: { prompt: message, session_id: sessionId },
       parameters: { 
         incremental_output: true,
         // 添加流式控制参数
