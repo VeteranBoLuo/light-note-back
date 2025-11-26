@@ -1,122 +1,148 @@
-// 阿里云百炼API的配置信息（流式输出版本）
-const https = require('https');
+const axios = require('axios');
 const { resultData } = require('../util/common');
+const { Transform } = require('stream');
 
-// 核心的聊天接口（流式输出）
-exports.receiveMessage = (req, res) => {
-  try {
-    const { message, stream = false } = req.body; // 添加stream参数
-    const APP_ID = "01e9e79a38d9433aa0e9795154b06704"
-    const BAILIAN_CONFIG = {
-      hostname: 'dashscope.aliyuncs.com',
-      path: `/api/v1/apps/${APP_ID}/completion`,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DASHSCOPE_API_KEY}`,
-        'X-DashScope-SSE': 'enable', // 必须启用流式输出
+// 创建自定义转换流优化数据处理
+class SSETransform extends Transform {
+  constructor() {
+    super({ objectMode: true });
+    this.buffer = '';
+  }
+
+  _transform(chunk, encoding, callback) {
+    const chunkStr = chunk.toString();
+    this.buffer += chunkStr;
+    
+    const lines = this.buffer.split('\n');
+    this.buffer = lines.pop(); // 保留未完成的行
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('data:')) {
+        this.push(trimmedLine + '\n\n');
       }
-    };
+    }
+    
+    callback();
+  }
+}
 
-    // 构建请求数据，启用流式输出
-    const requestData = JSON.stringify({
-      input: {
-        messages: [{ role: "user", content: message }],
-      },
-      parameters: {
-        stream: stream,
-        // incremental_output: true, // 根据需求选择是否增量输出
-      },
-    });
+exports.receiveMessage = async (req, res) => {
+  req.setTimeout(0);
 
-    // 设置SSE响应头
+  try {
+    const { message, stream = false } = req.body;
+    const APP_ID = "01e9e79a38d9433aa0e9795154b06704";
+
     if (stream) {
+      // 🔧 优化响应头设置
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
         'X-Accel-Buffering': 'no',
+        'Content-Encoding': 'identity' // 防止压缩缓冲
       });
+      res.flushHeaders?.();
     }
 
-    const apiRequest = https.request(BAILIAN_CONFIG, (apiResponse) => {
-      if (stream) {
-        // 流式输出处理
-        apiResponse.on('data', (chunk) => {
-          const lines = chunk.toString().split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.substring(6);
-              
-              if (data === '[DONE]') {
-                res.write('data: [DONE]\n\n');
-                res.end();
-                return;
-              }
-              
-              try {
-                // 直接转发百炼API的流式响应
-                res.write(`data: ${data}\n\n`);
-              } catch (error) {
-                console.error('流式数据转发错误:', error);
-              }
-            }
-          }
-        });
+    const requestData = {
+      input: { prompt: message },
+      parameters: { 
+        incremental_output: true,
+        // 添加流式控制参数
+        stream_interval: 100,
+        max_tokens: 2048
+      },
+    };
+
+    const config = {
+      method: 'post',
+      url: `https://dashscope.aliyuncs.com/api/v1/apps/${APP_ID}/completion`,
+      headers: {
+        'Authorization': `Bearer ${process.env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+        'X-DashScope-SSE': stream ? 'enable' : 'disable',
+        'Accept': 'text/event-stream' // 明确接受流式响应
+      },
+      data: requestData,
+      responseType: stream ? 'stream' : 'json',
+      timeout: 0, // 流式请求设置为不超时
+      // 🔧 重要：禁用axios的响应转换
+      transformResponse: [data => data],
+      // 优化http客户端设置
+      httpAgent: new (require('http').Agent)({ 
+        keepAlive: true,
+        maxSockets: 1 // 限制连接数避免竞争
+      }),
+    };
+
+    const response = await axios(config);
+
+    if (stream) {
+      const sseTransform = new SSETransform();
+      
+      // 管道式处理，避免数据堆积
+      response.data.pipe(sseTransform);
+      
+      let lastFlushTime = Date.now();
+      const FLUSH_INTERVAL = 50; // 50ms刷新间隔
+      
+      sseTransform.on('data', (chunk) => {
+        const now = Date.now();
         
-        apiResponse.on('end', () => {
-          console.log('流式传输结束');
-        });
-      } else {
-        // 非流式输出（保持原有逻辑）
-        let data = '';
-        apiResponse.on('data', (chunk) => {
-          data += chunk;
-        });
+        // 立即写入基础数据
+        res.write(chunk);
         
-        apiResponse.on('end', () => {
-          try {
-            const parsedData = JSON.parse(data);
-            
-            if (parsedData.error) {
-              res.send(resultData(null, 500, 'API错误: ' + parsedData.error.message));
-              return;
-            }
-            
-            const aiReply = parsedData.choices[0].message.content;
-            res.send(resultData({ response: aiReply }));
-          } catch (error) {
-            res.send(resultData(null, 500, '解析AI响应失败'));
+        // 控制flush频率，平衡实时性和性能
+        if (now - lastFlushTime >= FLUSH_INTERVAL) {
+          if (typeof res.flush === 'function') {
+            res.flush();
+          } else {
+            res.socket?.cork(); // 收集数据
+            process.nextTick(() => res.socket?.uncork()); // 下一Tick统一发送
           }
-        });
-      }
-    });
+          lastFlushTime = now;
+        }
+      });
 
-    // 错误处理（保持不变）
-    apiRequest.on('error', (error) => {
-      if (stream) {
-        res.write('data: {"error": "请求失败"}\n\n');
+      sseTransform.on('end', () => {
+        // 发送结束前强制flush
+        if (typeof res.flush === 'function') res.flush();
+        res.write('data: [DONE]\n\n');
         res.end();
-      } else {
-        res.send(resultData(null, 500, '网络请求失败'));
-      }
-    });
+      });
 
-    apiRequest.setTimeout(30000, () => {
-      if (stream) {
-        res.write('data: {"error": "请求超时"}\n\n');
+      sseTransform.on('error', (error) => {
+        console.error('SSE转换错误:', error);
+        try {
+          res.write('data: {"error": "流处理异常"}\n\n');
+          res.end();
+        } catch (e) {}
+      });
+
+      req.on('close', () => {
+        sseTransform.destroy();
+        response.data.destroy();
+      });
+      
+    } else {
+      const aiReply = response.data.output.text;
+      res.send(resultData({ response: aiReply }));
+    }
+
+  } catch (error) {
+    console.error('AI 请求错误:', error.message);
+    
+    if (stream) {
+      try {
+        // 发送格式化错误信息
+        res.write(`data: ${JSON.stringify({ error: "服务异常", message: error.message })}\n\n`);
         res.end();
-      } else {
-        res.send(resultData(null, 500, '请求超时'));
-      }
-      apiRequest.destroy();
-    });
-
-    apiRequest.write(requestData);
-    apiRequest.end();
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
+      } catch (e) {}
+    } else {
+      res.status(500).send(resultData(null, 500, 'AI 服务异常'));
+    }
   }
 };
