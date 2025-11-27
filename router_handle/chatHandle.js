@@ -32,7 +32,7 @@ exports.receiveMessage = async (req, res) => {
 
   try {
     const { message, sessionId = '', stream = false } = req.body;
-    const APP_ID = "01e9e79a38d9433aa0e9795154b06704";
+    const APP_ID = "ff8422dbcc784e8ba170b8ed0408c19b";
 
     if (stream) {
       // 🔧 优化响应头设置
