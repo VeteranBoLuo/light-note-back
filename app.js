@@ -7,7 +7,7 @@ const opinionRouter = require('./router/opinion');
 const fileRouter = require('./router/file');
 const bodyParser = require('body-parser');
 const chatRouter = require('./router/chat');
-const { logFunction } = require('./util/log');
+const { logFunction, baseRouter } = require('./util/log');
 const { requestTime, getClientIp } = require('./util/common');
 require('./db/index');
 const dotenv = require('dotenv');
@@ -38,33 +38,7 @@ app.use(requestTime);
 app.use(logFunction);
 
 const allRouter = [
-  {
-    path: '/user',
-    router: userRouter,
-  },
-  {
-    path: '/common',
-    router: commonRouter,
-  },
-  {
-    path: '/note',
-    router: noteLibraryRouter,
-  },
-  {
-    path: '/bookmark',
-    router: bookmarkRouter,
-  },
-  {
-    path: '/opinion',
-    router: opinionRouter,
-  },
-  {
-    path: '/file',
-    router: fileRouter,
-  },{
-    path:'/chat',
-    router: chatRouter
-  },
+  ...baseRouter,
   {
     path: '/files',
     router: express.static('/www/wwwroot/files'), // 设置静态文件目录,
@@ -72,7 +46,7 @@ const allRouter = [
   {
     path: '/uploads',
     router: express.static('/www/wwwroot/images'), // 设置静态文件目录
-  }
+  },
 ];
 allRouter.forEach((item) => {
   app.use(item.path, item.router);

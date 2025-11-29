@@ -5,8 +5,38 @@ const commonRouter = require('../router/common');
 const noteLibraryRouter = require('../router/noteLibrary');
 const bookmarkRouter = require('../router/bookmark');
 const opinionRouter = require('../router/opinion');
-const express = require('express');
 const fileRouter = require('../router/file');
+const chatRouter = require('../router/chat');
+export const baseRouter = [
+  {
+    path: '/user',
+    router: userRouter,
+  },
+  {
+    path: '/common',
+    router: commonRouter,
+  },
+  {
+    path: '/note',
+    router: noteLibraryRouter,
+  },
+  {
+    path: '/bookmark',
+    router: bookmarkRouter,
+  },
+  {
+    path: '/opinion',
+    router: opinionRouter,
+  },
+  {
+    path: '/file',
+    router: fileRouter,
+  },
+  {
+    path: '/chat',
+    router: chatRouter,
+  },
+];
 const attackTypes = {
   // 注入类攻击
   SQL_INJECTION: {
@@ -108,33 +138,7 @@ const detectAttack = (req) => {
     });
   }
   const allowApi = [];
-  const allRouter = [
-    {
-      path: '/user',
-      router: userRouter,
-    },
-    {
-      path: '/common',
-      router: commonRouter,
-    },
-    {
-      path: '/note',
-      router: noteLibraryRouter,
-    },
-    {
-      path: '/bookmark',
-      router: bookmarkRouter,
-    },
-    {
-      path: '/opinion',
-      router: opinionRouter,
-    },
-    {
-      path: '/file',
-      router: fileRouter,
-    },
-  ];
-  allRouter.forEach((Router) => {
+  baseRouter.forEach((Router) => {
     Object.keys(Router.router.stack).forEach((key) => {
       const route = Router.router.stack[key];
       if (route.route) {
@@ -181,10 +185,7 @@ exports.logFunction = async function (req, res, next) {
       if (req.originalUrl.includes('login')) {
         // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
         const { email, password } = req.body;
-        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [
-          email,
-          password,
-        ]);
+        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [email, password]);
         if (!userResult[0]) {
           throw new Error('邮箱或密码错误');
         }
