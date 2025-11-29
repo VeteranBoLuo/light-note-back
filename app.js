@@ -1,14 +1,7 @@
 const express = require('express');
-const userRouter = require('./router/user');
-const commonRouter = require('./router/common');
-const noteLibraryRouter = require('./router/noteLibrary');
-const bookmarkRouter = require('./router/bookmark');
-const opinionRouter = require('./router/opinion');
-const fileRouter = require('./router/file');
 const bodyParser = require('body-parser');
-const chatRouter = require('./router/chat');
 const { logFunction, baseRouter } = require('./util/log');
-const { requestTime, getClientIp } = require('./util/common');
+const { requestTime } = require('./util/common');
 require('./db/index');
 const dotenv = require('dotenv');
 const path = require('path');
