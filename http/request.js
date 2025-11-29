@@ -1,4 +1,5 @@
-const https = require('https');
+import https from 'https';
+
 const request = {
   requestData(method, url, options = {}) {
     return new Promise((resolve, reject) => {
@@ -48,9 +49,10 @@ const request = {
   get(url, options) {
     return this.requestData('GET', url, options);
   },
+
   post(url, options) {
     return this.requestData('POST', url, options);
   },
 };
 
-module.exports = request;
+export default request;

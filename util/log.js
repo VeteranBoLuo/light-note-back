@@ -1,42 +1,6 @@
-const pool = require('../db');
-const { snakeCaseKeys, resultData, getClientIp } = require('./common');
-const userRouter = require('../router/user');
-const commonRouter = require('../router/common');
-const noteLibraryRouter = require('../router/noteLibrary');
-const bookmarkRouter = require('../router/bookmark');
-const opinionRouter = require('../router/opinion');
-const fileRouter = require('../router/file');
-const chatRouter = require('../router/chat');
-export const baseRouter = [
-  {
-    path: '/user',
-    router: userRouter,
-  },
-  {
-    path: '/common',
-    router: commonRouter,
-  },
-  {
-    path: '/note',
-    router: noteLibraryRouter,
-  },
-  {
-    path: '/bookmark',
-    router: bookmarkRouter,
-  },
-  {
-    path: '/opinion',
-    router: opinionRouter,
-  },
-  {
-    path: '/file',
-    router: fileRouter,
-  },
-  {
-    path: '/chat',
-    router: chatRouter,
-  },
-];
+import pool from '../db/index.js';
+import { snakeCaseKeys, resultData, getClientIp, baseRouter } from './common.js';
+
 const attackTypes = {
   // 注入类攻击
   SQL_INJECTION: {
@@ -171,7 +135,8 @@ const detectAttack = (req) => {
   }
   return detectedType;
 };
-exports.logFunction = async function (req, res, next) {
+
+export async function logFunction(req, res, next) {
   try {
     const noPass = detectAttack(req, res, next);
     if (noPass) {
@@ -185,7 +150,10 @@ exports.logFunction = async function (req, res, next) {
       if (req.originalUrl.includes('login')) {
         // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
         const { email, password } = req.body;
-        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [email, password]);
+        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [
+          email,
+          password,
+        ]);
         if (!userResult[0]) {
           throw new Error('邮箱或密码错误');
         }
@@ -262,4 +230,4 @@ exports.logFunction = async function (req, res, next) {
   } catch (e) {
     res.send(resultData(null, 500, e.message)); // 设置状态码为500
   }
-};
+}

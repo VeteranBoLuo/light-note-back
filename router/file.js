@@ -1,11 +1,11 @@
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } = require('../util/common');
-const pool = require('../db');
-const express = require('express');
-const commonHandle = require('../router_handle/commonHandle');
-const fileHandle = require('../router_handle/fileHandle');
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } from '../util/common.js';
+import pool from '../db/index.js';
+import express from 'express';
+import * as commonHandle from '../router_handle/commonHandle.js';
+import * as fileHandle from '../router_handle/fileHandle.js';
 const router = express.Router();
 
 // 配置multer存储
@@ -317,4 +317,4 @@ router.post('/associateFile', fileHandle.associateFile);
 router.post('/updateFolder', fileHandle.updateFolder);
 router.post('/deleteFolder', fileHandle.deleteFolder);
 router.post('/updateFolderSort', fileHandle.updateFolderSort);
-module.exports = router;
+export default router;

@@ -1,8 +1,7 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
-const bookmarkHandle = require("../router_handle/bookmarkHandle");
-const commonHandle = require('../router_handle/commonHandle');
+import * as bookmarkHandle from "../router_handle/bookmarkHandle.js";
 
 router.post("/queryTagList", bookmarkHandle.queryTagList);
 
@@ -35,4 +34,4 @@ router.post('/updateBookmarkSort', bookmarkHandle.updateBookmarkSort);
 
 
 
-module.exports = router;
+export default router;

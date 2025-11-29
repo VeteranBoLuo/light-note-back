@@ -1,6 +1,8 @@
-const axios = require('axios');
-const { resultData } = require('../util/common');
-const { Transform } = require('stream');
+
+import axios from 'axios';
+import { resultData } from '../util/common.js';
+import { Transform } from 'stream';
+import { Agent as HttpAgent } from 'http';
 
 // 创建自定义转换流优化数据处理
 class SSETransform extends Transform {
@@ -12,26 +14,30 @@ class SSETransform extends Transform {
   _transform(chunk, encoding, callback) {
     const chunkStr = chunk.toString();
     this.buffer += chunkStr;
-    
+
     const lines = this.buffer.split('\n');
     this.buffer = lines.pop(); // 保留未完成的行
-    
+
     for (const line of lines) {
       const trimmedLine = line.trim();
       if (trimmedLine.startsWith('data:')) {
         this.push(trimmedLine + '\n\n');
       }
     }
-    
+
     callback();
   }
 }
 
-exports.receiveMessage = async (req, res) => {
+export const receiveMessage = async (req, res) => {
   req.setTimeout(0);
 
+  // 在函数作用域顶部声明变量，确保catch块可以访问
+  let stream = false;
+
   try {
-    const { message, sessionId = '', stream = false } = req.body;
+    const { message, sessionId = '' } = req.body;
+    stream = req.body.stream ?? false; // 提取到外层作用域
     const APP_ID = "ff8422dbcc784e8ba170b8ed0408c19b";
 
     if (stream) {
@@ -49,7 +55,7 @@ exports.receiveMessage = async (req, res) => {
 
     const requestData = {
       input: { prompt: message, session_id: sessionId },
-      parameters: { 
+      parameters: {
         incremental_output: true,
         // 添加流式控制参数
         stream_interval: 100,
@@ -68,33 +74,39 @@ exports.receiveMessage = async (req, res) => {
       },
       data: requestData,
       responseType: stream ? 'stream' : 'json',
-      timeout: 0, // 流式请求设置为不超时
+      timeout: 30000, // 设置30秒超时
       // 🔧 重要：禁用axios的响应转换
       transformResponse: [data => data],
       // 优化http客户端设置
-      httpAgent: new (require('http').Agent)({ 
+      httpAgent: new HttpAgent({
         keepAlive: true,
         maxSockets: 1 // 限制连接数避免竞争
       }),
     };
 
-    const response = await axios(config);
+    // 添加超时处理
+    const response = await Promise.race([
+      axios(config),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('请求超时，请稍后重试')), 30000)
+      )
+    ]);
 
     if (stream) {
       const sseTransform = new SSETransform();
-      
+
       // 管道式处理，避免数据堆积
       response.data.pipe(sseTransform);
-      
+
       let lastFlushTime = Date.now();
       const FLUSH_INTERVAL = 50; // 50ms刷新间隔
-      
+
       sseTransform.on('data', (chunk) => {
         const now = Date.now();
-        
+
         // 立即写入基础数据
         res.write(chunk);
-        
+
         // 控制flush频率，平衡实时性和性能
         if (now - lastFlushTime >= FLUSH_INTERVAL) {
           if (typeof res.flush === 'function') {
@@ -126,7 +138,7 @@ exports.receiveMessage = async (req, res) => {
         sseTransform.destroy();
         response.data.destroy();
       });
-      
+
     } else {
       const aiReply = response.data.output.text;
       res.send(resultData({ response: aiReply }));
@@ -134,7 +146,6 @@ exports.receiveMessage = async (req, res) => {
 
   } catch (error) {
     console.error('AI 请求错误:', error.message);
-    
     if (stream) {
       try {
         // 发送格式化错误信息
@@ -142,7 +153,7 @@ exports.receiveMessage = async (req, res) => {
         res.end();
       } catch (e) {}
     } else {
-      res.status(500).send(resultData(null, 500, 'AI 服务异常'));
+      res.status(500).send(resultData(null, 500, 'AI 服务异常: ' + error.message));
     }
   }
 };

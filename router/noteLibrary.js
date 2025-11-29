@@ -1,15 +1,14 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const noteLibraryHandle = require('../router_handle/noteLibraryHandle');
+import multer from 'multer';
+import path from 'path';
+import * as noteLibraryHandle from '../router_handle/noteLibraryHandle.js';
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, '/www/wwwroot/images');
   },
   filename: (req, file, cb) => {
-    // 关键步骤：转换中文编码
     const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf-8');
     const uniqueSuffix = Date.now();
     cb(null, 'note-' + uniqueSuffix + '-' + decodedName);
@@ -17,8 +16,8 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-const { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } = require('../util/common');
-const pool = require('../db');
+import { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } from '../util/common.js';
+import pool from '../db/index.js';
 
 router.post('/uploadImage', upload.single('file'), async (req, res) => {
   try {
@@ -81,4 +80,4 @@ router.post('/getNoteDetail', noteLibraryHandle.getNoteDetail);
 router.post('/delNote', noteLibraryHandle.delNote);
 router.post("/updateNoteSort", noteLibraryHandle.updateNoteSort);
 
-module.exports = router;
+export default router;

@@ -1,8 +1,9 @@
-const pool = require('../db');
-const fs = require('fs').promises;
-const path = require('path');
-const { snakeCaseKeys, resultData, mergeExistingProperties } = require('../util/common');
-exports.addNote = (req, res) => {
+import pool from '../db/index.js';
+import fs from 'fs/promises';
+import path from 'path';
+import { snakeCaseKeys, resultData, mergeExistingProperties } from '../util/common.js';
+
+export const addNote = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const params = {
@@ -24,17 +25,18 @@ exports.addNote = (req, res) => {
             );
           })
           .catch((err) => {
-            res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+            res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
           });
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };
-exports.updateNote = (req, res) => {
+
+export const updateNote = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const params = {
@@ -48,13 +50,14 @@ exports.updateNote = (req, res) => {
         res.send(resultData('更新笔记成功'));
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };
-exports.queryNoteList = (req, res) => {
+
+export const queryNoteList = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     pool
@@ -63,13 +66,14 @@ exports.queryNoteList = (req, res) => {
         res.send(resultData(result));
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };
-exports.getNoteDetail = (req, res) => {
+
+export const getNoteDetail = (req, res) => {
   try {
     pool
       .query('select * from note where id=?', [req.body.id])
@@ -77,14 +81,14 @@ exports.getNoteDetail = (req, res) => {
         res.send(resultData(result[0]));
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };
 
-exports.delNote = async (req, res) => {
+export const delNote = async (req, res) => {
   try {
     const ids = req.body.ids; // 获取标签ID数组
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -130,7 +134,7 @@ exports.delNote = async (req, res) => {
       res.send(resultData(updateResult));
     } catch (error) {
       await connection.rollback(); // 回滚事务
-      res.send(resultData(null, 500, '服务器内部错误: ' + error.message)); // 设置状态码为500
+      res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
     } finally {
       connection.release(); // 释放连接
     }
@@ -139,7 +143,7 @@ exports.delNote = async (req, res) => {
   }
 };
 
-exports.updateNoteSort = async (req, res) => {
+export const updateNoteSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务

@@ -1,10 +1,17 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const { logFunction, baseRouter } = require('./util/log');
-const { requestTime } = require('./util/common');
-require('./db/index');
-const dotenv = require('dotenv');
-const path = require('path');
+import express from 'express';
+import bodyParser from 'body-parser';
+import { logFunction } from './util/log.js';
+import { baseRouter, requestTime } from './util/common.js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import './db/index.js';
+
+// 获取 __dirname 的 ES 模块等效写法
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 // 判断是否是生产环境（比如：运行在 Linux 上）
 function isProduction() {
   return process.platform === 'linux';
@@ -16,8 +23,8 @@ const envPath = path.resolve(__dirname, `.env.${mode}`);
 
 dotenv.config({ path: envPath });
 // 打印当前加载的环境变量（可选）
-console.log(`Running in ${mode} mode`);
-console.log(`Loaded env from: ${envPath}`);
+console.log(`Running in 【${mode}】 mode`);
+console.log(`Loaded env from: 【${envPath}】`);
 console.log('BASE_URL:', process.env.BASE_URL);
 // 建立一个Express服务器
 const app = express();
@@ -47,5 +54,5 @@ allRouter.forEach((item) => {
 
 // 启动 Express 服务器
 app.listen(9001, () => {
-  console.log('服务器已启动' + new Date());
+  console.log('服务器已启动：' + new Date().toLocaleString('zh-CN'));
 });

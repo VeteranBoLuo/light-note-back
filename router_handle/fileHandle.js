@@ -1,9 +1,9 @@
-const pool = require('../db');
-const { resultData, snakeCaseKeys } = require('../util/common');
-const fs = require('fs');
-const path = require('path');
-// 修改文件（名字）同时修改服务器上的本地文件的名字
-exports.updateFile = async (req, res) => {
+import pool from '../db/index.js';
+import { resultData, snakeCaseKeys } from '../util/common.js';
+import fs from 'fs';
+import path from 'path';
+
+export const updateFile = async (req, res) => {
   try {
     const { id, fileName } = req.body;
 
@@ -66,7 +66,7 @@ exports.updateFile = async (req, res) => {
   }
 };
 
-exports.queryFolder = async (req, res) => {
+export const queryFolder = async (req, res) => {
   const { filters } = req.body;
   const connection = await pool.getConnection();
 
@@ -105,7 +105,7 @@ exports.queryFolder = async (req, res) => {
   }
 };
 
-exports.addFolder = async (req, res) => {
+export const addFolder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { name } = req.body;
@@ -124,7 +124,7 @@ exports.addFolder = async (req, res) => {
 };
 
 // 文件关联文件夹
-exports.associateFile = async (req, res) => {
+export const associateFile = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     let { folderId, fileId } = req.body;
@@ -139,7 +139,7 @@ exports.associateFile = async (req, res) => {
 };
 
 // 删除文件夹
-exports.deleteFolder = async (req, res) => {
+export const deleteFolder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id } = req.body;
@@ -151,7 +151,7 @@ exports.deleteFolder = async (req, res) => {
 };
 
 // 修改文件夹名称
-exports.updateFolder = async (req, res) => {
+export const updateFolder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id, name } = req.body;
@@ -162,7 +162,7 @@ exports.updateFolder = async (req, res) => {
   }
 };
 
-exports.updateFolderSort = async (req, res) => {
+export const updateFolderSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务

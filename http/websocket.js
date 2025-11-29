@@ -1,5 +1,5 @@
-const http = require('http');
-const WebSocket = require('ws');
+import http from 'http';
+import WebSocket from 'ws';
 
 // 创建 HTTP 服务器
 const server = http.createServer();
@@ -29,4 +29,4 @@ server.listen(3000, () => {
   console.log('WSS server started on port 3000');
 });
 
-module.exports = wss;
+export default wss;

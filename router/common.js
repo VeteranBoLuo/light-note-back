@@ -1,7 +1,8 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
-const commonHandle = require('../router_handle/commonHandle');
+import * as commonHandle from '../router_handle/commonHandle.js';
+
 router.post('/getApiLogs', commonHandle.getApiLogs);
 
 router.get('/clearApiLogs', commonHandle.clearApiLogs);
@@ -31,4 +32,4 @@ router.post('/updateHelp', commonHandle.updateHelp);
 // router.post('/updateFolder', commonHandle.updateFolder);
 // router.post('/deleteFolder', commonHandle.deleteFolder);
 
-module.exports = router;
+export default router;

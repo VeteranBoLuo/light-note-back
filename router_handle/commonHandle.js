@@ -1,13 +1,12 @@
-const { resultData, snakeCaseKeys, requestTime } = require('../util/common');
-const https = require('https');
-const fs = require('fs');
-const fsP = require('fs').promises;
+import { resultData, snakeCaseKeys, requestTime } from '../util/common.js';
+import https from 'https';
+import fs from 'fs';
+import fsP from 'fs/promises';
+import path from 'path';
+import pool from '../db/index.js';
+import { validateQueryParams } from '../util/request.js';
 
-const path = require('path');
-const pool = require('../db');
-const { validateQueryParams } = require('../util/request');
-
-exports.getApiLogs = (req, res) => {
+export const getApiLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const key = filters.key.trim();
@@ -20,14 +19,12 @@ exports.getApiLogs = (req, res) => {
       .query(sql, [filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
         result.forEach((row) => {
-          // 判断数据是否是JSON字符串
           const fieldsToParse = ['req', 'system', 'location'];
           fieldsToParse.forEach((field) => {
             if (row[field] && typeof row[field] === 'string') {
               try {
                 row[field] = JSON.parse(row[field]);
               } catch (e) {
-                // 如果解析失败，保持原样或者根据需要处理
                 console.error(`JSON解析失败 ${field}:${row[field]}--`, e);
               }
             }
@@ -45,23 +42,23 @@ exports.getApiLogs = (req, res) => {
         );
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
 };
-exports.clearApiLogs = (req, res) => {
+export const clearApiLogs = (req, res) => {
   pool
     .query('UPDATE api_logs set del_flag=1')
     .then(() => {
       res.send(resultData(null));
     })
     .catch((err) => {
-      res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
     });
 };
-exports.getAttackLogs = (req, res) => {
+export const getAttackLogs = (req, res) => {
   try {
     pool
       .query('SELECT * FROM attack_logs ORDER BY created_at DESC')
@@ -74,15 +71,15 @@ exports.getAttackLogs = (req, res) => {
         );
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
 };
 
 // 用户操作日志
-exports.recordOperationLogs = (req, res) => {
+export const recordOperationLogs = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const log = {
@@ -97,14 +94,14 @@ exports.recordOperationLogs = (req, res) => {
         res.send(resultData(null));
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
 };
 
-exports.getOperationLogs = (req, res) => {
+export const getOperationLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = req.body;
     const skip = pageSize * (currentPage - 1);
@@ -138,21 +135,21 @@ AND o.del_flag=0 AND u.alias!='菠萝'`;
         );
       })
       .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e.message)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
 };
 
-exports.clearOperationLogs = (req, res) => {
+export const clearOperationLogs = (req, res) => {
   pool
     .query('UPDATE operation_logs set del_flag=1')
     .then(() => {
       res.send(resultData(null));
     })
     .catch((err) => {
-      res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
     });
 };
 
@@ -167,7 +164,7 @@ const imageMimeTypes = {
 // 默认图片路径（可选）
 const defaultImagePath = '/uploads/default-icon.png';
 
-exports.analyzeImgUrl = async (req, res) => {
+export const analyzeImgUrl = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const promises = req.body.map(async (bookmark) => {
@@ -242,7 +239,7 @@ exports.analyzeImgUrl = async (req, res) => {
   }
 };
 
-exports.getImages = async (req, res) => {
+export const getImages = async (req, res) => {
   const [bookmarkResult] = await pool.query('select icon_url from bookmark');
   const [noteResult] = await pool.query('select url from note_images');
   // 指定要读取的目录路径
@@ -300,7 +297,7 @@ exports.getImages = async (req, res) => {
   }
 };
 
-exports.clearImages = async (req, res) => {
+export const clearImages = async (req, res) => {
   const directoryPath = '/www/wwwroot/images';
   const images = req.body.images;
 
@@ -332,7 +329,7 @@ exports.clearImages = async (req, res) => {
   }
 };
 
-exports.runSql = async (req, res) => {
+export const runSql = async (req, res) => {
   try {
     const [result] = await pool.query(req.body.sql);
     res.send(resultData(result, 200));
@@ -341,7 +338,7 @@ exports.runSql = async (req, res) => {
   }
 };
 
-exports.getHelpConfig = async (req, res) => {
+export const getHelpConfig = async (req, res) => {
   try {
     const [result] = await pool.query('SELECT * FROM help_config');
     res.send(resultData(result, 200));
@@ -350,7 +347,7 @@ exports.getHelpConfig = async (req, res) => {
   }
 };
 
-exports.updateHelp = async (req, res) => {
+export const updateHelp = async (req, res) => {
   try {
     const { id, content } = req.body;
     const [result] = await pool.query('UPDATE help_config SET content=? WHERE id=?', [content, id]);

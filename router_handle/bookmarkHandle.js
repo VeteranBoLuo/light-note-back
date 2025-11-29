@@ -1,6 +1,9 @@
-const pool = require('../db');
-const { resultData, snakeCaseKeys, mergeExistingProperties } = require('../util/common');
-exports.queryTagList = (req, res) => {
+import pool from '../db/index.js';
+import { resultData, snakeCaseKeys, mergeExistingProperties } from '../util/common.js';
+
+import { promises as fs } from 'fs';
+import path from 'path';
+export const queryTagList = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
     let sql = `SELECT 
@@ -63,7 +66,7 @@ FROM
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
 };
-exports.getRelatedTag = (req, res) => {
+export const getRelatedTag = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
     let sql = `SELECT t.* FROM tag t LEFT JOIN tag_relations a on t.id=a.related_tag_id 
@@ -85,7 +88,7 @@ WHERE t.user_id=? AND tb.bookmark_id=? AND t.del_flag=0`;
   }
 };
 
-exports.updateTagSort = async (req, res) => {
+export const updateTagSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -105,7 +108,7 @@ exports.updateTagSort = async (req, res) => {
   }
 };
 
-exports.getTagDetail = (req, res) => {
+export const getTagDetail = (req, res) => {
   try {
     const { filters } = req.body;
     pool
@@ -124,7 +127,7 @@ exports.getTagDetail = (req, res) => {
   }
 };
 
-exports.addTag = async (req, res) => {
+export const addTag = async (req, res) => {
   try {
     const connection = await pool.getConnection();
     try {
@@ -182,7 +185,7 @@ exports.addTag = async (req, res) => {
   }
 };
 
-exports.delTag = (req, res) => {
+export const delTag = (req, res) => {
   try {
     const id = req.body.id; // 获取标签ID
     let sql = `UPDATE TAG SET del_flag=1  WHERE id=?`;
@@ -199,7 +202,7 @@ exports.delTag = (req, res) => {
   }
 };
 
-exports.updateTag = async (req, res) => {
+export const updateTag = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -261,7 +264,7 @@ exports.updateTag = async (req, res) => {
     await connection.release(); // 释放连接
   }
 };
-exports.getBookmarkList = (req, res) => {
+export const getBookmarkList = (req, res) => {
   const userId = req.headers['x-user-id']; // 获取用户ID
   const tagId = req.body.filters.tagId; // 获取标签ID
   let sql = `SELECT b.*,(
@@ -356,7 +359,7 @@ ORDER BY
     });
 };
 
-exports.addBookmark = async (req, res) => {
+export const addBookmark = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -399,7 +402,7 @@ exports.addBookmark = async (req, res) => {
   }
 };
 
-exports.updateBookmark = async (req, res) => {
+export const updateBookmark = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -439,7 +442,7 @@ exports.updateBookmark = async (req, res) => {
   }
 };
 
-exports.getBookmarkDetail = (req, res) => {
+export const getBookmarkDetail = (req, res) => {
   try {
     let sql = `SELECT * FROM bookmark WHERE  id=? AND del_flag=0`;
     pool
@@ -458,10 +461,7 @@ exports.getBookmarkDetail = (req, res) => {
   }
 };
 
-const fs = require('fs').promises;
-const path = require('path');
-
-exports.delBookmark = async (req, res) => {
+export const delBookmark = async (req, res) => {
   try {
     const id = req.body.id;
 
@@ -498,7 +498,7 @@ exports.delBookmark = async (req, res) => {
   }
 };
 
-exports.getCommonBookmarks = async (req, res) => {
+export const getCommonBookmarks = async (req, res) => {
   try {
     const [result] = await pool.query(
       "SELECT REPLACE(operation, '点击书签卡片', '') AS name,COUNT(*) as count FROM `operation_logs` WHERE operation LIKE '点击书签卡片%' GROUP  BY operation ORDER BY count DESC LIMIT 10",
@@ -514,7 +514,7 @@ exports.getCommonBookmarks = async (req, res) => {
   }
 };
 
-exports.updateBookmarkSort = async (req, res) => {
+export const updateBookmarkSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务

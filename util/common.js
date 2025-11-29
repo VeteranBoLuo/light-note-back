@@ -1,5 +1,13 @@
-require('../db');
-exports.resultData = function (data = null, status = 200, msg = '') {
+import '../db/index.js';
+import userRouter from '../router/user.js';
+import commonRouter from '../router/common.js';
+import noteLibraryRouter from '../router/noteLibrary.js';
+import bookmarkRouter from '../router/bookmark.js';
+import opinionRouter from '../router/opinion.js';
+import fileRouter from '../router/file.js';
+import chatRouter from '../router/chat.js';
+
+export const resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
     console.error(status, msg);
   }
@@ -42,7 +50,7 @@ const camelCaseKeys = function (input) {
 };
 
 // 驼峰转下划线
-exports.snakeCaseKeys = function (input) {
+export const snakeCaseKeys = function (input) {
   // 定义一个处理函数，用于将单个对象中的键转换为下划线命名
   function toSnakeCase(obj) {
     if (Array.isArray(obj)) {
@@ -73,7 +81,7 @@ exports.snakeCaseKeys = function (input) {
 };
 
 // 函数用于将 ISO 8601 格式转换为数据库存储的格式
-exports.convertISOToDatabaseFormat = function (isoDate) {
+export const convertISOToDatabaseFormat = function (isoDate) {
   // 创建一个 Date 对象
   const date = new Date(isoDate);
   // 将 Date 对象转换为数据库存储的格式
@@ -82,7 +90,7 @@ exports.convertISOToDatabaseFormat = function (isoDate) {
 };
 
 // 前端没有传但后端定义了的参数过滤掉
-exports.mergeExistingProperties = function (source, outValue = [undefined], outKey = []) {
+export const mergeExistingProperties = function (source, outValue = [undefined], outKey = []) {
   let target = {};
   for (const key in source) {
     // 检查value是否在outValue中
@@ -103,7 +111,7 @@ exports.mergeExistingProperties = function (source, outValue = [undefined], outK
   return target;
 };
 // 当前时间拼接
-exports.requestTime = function (req, res, next) {
+export const requestTime = function (req, res, next) {
   const now = new Date();
   const year = now.getFullYear();
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -115,7 +123,7 @@ exports.requestTime = function (req, res, next) {
   next();
 };
 // 生成随机数
-exports.generateUUID = function () {
+export const generateUUID = function () {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     let r = (Math.random() * 16) | 0,
       v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -123,7 +131,7 @@ exports.generateUUID = function () {
   });
 };
 
-exports.getClientIp = function (req) {
+export const getClientIp = function (req) {
   // 处理多层代理场景
   const xff = req.headers['x-forwarded-for'] || '';
   const ips = xff.split(/, ?/g).filter((ip) => ip); // 拆分并过滤空值
@@ -134,3 +142,33 @@ exports.getClientIp = function (req) {
   // 取第一个非内网 IP
   return ips.find((ip) => !isPrivate(ip)) || req.ip;
 };
+
+export const baseRouter = [
+  {
+    path: '/user',
+    router: userRouter,
+  },
+  {
+    path: '/common',
+    router: commonRouter,
+  },
+  {
+    path: '/note',
+    router: noteLibraryRouter,
+  },
+  {
+    path: '/bookmark',
+    router: bookmarkRouter,
+  },
+  {
+    path: '/opinion',
+    router: opinionRouter,
+  },
+  {
+    path: '/file',
+    router: fileRouter,
+  },{
+    path:'/chat',
+    router: chatRouter
+  },
+];

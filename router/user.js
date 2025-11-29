@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
 
-const userHandle = require('../router_handle/userHandle');
+import * as userHandle from '../router_handle/userHandle.js';
 
 router.post('/login', userHandle.login);
 
@@ -23,4 +23,4 @@ router.post('/sendEmail', userHandle.sendEmail);
 
 router.post('/verifyCode', userHandle.verifyCode);
 
-module.exports = router;
+export default router;

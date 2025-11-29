@@ -1,7 +1,8 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
-const opinionHandle = require('../router_handle/opinionHandle');
+import * as opinionHandle from '../router_handle/opinionHandle.js';
+
 router.post("/recordOpinion", opinionHandle.recordOpinion);
 
 router.post("/getOpinionList", opinionHandle.getOpinionList);
@@ -10,4 +11,4 @@ router.post("/delOpinion", opinionHandle.delOpinion);
 
 
 
-module.exports = router;
+export default router;

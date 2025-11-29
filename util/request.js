@@ -1,7 +1,7 @@
-const { snakeCaseKeys } = require('./common');
-const pool = require('../db');
+import { snakeCaseKeys } from './common.js';
+import pool from '../db/index.js';
 
-exports.validateQueryParams = function (queryBody) {
+export const validateQueryParams = function (queryBody) {
   let { pageSize, currentPage, order, filters } = queryBody;
   order = snakeCaseKeys(order);
   filters = snakeCaseKeys(filters);
@@ -13,9 +13,9 @@ exports.validateQueryParams = function (queryBody) {
 };
 
 // 基础查询请求
-exports.baseQuery = async function (req, tableName, options = { whereSign: 'AND' }) {
+export const baseQuery = async function (req, tableName, options = { whereSign: 'AND' }) {
   try {
-    const { pageSize, currentPage, order, filters } = exports.validateQueryParams(req.body);
+    const { pageSize, currentPage, order, filters } = validateQueryParams(req.body);
 
     // 处理排序
     let orderClause = '';
@@ -115,7 +115,7 @@ exports.baseQuery = async function (req, tableName, options = { whereSign: 'AND'
 };
 
 // 基础新增请求
-exports.baseCreate = async function (req, tableName) {
+export const baseCreate = async function (req, tableName) {
   let { data } = req.body;
   if (!data) {
     throw new Error('data is required');
@@ -153,7 +153,7 @@ exports.baseCreate = async function (req, tableName) {
 };
 
 // 基础修改请求
-exports.baseUpdate = async function (req, tableName) {
+export const baseUpdate = async function (req, tableName) {
   let { query, update } = req.body;
   const safeQuery = snakeCaseKeys(query);
   // 检查查询参数是否为空
@@ -172,7 +172,7 @@ exports.baseUpdate = async function (req, tableName) {
 };
 
 // 基础删除请求
-exports.baseDelete = async function (req, tableName) {
+export const baseDelete = async function (req, tableName) {
   const { filters } = req.body;
   const safeFilters = snakeCaseKeys(filters);
 
@@ -205,7 +205,7 @@ exports.baseDelete = async function (req, tableName) {
 };
 
 // 工具函数：带超时的 fetch 请求
-exports.fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
+export const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 

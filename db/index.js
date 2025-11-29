@@ -1,5 +1,6 @@
+
 // 引入mysql模块
-const mysql = require('mysql2/promise');
+import mysql from 'mysql2/promise'
 
 const pool = mysql.createPool({
   connectionLimit: 10, // 例如限制为10个连接
@@ -30,4 +31,4 @@ pool
     }
   });
 
-module.exports = pool;
+export default pool;
