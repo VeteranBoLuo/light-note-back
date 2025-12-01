@@ -372,7 +372,7 @@ export const addBookmark = async (req, res) => {
     const sqlCheck = 'SELECT * FROM bookmark WHERE user_id=? AND name = ? AND del_flag = 0';
     const [checkRes] = await connection.query(sqlCheck, [userId, params.name]);
     if (checkRes.length > 0) {
-      throw new Error('书签已存在');
+      throw new Error(`书签${checkRes[0].name}已存在`);
     }
 
     let sql = `INSERT INTO bookmark SET ?`;
