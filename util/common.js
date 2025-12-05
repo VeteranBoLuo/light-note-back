@@ -6,6 +6,7 @@ import bookmarkRouter from '../router/bookmark.js';
 import opinionRouter from '../router/opinion.js';
 import fileRouter from '../router/file.js';
 import chatRouter from '../router/chat.js';
+import jsonRouter from '../router/json.js';
 
 export const resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
@@ -149,6 +150,10 @@ export const baseRouter = [
     router: userRouter,
   },
   {
+    path: '/json',
+    router: jsonRouter,
+  },
+  {
     path: '/common',
     router: commonRouter,
   },
@@ -167,8 +172,9 @@ export const baseRouter = [
   {
     path: '/file',
     router: fileRouter,
-  },{
-    path:'/chat',
-    router: chatRouter
+  },
+  {
+    path: '/chat',
+    router: chatRouter,
   },
 ];
