@@ -184,6 +184,7 @@ router.post('/queryFiles', async (req, res) => {
         word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         audio: ['audio/mpeg', 'audio/wav'],
         video: ['video/mp4', 'video/quicktime'],
+        excel:['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
       };
 
       // 提取用户选择的类型
@@ -194,7 +195,7 @@ router.post('/queryFiles', async (req, res) => {
       const includeMimeTypes = selectedNonOtherTypes.flatMap((type) => mimeTypeMap[type] || []);
 
       // 构建需要排除的 MIME 类型（用于 other 逻辑）
-      const excludeMimeTypes = ['image', 'pdf', 'word', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
+      const excludeMimeTypes = ['image', 'pdf', 'word','excel', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
 
       // 过滤文件
       formattedFiles = formattedFiles.filter((file) => {
