@@ -36,7 +36,7 @@ export const receiveMessage = async (req, res) => {
   let stream = false;
 
   try {
-    const { message, sessionId = '' } = req.body;
+    const { message, sessionId = '',useInternetSearch = false,enableThinking = false } = req.body;
     stream = req.body.stream ?? false; // 提取到外层作用域
     const APP_ID = "ff8422dbcc784e8ba170b8ed0408c19b";
 
@@ -59,7 +59,12 @@ export const receiveMessage = async (req, res) => {
         incremental_output: true,
         // 添加流式控制参数
         stream_interval: 100,
-        max_tokens: 2048
+        max_tokens: 2048,
+        // 启用联网搜索功能
+        enable_web_search:useInternetSearch,
+        // 深度思考功能控制
+        has_thoughts: enableThinking,
+        enable_thinking: enableThinking
       },
     };
 
