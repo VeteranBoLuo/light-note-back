@@ -170,14 +170,14 @@ router.post('/upload/init', async (req, res) => {
 // 分片存储配置：依据 uploadId 建立单独目录，文件名为 {index}.part
 const chunkStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadId = req.body.uploadId;
-    if (!uploadId) return cb(new Error('缺少 uploadId')); // 简单校验
+    const uploadId = req.query.uploadId;
+    if (!uploadId) return cb(new Error('缺少 uploadId'));
     const chunkDir = path.join(CHUNK_ROOT, uploadId);
     ensureDir(chunkDir);
     cb(null, chunkDir);
   },
   filename: function (req, file, cb) {
-    const index = req.body.index;
+    const index = req.query.index;
     if (index === undefined) return cb(new Error('缺少分片 index'));
     cb(null, `${index}.part`);
   },
