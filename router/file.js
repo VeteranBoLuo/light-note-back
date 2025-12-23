@@ -213,18 +213,33 @@ router.post('/upload/complete', async (req, res) => {
 
     const chunkDir = path.join(CHUNK_ROOT, uploadId);
     const finalPath = path.join(FILE_ROOT, filename);
-    // 合并
+    // 合并 - 使用流式异步合并以提高性能
     const writeStream = fs.createWriteStream(finalPath);
+    let mergePromises = [];
     for (let i = 0; i < Number(totalChunks); i++) {
       const partPath = path.join(chunkDir, `${i}.part`);
       if (!fs.existsSync(partPath)) {
         writeStream.destroy();
         return res.send(resultData(null, 400, `缺少分片: ${i}`));
       }
-      const data = fs.readFileSync(partPath);
-      writeStream.write(data);
+      mergePromises.push(
+        new Promise((resolve, reject) => {
+          const readStream = fs.createReadStream(partPath);
+          readStream.pipe(writeStream, { end: false });
+          readStream.on('end', resolve);
+          readStream.on('error', reject);
+        }),
+      );
     }
-    writeStream.end();
+    // 等待所有分片pipe完成，然后结束写入流
+    Promise.all(mergePromises)
+      .then(() => {
+        writeStream.end();
+      })
+      .catch((err) => {
+        writeStream.destroy();
+        return res.send(resultData(null, 500, '合并文件失败: ' + err.message));
+      });
 
     // 清理分片
     writeStream.on('close', async () => {
