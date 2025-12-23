@@ -8,10 +8,20 @@ import * as commonHandle from '../router_handle/commonHandle.js';
 import * as fileHandle from '../router_handle/fileHandle.js';
 const router = express.Router();
 
+// 文件根目录与分片临时目录
+const FILE_ROOT = '/www/wwwroot/files';
+const CHUNK_ROOT = path.join(FILE_ROOT, 'chunks');
+
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
 // 配置multer存储
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, '/www/wwwroot/files/');
+    cb(null, FILE_ROOT + '/');
   },
   filename: function (req, file, cb) {
     // 关键步骤：转换中文编码
@@ -72,7 +82,8 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
 
           if (existingRows.length > 0) {
             const oldFile = existingRows[0];
-            const oldFilePath = oldFile.directory;
+            // directory 存的是 URL 前缀，这里应当通过文件名拼接物理路径
+            const oldFilePath = path.join(FILE_ROOT, oldFile.file_name);
 
             // 1. 删除旧文件（物理文件）
             try {
@@ -141,6 +152,144 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
   }
 });
 
+// ---------------- 分片上传支持（更稳妥的大文件上传）----------------
+
+// 初始化：创建 uploadId 与分片存储目录
+router.post('/upload/init', async (req, res) => {
+  try {
+    const { filename } = req.body || {};
+    const uploadId = generateUUID();
+    const chunkDir = path.join(CHUNK_ROOT, uploadId);
+    ensureDir(chunkDir);
+    res.send(resultData({ uploadId, chunkDirName: uploadId, filename }));
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+});
+
+// 分片存储配置：依据 uploadId 建立单独目录，文件名为 {index}.part
+const chunkStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadId = req.body.uploadId;
+    if (!uploadId) return cb(new Error('缺少 uploadId')); // 简单校验
+    const chunkDir = path.join(CHUNK_ROOT, uploadId);
+    ensureDir(chunkDir);
+    cb(null, chunkDir);
+  },
+  filename: function (req, file, cb) {
+    const index = req.body.index;
+    if (index === undefined) return cb(new Error('缺少分片 index'));
+    cb(null, `${index}.part`);
+  },
+});
+
+const uploadChunk = multer({
+  storage: chunkStorage,
+  limits: {
+    // 单片大小可按需控制（例如 10-20MB），若前端控制为 10MB，可不在此强卡
+    fileSize: 50 * 1024 * 1024,
+  },
+});
+
+// 接收分片
+router.post('/upload/chunk', uploadChunk.single('chunk'), async (req, res) => {
+  try {
+    // 分片已按 {uploadId}/{index}.part 写入硬盘
+    res.send(resultData({ status: 'ok' }));
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+});
+
+// 合并分片并入库
+router.post('/upload/complete', async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { uploadId, filename, totalChunks, fileType, fileSize } = req.body || {};
+    const userId = req.headers['x-user-id'];
+    if (!uploadId || !filename || !totalChunks) {
+      return res.send(resultData(null, 400, '缺少必要参数'));
+    }
+
+    const chunkDir = path.join(CHUNK_ROOT, uploadId);
+    const finalPath = path.join(FILE_ROOT, filename);
+    // 合并
+    const writeStream = fs.createWriteStream(finalPath);
+    for (let i = 0; i < Number(totalChunks); i++) {
+      const partPath = path.join(chunkDir, `${i}.part`);
+      if (!fs.existsSync(partPath)) {
+        writeStream.destroy();
+        return res.send(resultData(null, 400, `缺少分片: ${i}`));
+      }
+      const data = fs.readFileSync(partPath);
+      writeStream.write(data);
+    }
+    writeStream.end();
+
+    // 清理分片
+    writeStream.on('close', async () => {
+      try {
+        // 删除分片目录
+        if (fs.existsSync(chunkDir)) {
+          fs.readdirSync(chunkDir).forEach((f) => fs.unlinkSync(path.join(chunkDir, f)));
+          fs.rmdirSync(chunkDir);
+        }
+
+        await connection.beginTransaction();
+
+        // 准备文件信息（directory 存放 URL 前缀）
+        const directory = `${process.env.BASE_URL}/files/`;
+        const fileInfo = {
+          create_by: userId,
+          create_time: req.requestTime,
+          file_name: filename,
+          file_type: fileType || 'application/octet-stream',
+          file_size: fileSize || fs.statSync(finalPath).size,
+          directory: directory,
+        };
+
+        // 覆盖同名文件逻辑
+        const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ?';
+        const [existingRows] = await connection.query(selectSql, [userId, filename]);
+
+        if (existingRows.length > 0) {
+          const oldFile = existingRows[0];
+          const oldFilePath = path.join(FILE_ROOT, oldFile.file_name);
+          try {
+            if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+          } catch (e) {}
+          const deleteSql = 'DELETE FROM files WHERE id = ?';
+          await connection.query(deleteSql, [oldFile.id]);
+        }
+
+        const insertSql = 'INSERT INTO files SET ?';
+        const [insertResult] = await connection.query(insertSql, [snakeCaseKeys(fileInfo)]);
+
+        await connection.commit();
+        res.send(
+          resultData({
+            filename,
+            status: existingRows?.length ? '已覆盖' : '已上传',
+            fileId: insertResult.insertId,
+          }),
+        );
+      } catch (err) {
+        await connection.rollback();
+        // 回滚时删除已生成的最终文件
+        try {
+          if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
+        } catch (e) {}
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+      } finally {
+        connection.release();
+      }
+    });
+  } catch (e) {
+    connection.release();
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+});
+
 // 查询所有文件
 router.post('/queryFiles', async (req, res) => {
   try {
@@ -184,7 +333,7 @@ router.post('/queryFiles', async (req, res) => {
         word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         audio: ['audio/mpeg', 'audio/wav'],
         video: ['video/mp4', 'video/quicktime'],
-        excel:['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+        excel: ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
       };
 
       // 提取用户选择的类型
@@ -195,7 +344,7 @@ router.post('/queryFiles', async (req, res) => {
       const includeMimeTypes = selectedNonOtherTypes.flatMap((type) => mimeTypeMap[type] || []);
 
       // 构建需要排除的 MIME 类型（用于 other 逻辑）
-      const excludeMimeTypes = ['image', 'pdf', 'word','excel', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
+      const excludeMimeTypes = ['image', 'pdf', 'word', 'excel', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
 
       // 过滤文件
       formattedFiles = formattedFiles.filter((file) => {
