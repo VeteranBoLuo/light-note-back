@@ -8,13 +8,10 @@ import * as commonHandle from '../router_handle/commonHandle.js';
 import * as fileHandle from '../router_handle/fileHandle.js';
 const router = express.Router();
 
-// 文件根目录与分片临时目录
-const FILE_ROOT = '/www/wwwroot/files';
-path.join(FILE_ROOT, 'chunks');
 // 配置multer存储
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, FILE_ROOT + '/');
+    cb(null, '/www/wwwroot/files/');
   },
   filename: function (req, file, cb) {
     // 关键步骤：转换中文编码
@@ -75,8 +72,7 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
 
           if (existingRows.length > 0) {
             const oldFile = existingRows[0];
-            // directory 存的是 URL 前缀，这里应当通过文件名拼接物理路径
-            const oldFilePath = path.join(FILE_ROOT, oldFile.file_name);
+            const oldFilePath = oldFile.directory;
 
             // 1. 删除旧文件（物理文件）
             try {
@@ -145,8 +141,6 @@ router.post('/uploadFiles', upload.array('files', 10), async (req, res) => {
   }
 });
 
-
-
 // 查询所有文件
 router.post('/queryFiles', async (req, res) => {
   try {
@@ -190,7 +184,7 @@ router.post('/queryFiles', async (req, res) => {
         word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         audio: ['audio/mpeg', 'audio/wav'],
         video: ['video/mp4', 'video/quicktime'],
-        excel: ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        excel:['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
       };
 
       // 提取用户选择的类型
@@ -201,7 +195,7 @@ router.post('/queryFiles', async (req, res) => {
       const includeMimeTypes = selectedNonOtherTypes.flatMap((type) => mimeTypeMap[type] || []);
 
       // 构建需要排除的 MIME 类型（用于 other 逻辑）
-      const excludeMimeTypes = ['image', 'pdf', 'word', 'excel', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
+      const excludeMimeTypes = ['image', 'pdf', 'word','excel', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
 
       // 过滤文件
       formattedFiles = formattedFiles.filter((file) => {
