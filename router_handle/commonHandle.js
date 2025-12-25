@@ -9,7 +9,6 @@ import { validateQueryParams } from '../util/request.js';
 export const getApiLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
     let sql = `SELECT a.*,u.alias,u.email 
       FROM api_logs a left join user u on a.user_id=u.id  where (u.alias LIKE CONCAT('%', ?, '%') 
@@ -61,15 +60,14 @@ export const clearApiLogs = (req, res) => {
 export const getAttackLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
     let sql = `SELECT * FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') OR source_ip LIKE CONCAT('%', ?, '%') ORDER BY created_at DESC LIMIT ? OFFSET ?`;
     pool
-      .query(sql, [key, key, pageSize, skip])
+      .query(sql, [filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
         const [totalRes] = await pool.query(
           "SELECT COUNT(*) FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') OR source_ip LIKE CONCAT('%', ?, '%')",
-          [key, key],
+          [filters.key, filters.key],
         );
         res.send(
           resultData({

@@ -174,7 +174,7 @@ export const getUserInfo = async (req, res) => {
 export const getUserList = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const key = filters.key.trim();
+    const key = filters.key;
     const skip = pageSize * (currentPage - 1);
     let sql = `
       SELECT 
