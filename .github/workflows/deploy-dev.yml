@@ -33,7 +33,7 @@ jobs:
           # 源目录改为项目根目录
           source: './*'
           # 目标目录根据你的服务器路径修改
-          target: '/www/wwwroot/BMS_Back'
+          target: '/www/wwwroot/light-note-back'
 
       # 通过SSH连接到服务器并重启服务
       - name: 重启Node.js服务
