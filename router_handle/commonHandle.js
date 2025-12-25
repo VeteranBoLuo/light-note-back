@@ -61,16 +61,15 @@ export const clearApiLogs = (req, res) => {
 export const getAttackLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const attackType = filters.attack_type ? filters.attack_type.trim() : '';
-    const sourceIp = filters.source_ip ? filters.source_ip.trim() : '';
+    const key = filters.key.trim();
     const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT * FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') AND source_ip LIKE CONCAT('%', ?, '%') ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+    let sql = `SELECT * FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') OR source_ip LIKE CONCAT('%', ?, '%') ORDER BY created_at DESC LIMIT ? OFFSET ?`;
     pool
-      .query(sql, [attackType, sourceIp, pageSize, skip])
+      .query(sql, [key, key, pageSize, skip])
       .then(async ([result]) => {
         const [totalRes] = await pool.query(
-          "SELECT COUNT(*) FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') AND source_ip LIKE CONCAT('%', ?, '%')",
-          [attackType, sourceIp],
+          "SELECT COUNT(*) FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') OR source_ip LIKE CONCAT('%', ?, '%')",
+          [key, key],
         );
         res.send(
           resultData({

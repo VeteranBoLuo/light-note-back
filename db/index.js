@@ -4,7 +4,7 @@ import mysql from 'mysql2/promise'
 
 const pool = mysql.createPool({
   connectionLimit: 10, // 例如限制为10个连接
-  host: '127.0.0.1',
+  host: '124.71.221.106',
   port: 3306,
   user: 'boluo',
   password: '123456',

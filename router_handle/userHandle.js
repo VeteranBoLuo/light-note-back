@@ -1,7 +1,7 @@
 import pool from '../db/index.js';
 import { resultData, snakeCaseKeys, mergeExistingProperties } from '../util/common.js';
 import request from '../http/request.js';
-import { fetchWithTimeout } from '../util/request.js';
+import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
 import nodeMail from '../util/nodemailer.js';
 let redisClient;
 if (process.platform === 'linux') {
@@ -130,7 +130,8 @@ export const getUserInfo = async (req, res) => {
           id,
         ]);
       } catch (e) {
-        res.send(resultData(null, 500, '地理信息配置失败' + e));
+        console.error('地理信息配置失败:', e.message);
+        // 不发送响应，继续执行获取用户信息
       }
     }
     pool
@@ -172,13 +173,65 @@ export const getUserInfo = async (req, res) => {
 };
 export const getUserList = (req, res) => {
   try {
+    const { filters, pageSize, currentPage } = validateQueryParams(req.body);
+    const key = filters.key.trim();
+    const skip = pageSize * (currentPage - 1);
+    let sql = `
+      SELECT 
+        u.id,
+        u.alias,
+        u.email,
+        u.phone_number,
+        u.role,
+        u.theme,
+        u.ip,
+        u.create_time,
+        u.password,
+        u.del_flag,
+        COALESCE(b.bookmark_count, 0) AS bookmarkTotal,
+        COALESCE(t.tag_count, 0) AS tagTotal,
+        COALESCE(n.note_count, 0) AS noteTotal,
+        COALESCE(f.storage_used, 0) AS storageUsed
+      FROM user u
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS bookmark_count
+        FROM bookmark
+        WHERE del_flag = 0
+        GROUP BY user_id
+      ) b ON u.id = b.user_id
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS tag_count
+        FROM tag
+        WHERE del_flag = 0
+        GROUP BY user_id
+      ) t ON u.id = t.user_id
+      LEFT JOIN (
+        SELECT create_by, COUNT(*) AS note_count
+        FROM note
+        WHERE del_flag = 0
+        GROUP BY create_by
+      ) n ON u.id = n.create_by
+      LEFT JOIN (
+        SELECT create_by, ROUND(SUM(file_size) / 1048576, 2) AS storage_used
+        FROM files
+        WHERE del_flag = 0
+        GROUP BY create_by
+      ) f ON u.id = f.create_by
+      WHERE u.del_flag = 0 AND (u.alias LIKE CONCAT('%', ?, '%') OR u.email LIKE CONCAT('%', ?, '%'))
+      ORDER BY u.create_time DESC
+      LIMIT ? OFFSET ?
+    `;
     pool
-      .query(`SELECT alias,email,id,password,phone_number,role,theme,ip FROM user where del_flag=0`)
-      .then(([result]) => {
+      .query(sql, [key, key, pageSize, skip])
+      .then(async ([result]) => {
+        const [totalRes] = await pool.query(
+          "SELECT COUNT(*) FROM user WHERE del_flag=0 AND (alias LIKE CONCAT('%', ?, '%') OR email LIKE CONCAT('%', ?, '%'))",
+          [key, key],
+        );
         res.send(
           resultData({
             items: result,
-            total: result.length,
+            total: totalRes[0]['COUNT(*)'],
           }),
         );
       })
@@ -189,6 +242,7 @@ export const getUserList = (req, res) => {
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
 };
+
 export const saveUserInfo = (req, res) => {
   try {
     const id = req.body.id ? req.body.id : req.headers['x-user-id']; // 获取用户ID
