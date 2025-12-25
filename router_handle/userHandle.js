@@ -135,7 +135,49 @@ export const getUserInfo = async (req, res) => {
       }
     }
     pool
-      .query('SELECT * FROM user WHERE id = ?', [id])
+      .query(
+        `
+          SELECT 
+            u.*,
+            COALESCE(b.bookmark_count, 0) AS bookmarkTotal,
+            COALESCE(t.tag_count, 0) AS tagTotal,
+            COALESCE(n.note_count, 0) AS noteTotal,
+            COALESCE(o.opinion_count, 0) AS opinionTotal,
+            COALESCE(f.storage_used, 0) AS storageUsed
+          FROM user u
+          LEFT JOIN (
+            SELECT user_id, COUNT(*) AS bookmark_count
+            FROM bookmark
+            WHERE del_flag = 0
+            GROUP BY user_id
+          ) b ON u.id = b.user_id
+          LEFT JOIN (
+            SELECT user_id, COUNT(*) AS tag_count
+            FROM tag
+            WHERE del_flag = 0
+            GROUP BY user_id
+          ) t ON u.id = t.user_id
+          LEFT JOIN (
+            SELECT create_by, COUNT(*) AS note_count
+            FROM note
+            WHERE del_flag = 0
+            GROUP BY create_by
+          ) n ON u.id = n.create_by
+          LEFT JOIN (
+            SELECT COUNT(*) AS opinion_count
+            FROM opinion
+            WHERE del_flag = 0
+          ) o ON 1=1
+          LEFT JOIN (
+            SELECT create_by, ROUND(SUM(file_size) / 1048576, 2) AS storage_used
+            FROM files
+            WHERE del_flag = 0
+            GROUP BY create_by
+          ) f ON u.id = f.create_by
+          WHERE u.id = ?
+        `,
+        [id],
+      )
       .then(async ([result]) => {
         if (result.length === 0) {
           res.send(resultData(null, 401, '用户不存在,请重新登录！')); // 设置状态码为401
@@ -145,18 +187,6 @@ export const getUserInfo = async (req, res) => {
           res.send(resultData(null, 401, '账号已被禁用')); // 设置状态码为401
           return;
         }
-        const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
-        const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [id]);
-        const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
-        const [tagTotalRes] = await pool.query(tagTotalSql, [id]);
-        const noteTotalSql = `SELECT COUNT(*) FROM note WHERE create_by=? and del_flag = 0`;
-        const [noteTotalRes] = await pool.query(noteTotalSql, [id]);
-        const opinionTotalSql = `SELECT COUNT(*) FROM opinion WHERE  del_flag = 0`;
-        const [opinionTotalRes] = await pool.query(opinionTotalSql, [id]);
-        result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
-        result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
-        result[0].noteTotal = noteTotalRes[0]['COUNT(*)'];
-        result[0].opinionTotal = opinionTotalRes[0]['COUNT(*)'];
         result[0].password = result[0].password ? '******' : '';
         if (result[0].role === 'visitor') {
           res.send(resultData(result[0], 'visitor'));
