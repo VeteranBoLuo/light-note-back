@@ -54,7 +54,6 @@ allRouter.forEach((item) => {
 
 // 启动 Express 服务器
 app.listen(9001, () => {
-  // 输出所有的环境变量
   console.log('环境变量:', process.env);
 
   console.log('服务器已启动：' + new Date().toLocaleString('zh-CN'));
