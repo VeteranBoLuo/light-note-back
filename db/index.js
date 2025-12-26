@@ -1,16 +1,15 @@
-
 // 引入mysql模块
-import mysql from 'mysql2/promise'
+import mysql from 'mysql2/promise';
 
 const pool = mysql.createPool({
   connectionLimit: 10, // 例如限制为10个连接
-  host: '124.71.221.106',
+  host: '139.9.83.16',
   port: 3306,
   user: 'boluo',
   password: '123456',
   database: 'tag_db',
   namedPlaceholders: true,
-  charset: 'utf8mb4'
+  charset: 'utf8mb4',
 });
 
 pool

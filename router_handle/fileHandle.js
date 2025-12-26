@@ -1,7 +1,7 @@
+import path from 'path';
 import pool from '../db/index.js';
 import { resultData, snakeCaseKeys } from '../util/common.js';
-import fs from 'fs';
-import path from 'path';
+import { bucketBaseUrl, buildObjectKey, copyObjectInObs, deleteObjectFromObs } from '../util/obsClient.js';
 
 export const updateFile = async (req, res) => {
   try {
@@ -16,50 +16,41 @@ export const updateFile = async (req, res) => {
     }
 
     const file = results[0];
-    const filePath = path.join('/www/wwwroot/files', file.file_name);
 
-    // 检查文件是否存在
-    fs.access(filePath, fs.constants.F_OK, async (err) => {
-      if (err) {
-        return res.send(resultData(null, 404, '服务器上文件不存在'));
-      }
+    const originalExt = path.extname(file.file_name);
+    const newExt = path.extname(fileName);
+    let finalFileName = fileName;
 
-      // 获取原始文件后缀名 [5](@ref)
-      const originalExt = path.extname(file.file_name);
+    if (!newExt) {
+      finalFileName = fileName + originalExt;
+    } else if (newExt !== originalExt) {
+      finalFileName = fileName;
+    }
 
-      // 检查用户提供的新文件名是否包含后缀 [3,5](@ref)
-      const newExt = path.extname(fileName);
-      let finalFileName = fileName;
+    if (
+      finalFileName.includes('/') ||
+      finalFileName.includes('\\') ||
+      finalFileName.includes('>') ||
+      finalFileName.includes('<')
+    ) {
+      return res.send(resultData(null, 400, '文件名不能包含特殊字符或路径分隔符'));
+    }
 
-      // 如果用户输入的文件名没有后缀，自动添加原始后缀 [5,6](@ref)
-      if (!newExt) {
-        finalFileName = fileName + originalExt;
-      }
-      // 如果用户输入了后缀但与原后缀不同，保留用户输入（允许修改文件类型）
-      else if (newExt !== originalExt) {
-        finalFileName = fileName;
-      }
+    const sourceKey = file.obs_key || buildObjectKey(file.create_by, file.file_name);
+    const targetKey = buildObjectKey(file.create_by, finalFileName);
 
-      // 检查文件名安全性（防止路径遍历攻击）[3](@ref)
-      if (
-        finalFileName.includes('/') ||
-        finalFileName.includes('\\') ||
-        finalFileName.includes('>') ||
-        finalFileName.includes('<')
-      ) {
-        return res.send(resultData(null, 400, '文件名不能包含特殊字符或路径分隔符'));
-      }
+    try {
+      await copyObjectInObs(sourceKey, targetKey);
+      await deleteObjectFromObs(sourceKey);
+    } catch (obsError) {
+      console.error('OBS 重命名失败:', obsError);
+      return res.send(resultData(null, 500, 'OBS 文件重命名失败: ' + obsError.message));
+    }
 
-      // 修改数据库中的文件记录
-      const updateSql = 'UPDATE files SET file_name = ? WHERE id = ?';
-      await pool.query(updateSql, [finalFileName, id]);
+    const updateSql = 'UPDATE files SET file_name = ?, obs_key = ?, directory = ? WHERE id = ?';
+    await pool.query(updateSql, [finalFileName, targetKey, `${bucketBaseUrl}/${file.create_by}/`, id]);
 
-      // 修改服务器上的文件名
-      const newFilePath = path.join('/www/wwwroot/files', finalFileName);
-      fs.renameSync(filePath, newFilePath);
-
-      res.send(resultData({ id, fileName: finalFileName }));
-    });
+    res.send(resultData({ id, fileName: finalFileName }));
   } catch (e) {
     console.error('修改文件名时出错:', e);
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
