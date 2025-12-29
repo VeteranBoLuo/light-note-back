@@ -12,7 +12,7 @@ import {
 import * as fileHandle from '../router_handle/fileHandle.js';
 const router = express.Router();
 
-const buildSignedDownloadUrl = (objectKey, expires = 600) => {
+export const buildSignedDownloadUrl = (objectKey, expires = 600) => {
   if (!objectKey) return null;
   const { url } = createDownloadSignedUrl({ objectKey, expires });
   return url || buildObjectUrl(objectKey);
@@ -324,6 +324,7 @@ router.post('/queryTotalFileSize', async (req, res) => {
 });
 
 router.post('/updateFile', fileHandle.updateFile);
+router.post('/getFileInfo', fileHandle.getFileInfo);
 
 router.post('/queryFolder', fileHandle.queryFolder);
 router.post('/addFolder', fileHandle.addFolder);

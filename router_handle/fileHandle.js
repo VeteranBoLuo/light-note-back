@@ -2,6 +2,26 @@ import path from 'path';
 import pool from '../db/index.js';
 import { resultData, snakeCaseKeys } from '../util/common.js';
 import { bucketBaseUrl, buildObjectKey, copyObjectInObs, deleteObjectFromObs } from '../util/obsClient.js';
+import { buildSignedDownloadUrl } from '../router/file.js';
+
+export const getFileInfo = async (req, res) => {
+  try {
+    const { id } = req.body;
+    // 需要查出创建者的名字
+    const sql =
+      'SELECT files.*, user.alias AS creatorName FROM files LEFT JOIN user ON files.create_by = user.id WHERE files.id = ?';
+    const [results] = await pool.query(sql, [id]);
+    if (results.length === 0) {
+      return res.send(resultData(null, 404, '数据库中未找到文件'));
+    }
+    const file = results[0];
+    file.fileUrl = file.obs_key ? buildSignedDownloadUrl(file.obs_key) : file.directory + file.file_name;
+    res.send(resultData(file, 200));
+  } catch (e) {
+    console.error('获取文件信息时出错:', e);
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+};
 
 export const updateFile = async (req, res) => {
   try {
