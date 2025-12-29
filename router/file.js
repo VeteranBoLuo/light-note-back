@@ -92,7 +92,7 @@ router.post('/confirmUpload', async (req, res) => {
       }
 
       const objectKey = buildObjectKey(userId, fileName);
-      const directory = `${bucketBaseUrl}/${userId}/`;
+      const directory = `${bucketBaseUrl}/files/${userId}/`;
 
       const fileInfo = {
         create_by: userId,

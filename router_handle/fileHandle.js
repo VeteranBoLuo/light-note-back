@@ -48,7 +48,7 @@ export const updateFile = async (req, res) => {
     }
 
     const updateSql = 'UPDATE files SET file_name = ?, obs_key = ?, directory = ? WHERE id = ?';
-    await pool.query(updateSql, [finalFileName, targetKey, `${bucketBaseUrl}/${file.create_by}/`, id]);
+    await pool.query(updateSql, [finalFileName, targetKey, `${bucketBaseUrl}/files/${file.create_by}/`, id]);
 
     res.send(resultData({ id, fileName: finalFileName }));
   } catch (e) {
