@@ -44,4 +44,4 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            pm2 restart app
+            pm2 restart light_note_back

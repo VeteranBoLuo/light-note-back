@@ -118,14 +118,22 @@ export const addFolder = async (req, res) => {
 export const associateFile = async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    let { folderId, fileId } = req.body;
+    let { folderId, fileIds } = req.body;
     if (!folderId) {
       folderId = null;
     }
-    const [result] = await connection.query(`UPDATE files SET folder_id = ? WHERE id = ?`, [folderId, fileId]);
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.send(resultData(null, 400, 'fileIds 必须是一个非空数组'));
+    }
+    const placeholders = fileIds.map(() => '?').join(',');
+    const sql = `UPDATE files SET folder_id = ? WHERE id IN (${placeholders})`;
+    const params = [folderId, ...fileIds];
+    const [result] = await connection.query(sql, params);
     res.send(resultData(result.affectedRows, 200, '关联成功'));
   } catch (e) {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 };
 

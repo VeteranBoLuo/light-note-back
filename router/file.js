@@ -246,33 +246,59 @@ router.post('/downloadFileById', async (req, res) => {
 
 // 根据id删除文件，同时删除服务器上数据
 router.post('/deleteFileById', async (req, res) => {
+  const connection = await pool.getConnection();
   try {
-    const { id } = req.body;
+    let { id, ids } = req.body;
+    let fileIds = [];
 
-    // 查询文件信息
-    const sql = 'SELECT * FROM files WHERE id = ?';
-    const [results] = await pool.query(sql, [id]);
-
-    if (results.length === 0) {
-      return res.send(resultData(null, 404, '文件未找到'));
+    if (ids && Array.isArray(ids)) {
+      fileIds = ids;
+    } else if (id) {
+      fileIds = [id];
+    } else {
+      return res.send(resultData(null, 400, '缺少文件ID'));
     }
 
-    const file = results[0];
-    const objectKey = file.obs_key || buildObjectKey(file.create_by, file.file_name);
-
-    try {
-      await deleteObjectFromObs(objectKey);
-    } catch (deleteError) {
-      console.error(`删除 OBS 对象失败 ${objectKey}: ${deleteError.message}`);
-      return res.send(resultData(null, 500, '删除文件失败: ' + deleteError.message));
+    if (fileIds.length === 0) {
+      return res.send(resultData(null, 400, '文件ID列表为空'));
     }
 
-    const deleteSql = 'DELETE FROM files WHERE id = ?';
-    await pool.query(deleteSql, [id]);
-    res.send(resultData({ id }));
+    await connection.beginTransaction();
+    const deletedIds = [];
+
+    for (const fileId of fileIds) {
+      // 查询文件信息
+      const sql = 'SELECT * FROM files WHERE id = ?';
+      const [results] = await connection.query(sql, [fileId]);
+
+      if (results.length === 0) {
+        console.warn(`文件ID ${fileId} 未找到，跳过`);
+        continue;
+      }
+
+      const file = results[0];
+      const objectKey = file.obs_key || buildObjectKey(file.create_by, file.file_name);
+
+      try {
+        await deleteObjectFromObs(objectKey);
+      } catch (deleteError) {
+        console.error(`删除 OBS 对象失败 ${objectKey}: ${deleteError.message}`);
+        // 可以选择继续或回滚，这里选择继续删除其他文件
+      }
+
+      const deleteSql = 'DELETE FROM files WHERE id = ?';
+      await connection.query(deleteSql, [fileId]);
+      deletedIds.push(fileId);
+    }
+
+    await connection.commit();
+    res.send(resultData({ deletedIds, count: deletedIds.length }, 200, '删除成功'));
   } catch (e) {
+    await connection.rollback();
     console.error('删除文件时出错:', e);
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 });
 
