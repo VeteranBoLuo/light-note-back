@@ -1,37 +1,39 @@
-import express from "express";
+import express from 'express';
 const router = express.Router();
 
-import * as bookmarkHandle from "../router_handle/bookmarkHandle.js";
+import * as bookmarkHandle from '../router_handle/bookmarkHandle.js';
+import multer from 'multer';
 
-router.post("/queryTagList", bookmarkHandle.queryTagList);
+const upload = multer({ dest: 'temp/' }); // 临时目录用于上传文件
 
-router.post("/updateTagSort", bookmarkHandle.updateTagSort);
+router.post('/queryTagList', bookmarkHandle.queryTagList);
 
+router.post('/updateTagSort', bookmarkHandle.updateTagSort);
 
-router.post("/getTagDetail", bookmarkHandle.getTagDetail);
+router.post('/getTagDetail', bookmarkHandle.getTagDetail);
 
-router.post("/getRelatedTag", bookmarkHandle.getRelatedTag);
+router.post('/getRelatedTag', bookmarkHandle.getRelatedTag);
 
-router.post("/getBookmarkList", bookmarkHandle.getBookmarkList);
+router.post('/getBookmarkList', bookmarkHandle.getBookmarkList);
 
-router.post("/addTag", bookmarkHandle.addTag);
+router.post('/addTag', bookmarkHandle.addTag);
 
-router.post("/delTag", bookmarkHandle.delTag);
+router.post('/delTag', bookmarkHandle.delTag);
 
-router.post("/updateTag", bookmarkHandle.updateTag);
+router.post('/updateTag', bookmarkHandle.updateTag);
 
-router.post("/addBookmark", bookmarkHandle.addBookmark);
+router.post('/addBookmark', bookmarkHandle.addBookmark);
 
-router.post("/getBookmarkDetail", bookmarkHandle.getBookmarkDetail);
+router.post('/getBookmarkDetail', bookmarkHandle.getBookmarkDetail);
 
-router.post("/delBookmark", bookmarkHandle.delBookmark);
+router.post('/delBookmark', bookmarkHandle.delBookmark);
 
-router.post("/updateBookmark", bookmarkHandle.updateBookmark);
+router.post('/updateBookmark', bookmarkHandle.updateBookmark);
 
 router.post('/getCommonBookmarks', bookmarkHandle.getCommonBookmarks);
 
 router.post('/updateBookmarkSort', bookmarkHandle.updateBookmarkSort);
 
-
+router.post('/importBookmarksHtml', upload.single('file'), bookmarkHandle.importBookmarksHtml);
 
 export default router;
