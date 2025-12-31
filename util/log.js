@@ -150,10 +150,7 @@ export async function logFunction(req, res, next) {
       if (req.originalUrl.includes('login')) {
         // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
         const { email, password } = req.body;
-        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [
-          email,
-          password,
-        ]);
+        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [email, password]);
         if (!userResult[0]) {
           throw new Error('邮箱或密码错误');
         }
@@ -172,7 +169,9 @@ export async function logFunction(req, res, next) {
     const userId = req.headers['x-user-id'];
     let skipUser = false;
     if (userId) {
-      skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
+      skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e', 'f8fd8402-1316-11f0-973c-fa163e50acdb'].some((key) =>
+        userId.includes(key),
+      );
     }
     // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>

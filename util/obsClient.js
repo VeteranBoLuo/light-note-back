@@ -1,10 +1,11 @@
 import ObsClientSdk from 'esdk-obs-nodejs';
+import 'dotenv/config';
 
 const ObsClient = ObsClientSdk?.default || ObsClientSdk;
-const OBS_AK = 'HPUAVAKVYRUUYKOIUUYZ';
-const OBS_SK = 'Kax2vXaUmYbMXyMxFqEk7LDjVCnJQHSOL1wOLVrQ';
-const OBS_ENDPOINT = 'https://obs.cn-south-1.myhuaweicloud.com';
-const OBS_BUCKET_NAME = 'light-note-files';
+const OBS_AK = process.env.OBS_AK;
+const OBS_SK = process.env.OBS_SK;
+const OBS_ENDPOINT = process.env.OBS_ENDPOINT;
+const OBS_BUCKET_NAME = process.env.OBS_BUCKET_NAME;
 if (!OBS_AK || !OBS_SK || !OBS_ENDPOINT || !OBS_BUCKET_NAME) {
   console.warn('[OBS] Missing OBS env config, signed URL generation will fail until configured.');
 }
