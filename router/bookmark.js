@@ -1,7 +1,11 @@
 import express from 'express';
+import multer from 'multer';
+
 const router = express.Router();
 
 import * as bookmarkHandle from '../router_handle/bookmarkHandle.js';
+
+const upload = multer({ dest: '/www/wwwroot/temp' }); // 临时目录用于上传文件
 
 router.post('/queryTagList', bookmarkHandle.queryTagList);
 
@@ -30,5 +34,7 @@ router.post('/updateBookmark', bookmarkHandle.updateBookmark);
 router.post('/getCommonBookmarks', bookmarkHandle.getCommonBookmarks);
 
 router.post('/updateBookmarkSort', bookmarkHandle.updateBookmarkSort);
+
+router.post('/importBookmarksHtml', upload.single('file'), bookmarkHandle.importBookmarksHtml);
 
 export default router;

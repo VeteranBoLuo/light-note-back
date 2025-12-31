@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { resultData, snakeCaseKeys, mergeExistingProperties } from '../util/common.js';
+import { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } from '../util/common.js';
 
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -531,5 +531,178 @@ export const updateBookmarkSort = async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
   } finally {
     connection.release(); // 释放连接回连接池
+  }
+};
+
+// 解析 Netscape 书签 HTML，提取文件夹（标签）与书签
+const parseBookmarksFromHtml = (html = '') => {
+  const bookmarks = [];
+  const folderStack = [];
+  const lines = html.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const folderMatch = line.match(/<DT><H3[^>]*>(.*?)<\/H3>/i);
+    if (folderMatch) {
+      folderStack.push(folderMatch[1].trim());
+      continue;
+    }
+
+    if (/<\/DL>/i.test(line) && folderStack.length) {
+      folderStack.pop();
+      continue;
+    }
+
+    const linkMatch = line.match(/<DT><A[^>]*HREF="([^"]+)"[^>]*>(.*?)<\/A>/i);
+    if (linkMatch) {
+      const currentFolder = folderStack[folderStack.length - 1] || '';
+      bookmarks.push({
+        name: linkMatch[2].trim(),
+        url: linkMatch[1].trim(),
+        folder: currentFolder,
+      });
+    }
+  }
+
+  return bookmarks;
+};
+
+// HTML 书签导入：新增缺失的标签/书签，并建立关联
+export const importBookmarksHtml = async (req, res) => {
+  const userId = req.headers['x-user-id'];
+
+  if (!userId) {
+    return res.send(resultData(null, 401, '缺少用户身份')); // 无法继续
+  }
+
+  if (!req.file) {
+    return res.send(resultData(null, 400, '未上传文件'));
+  }
+
+  let html;
+  try {
+    html = await fs.readFile(req.file.path, 'utf8');
+  } catch (err) {
+    return res.send(resultData(null, 500, '读取文件失败'));
+  } finally {
+    // 删除临时文件
+    try {
+      await fs.unlink(req.file.path);
+    } catch (e) {
+      console.error('删除临时文件失败:', e);
+    }
+  }
+
+  if (!html || typeof html !== 'string') {
+    return res.send(resultData(null, 400, 'html 内容为空'));
+  }
+
+  const parsedBookmarks = parseBookmarksFromHtml(html);
+  if (!parsedBookmarks.length) {
+    return res.send(resultData(null, 400, '未解析到书签数据'));
+  }
+
+  console.log(`解析到 ${parsedBookmarks.length} 条书签`, parsedBookmarks);
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 预加载现有标签和书签
+    const [tagRows] = await connection.query('SELECT id, name FROM tag WHERE user_id = ? AND del_flag = 0', [userId]);
+    const [bookmarkRows] = await connection.query('SELECT id, name FROM bookmark WHERE user_id = ? AND del_flag = 0', [
+      userId,
+    ]);
+    const tagMap = new Map(tagRows.map((row) => [row.name, row.id]));
+    const bookmarkMap = new Map(bookmarkRows.map((row) => [row.name, row.id]));
+
+    let createdTags = 0;
+    let createdBookmarks = 0;
+    let boundRelations = 0;
+
+    for (const item of parsedBookmarks) {
+      const tagName = (item.folder || '').trim();
+      let tagId = null;
+
+      if (tagName) {
+        if (!tagMap.has(tagName)) {
+          const tagPayload = {
+            name: tagName,
+            userId,
+            createTime: req.requestTime || new Date().toISOString().slice(0, 19).replace('T', ' '),
+          };
+          const [tagResult] = await connection.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagPayload)]);
+          // 支持自增主键或触发器生成 ID 的两种情况
+          tagId = tagResult.insertId || tagPayload.id || null;
+          // 如果数据库未返回 insertId，说明表使用字符串主键且未自动生成，手动获取刚插入的 id
+          if (!tagId) {
+            const [[lastInsertedTag]] = await connection.query(
+              'SELECT id FROM tag WHERE name = ? AND user_id = ? ORDER BY create_time DESC LIMIT 1',
+              [tagName, userId],
+            );
+            tagId = lastInsertedTag?.id;
+          }
+          tagMap.set(tagName, tagId);
+          createdTags++;
+        } else {
+          console.log('标签已存在:', tagName);
+          tagId = tagMap.get(tagName);
+        }
+      }
+      let bookmarkId = bookmarkMap.get(item.name);
+      if (!bookmarkId) {
+        const bookmarkPayload = {
+          name: item.name,
+          userId,
+          url: item.url,
+          description: '',
+          createTime: req.requestTime,
+        };
+        const [bookmarkResult] = await connection.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkPayload)]);
+        bookmarkId = bookmarkResult.insertId || bookmarkPayload.id || null;
+        if (!bookmarkId) {
+          const [[lastInsertedBookmark]] = await connection.query(
+            'SELECT id FROM bookmark WHERE name = ? AND user_id = ? ORDER BY create_time DESC LIMIT 1',
+            [item.name, userId],
+          );
+          bookmarkId = lastInsertedBookmark?.id;
+        }
+        bookmarkMap.set(item.name, bookmarkId);
+        createdBookmarks++;
+      }
+      if (tagId && bookmarkId) {
+        // 检查关联是否已存在
+        const [existingRelation] = await connection.query(
+          'SELECT 1 FROM tag_bookmark_relations WHERE tag_id = ? AND bookmark_id = ?',
+          [tagId, bookmarkId],
+        );
+        if (existingRelation.length === 0) {
+          const [relationResult] = await connection.query(
+            `INSERT INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES (?, ?)`,
+            [tagId, bookmarkId],
+          );
+          if (relationResult.affectedRows > 0) {
+            boundRelations++;
+          }
+        }
+      }
+    }
+
+    await connection.commit();
+    res.send(
+      resultData({
+        parsedTotal: parsedBookmarks.length,
+        createdTags,
+        createdBookmarks,
+        boundRelations,
+      }),
+    );
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 };
