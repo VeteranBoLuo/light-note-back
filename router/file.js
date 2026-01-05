@@ -96,7 +96,6 @@ router.post('/confirmUpload', async (req, res) => {
 
       const fileInfo = {
         create_by: userId,
-        create_time: req.requestTime,
         file_name: fileName,
         file_type: fileType,
         file_size: fileSize,
@@ -173,6 +172,18 @@ router.post('/queryFiles', async (req, res) => {
       // 定义文件类型到 MIME 类型的映射
       const mimeTypeMap = {
         image: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'],
+        text: [
+          'text/plain',
+          'text/html',
+          'text/css',
+          'text/javascript',
+          'application/javascript',
+          'text/xml',
+          'application/json',
+          'text/csv',
+          'application/x-sh',
+          'application/x-bat',
+        ],
         pdf: ['application/pdf'],
         word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         audio: ['audio/mpeg', 'audio/wav'],
@@ -188,7 +199,9 @@ router.post('/queryFiles', async (req, res) => {
       const includeMimeTypes = selectedNonOtherTypes.flatMap((type) => mimeTypeMap[type] || []);
 
       // 构建需要排除的 MIME 类型（用于 other 逻辑）
-      const excludeMimeTypes = ['image', 'pdf', 'word', 'excel', 'audio', 'video'].flatMap((type) => mimeTypeMap[type]);
+      const excludeMimeTypes = ['image', 'text', 'pdf', 'word', 'excel', 'audio', 'video'].flatMap(
+        (type) => mimeTypeMap[type],
+      );
 
       // 过滤文件
       formattedFiles = formattedFiles.filter((file) => {

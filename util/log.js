@@ -127,7 +127,6 @@ const detectAttack = (req) => {
       source_ip: getClientIp(req),
       payload: JSON.stringify({ ...body, ...query }),
       user_agent: headers['user-agent'],
-      created_at: req.requestTime,
     };
     pool
       .query('INSERT INTO attack_logs SET ?', [log])
@@ -212,7 +211,6 @@ export async function logFunction(req, res, next) {
             ip: getClientIp(req) || '',
             location: location,
             system: system,
-            requestTime: req.requestTime, // 获取当前时间
             del_flag: 0,
           };
           // 将日志保存到数据库

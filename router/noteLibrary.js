@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-import { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } from '../util/common.js';
+import { resultData, snakeCaseKeys } from '../util/common.js';
 import pool from '../db/index.js';
 
 router.post('/uploadImage', upload.single('file'), async (req, res) => {
@@ -29,7 +29,6 @@ router.post('/uploadImage', upload.single('file'), async (req, res) => {
     const userId = req.headers['x-user-id'];
     const noteParams = {
       createBy: userId,
-      createTime: req.requestTime,
       title: '未命名文档',
     };
     const connection = await pool.getConnection();
@@ -78,6 +77,6 @@ router.post('/addNote', noteLibraryHandle.addNote);
 router.post('/queryNoteList', noteLibraryHandle.queryNoteList);
 router.post('/getNoteDetail', noteLibraryHandle.getNoteDetail);
 router.post('/delNote', noteLibraryHandle.delNote);
-router.post("/updateNoteSort", noteLibraryHandle.updateNoteSort);
+router.post('/updateNoteSort', noteLibraryHandle.updateNoteSort);
 
 export default router;

@@ -9,8 +9,6 @@ export const addNote = (req, res) => {
     const params = {
       ...req.body,
       createBy: userId,
-      createTime: req.requestTime,
-      updateTime: req.requestTime,
     };
     pool
       .query('INSERT INTO note SET ?', [snakeCaseKeys(params)])
@@ -42,7 +40,6 @@ export const updateNote = (req, res) => {
     const params = {
       ...req.body,
       updateBy: userId,
-      updateTime: req.requestTime,
     };
     pool
       .query('update note set ? where id=?', [snakeCaseKeys(mergeExistingProperties(params, [], ['id'])), req.body.id])

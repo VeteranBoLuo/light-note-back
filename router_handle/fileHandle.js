@@ -124,7 +124,6 @@ export const addFolder = async (req, res) => {
     const folder = {
       name: name,
       createBy,
-      createTime: req.requestTime,
       del_flag: 0,
     };
     const [result] = await connection.query(`INSERT INTO folders SET ?`, [snakeCaseKeys(folder)]);

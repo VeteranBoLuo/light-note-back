@@ -19,10 +19,25 @@ export const resultData = function (data = null, status = 200, msg = '') {
   };
 };
 
+const formatDateTime = function (date) {
+  const pad = (v) => v.toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
 // 下划线转驼峰
 const camelCaseKeys = function (input) {
   // 定义一个处理函数，用于将单个对象中的键转换为驼峰命名
   function toCamelCase(obj) {
+    // Format Date to local datetime string
+    if (obj instanceof Date) {
+      return formatDateTime(obj);
+    }
     if (Array.isArray(obj)) {
       // 如果是数组，递归映射每个元素到处理函数
       return obj.map(toCamelCase);

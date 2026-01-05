@@ -7,7 +7,6 @@ export const recordOpinion = async (req, res) => {
   const insertSql = 'INSERT INTO opinion SET ?';
   const params = req.body;
   params.userId = userId;
-  params.createTime = req.requestTime;
   try {
     pool
       .query(insertSql, [snakeCaseKeys(params)])

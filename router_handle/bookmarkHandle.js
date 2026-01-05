@@ -135,7 +135,6 @@ export const addTag = async (req, res) => {
       const userId = req.headers['x-user-id'];
       const params = {
         ...req.body,
-        createTime: req.requestTime,
         userId: userId,
       };
       const sqlCheck = 'SELECT * FROM tag WHERE user_id=? AND name = ? AND del_flag = 0';
@@ -366,7 +365,6 @@ export const addBookmark = async (req, res) => {
     const userId = req.headers['x-user-id'];
     const params = {
       ...req.body,
-      createTime: req.requestTime,
       userId: userId,
     };
     const sqlCheck = 'SELECT * FROM bookmark WHERE user_id=? AND name = ? AND del_flag = 0';
@@ -631,7 +629,6 @@ export const importBookmarksHtml = async (req, res) => {
           const tagPayload = {
             name: tagName,
             userId,
-            createTime: req.requestTime || new Date().toISOString().slice(0, 19).replace('T', ' '),
           };
           const [tagResult] = await connection.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagPayload)]);
           // 支持自增主键或触发器生成 ID 的两种情况
@@ -658,7 +655,6 @@ export const importBookmarksHtml = async (req, res) => {
           userId,
           url: item.url,
           description: '',
-          createTime: req.requestTime,
         };
         const [bookmarkResult] = await connection.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkPayload)]);
         bookmarkId = bookmarkResult.insertId || bookmarkPayload.id || null;

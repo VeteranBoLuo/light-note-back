@@ -1,4 +1,4 @@
-import { resultData, snakeCaseKeys, requestTime } from '../util/common.js';
+import { resultData, snakeCaseKeys } from '../util/common.js';
 import https from 'https';
 import fs from 'fs';
 import fsP from 'fs/promises';
@@ -90,7 +90,6 @@ export const recordOperationLogs = (req, res) => {
     const userId = req.headers['x-user-id'];
     const log = {
       createBy: userId,
-      createTime: req.requestTime,
       ...req.body,
       del_flag: 0,
     };
