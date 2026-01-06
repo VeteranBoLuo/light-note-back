@@ -34,21 +34,36 @@ export const addNote = (req, res) => {
   }
 };
 
-export const updateNote = (req, res) => {
+export const updateNote = async (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     const params = {
       ...req.body,
       updateBy: userId,
     };
-    pool
-      .query('update note set ? where id=?', [snakeCaseKeys(mergeExistingProperties(params, [], ['id'])), req.body.id])
-      .then(() => {
-        res.send(resultData('更新笔记成功'));
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
-      });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      // 更新 note 表，排除 tags
+      const updateParams = mergeExistingProperties(params, [], ['id', 'tags']);
+      await connection.query('update note set ? where id=?', [snakeCaseKeys(updateParams), req.body.id]);
+      if (params.tags && Array.isArray(params.tags)) {
+        // 删除旧关联
+        await connection.query('DELETE FROM note_tag_relations WHERE note_id = ?', [req.body.id]);
+        // 插入新关联
+        if (params.tags.length > 0) {
+          const inserts = params.tags.map((tagId) => [req.body.id, tagId]);
+          await connection.query('INSERT INTO note_tag_relations (note_id, tag_id) VALUES ?', [inserts]);
+        }
+      }
+      await connection.commit();
+      res.send(resultData('更新笔记成功'));
+    } catch (error) {
+      await connection.rollback();
+      res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
+    } finally {
+      connection.release();
+    }
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e));
   }
@@ -58,8 +73,22 @@ export const queryNoteList = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     pool
-      .query('select * from note where create_by=? and del_flag=0 ORDER BY sort, update_time DESC', [userId])
+      .query(
+        `SELECT n.*, JSON_ARRAYAGG(JSON_OBJECT('id', nt.id, 'name', nt.name)) AS tags
+         FROM note n
+         LEFT JOIN note_tag_relations ntr ON n.id = ntr.note_id
+         LEFT JOIN note_tags nt ON ntr.tag_id = nt.id
+         WHERE n.create_by = ? AND n.del_flag = 0
+         GROUP BY n.id
+         ORDER BY n.sort, n.update_time DESC`,
+        [userId],
+      )
       .then(([result]) => {
+        // 处理 tags 为数组，如果 NULL 或包含无效标签则为空数组
+        result.forEach((note) => {
+          note.tags =
+            note.tags && Array.isArray(note.tags) && note.tags.every((tag) => tag && tag.id !== null) ? note.tags : [];
+        });
         res.send(resultData(result));
       })
       .catch((err) => {
@@ -157,5 +186,145 @@ export const updateNoteSort = async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
   } finally {
     connection.release(); // 释放连接回连接池
+  }
+};
+
+export const addNoteTag = (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'];
+    const params = {
+      name: req.body.name,
+      userId: userId,
+    };
+    pool
+      .query('INSERT INTO note_tags SET ?', [snakeCaseKeys(params)])
+      .then(() => {
+        res.send(resultData('添加标签成功'));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e));
+  }
+};
+
+export const editNoteTag = (req, res) => {
+  try {
+    const params = {
+      name: req.body.name,
+    };
+    pool
+      .query('update note_tags set ? where id=?', [
+        snakeCaseKeys(mergeExistingProperties(params, [], ['id'])),
+        req.body.id,
+      ])
+      .then(() => {
+        res.send(resultData('更新标签成功'));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e));
+  }
+};
+
+export const queryNoteTagList = (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'];
+    pool
+      .query('select * from note_tags where user_id=?', [userId])
+      .then(([result]) => {
+        res.send(resultData(result));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e));
+  }
+};
+
+export const getNoteTags = (req, res) => {
+  try {
+    const noteId = req.body.id;
+    pool
+      .query('SELECT nt.* FROM note_tags nt JOIN note_tag_relations ntr ON nt.id = ntr.tag_id WHERE ntr.note_id = ?', [
+        noteId,
+      ])
+      .then(([result]) => {
+        res.send(resultData(result));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e));
+  }
+};
+
+export const delNoteTag = (req, res) => {
+  try {
+    const tagId = req.body.id;
+    pool
+      .query('DELETE FROM note_tags WHERE id = ?', [tagId])
+      .then(() => {
+        res.send(resultData('删除标签成功'));
+      })
+      .catch((err) => {
+        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+      });
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e));
+  }
+};
+
+export const updateNoteTags = async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'];
+    const { noteId, tags } = req.body;
+    if (!noteId || !Array.isArray(tags)) {
+      return res.send(resultData(null, 400, '参数错误'));
+    }
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      // 验证笔记属于用户
+      const [noteResult] = await connection.query('SELECT id FROM note WHERE id = ? AND create_by = ?', [
+        noteId,
+        userId,
+      ]);
+      if (noteResult.length === 0) {
+        return res.send(resultData(null, 403, '无权限操作此笔记'));
+      }
+      // 验证所有标签属于用户
+      if (tags.length > 0) {
+        const placeholders = tags.map(() => '?').join(',');
+        const [tagResult] = await connection.query(
+          `SELECT id FROM note_tags WHERE id IN (${placeholders}) AND user_id = ?`,
+          [...tags, userId],
+        );
+        if (tagResult.length !== tags.length) {
+          return res.send(resultData(null, 403, '包含无效标签'));
+        }
+      }
+      // 删除旧关联
+      await connection.query('DELETE FROM note_tag_relations WHERE note_id = ?', [noteId]);
+      // 插入新关联
+      if (tags.length > 0) {
+        const inserts = tags.map((tagId) => [noteId, tagId]);
+        await connection.query('INSERT INTO note_tag_relations (note_id, tag_id) VALUES ?', [inserts]);
+      }
+      await connection.commit();
+      res.send(resultData('更新标签成功'));
+    } catch (error) {
+      await connection.rollback();
+      res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
+    } finally {
+      connection.release();
+    }
+  } catch (e) {
+    res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };

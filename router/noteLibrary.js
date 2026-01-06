@@ -79,4 +79,11 @@ router.post('/getNoteDetail', noteLibraryHandle.getNoteDetail);
 router.post('/delNote', noteLibraryHandle.delNote);
 router.post('/updateNoteSort', noteLibraryHandle.updateNoteSort);
 
+router.post('/addNoteTag', noteLibraryHandle.addNoteTag);
+router.post('/editNoteTag', noteLibraryHandle.editNoteTag);
+router.post('/queryNoteTagList', noteLibraryHandle.queryNoteTagList);
+router.post('/getNoteTags', noteLibraryHandle.getNoteTags);
+router.post('/delNoteTag', noteLibraryHandle.delNoteTag);
+router.post('/updateNoteTags', noteLibraryHandle.updateNoteTags);
+
 export default router;
