@@ -274,7 +274,8 @@ export const getUserList = (req, res) => {
         COALESCE(b.bookmark_count, 0) AS bookmarkTotal,
         COALESCE(t.tag_count, 0) AS tagTotal,
         COALESCE(n.note_count, 0) AS noteTotal,
-        COALESCE(f.storage_used, 0) AS storageUsed
+        COALESCE(f.storage_used, 0) AS storageUsed,
+        GREATEST(op.max_op_time, ap.max_api_time) AS lastActiveTime
       FROM user u
       LEFT JOIN (
         SELECT user_id, COUNT(*) AS bookmark_count
@@ -300,6 +301,18 @@ export const getUserList = (req, res) => {
         WHERE del_flag = 0
         GROUP BY create_by
       ) f ON u.id = f.create_by
+      LEFT JOIN (
+        SELECT create_by AS user_id, MAX(create_time) AS max_op_time
+        FROM operation_logs
+        WHERE del_flag = 0
+        GROUP BY create_by
+      ) op ON u.id = op.user_id
+      LEFT JOIN (
+        SELECT user_id, MAX(request_time) AS max_api_time
+        FROM api_logs
+        WHERE del_flag = 0
+        GROUP BY user_id
+      ) ap ON u.id = ap.user_id
       WHERE u.del_flag = 0 AND (u.alias LIKE CONCAT('%', ?, '%') OR u.email LIKE CONCAT('%', ?, '%'))
       ORDER BY u.create_time DESC
       LIMIT ? OFFSET ?
