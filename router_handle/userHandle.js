@@ -16,7 +16,7 @@ export const login = (req, res) => {
       .query(sql, [email, password])
       .then(async ([result]) => {
         if (result.length === 0) {
-          res.send(resultData(null, 401, '邮箱或密码错误或已过期，请重新输入')); // 设置状态码为401
+          res.send(resultData(null, 401, '邮箱密码错误或已过期，请重新输入正确信息或者注册新账号' + formatDateTime())); // 设置状态码为401
           return;
         }
         if (result[0].del_flag === 1) {
@@ -42,68 +42,125 @@ export const login = (req, res) => {
   }
 };
 
-export const registerUser = (req, res) => {
+export const registerUser = async (req, res) => {
   try {
-    pool
-      .query('SELECT * FROM user WHERE email = ?', [req.body.email])
-      .then(([result]) => {
-        if (result?.length > 0) {
-          res.send(resultData(null, 500, '账号已存在')); // 设置状态码为500
-        } else {
-          const params = req.body;
-          params.theme = 'day';
-          pool
-            .query('INSERT INTO user set ?', [snakeCaseKeys(params)])
-            .then(async () => {
-              const [userRes] = await pool.query('SELECT * FROM USER WHERE email=?', [req.body.email]);
-              const userId = userRes[0].id;
-              const bookmarkData = {
-                name: 'iconify',
-                userId: userId,
-                url: 'https://icon-sets.iconify.design/',
-                description: '全球最大的免费图标网站之一',
-                iconUrl:
-                  'data:image/vnd.microsoft.icon;base64,AAABAAUAEBAAAAEAIABoBAAAVgAAABgYAAABACAAiAkAAL4EAAAgIAAAAQAgAKgQAABGDgAAMDAAAAEAIACoJQAA7h4AAEBAAAABACAAKEIAAJZEAAAoAAAAEAAAACAAAAABACAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACTcy0AlHQvB5BwKUiTdC6lm34+4aGGSfmhhkn5m34+4ZN0LqWQcClIlHQvB5NzLQAAAAAAAAAAAJd9NwCScisAknIrFpN0L46mjVTtyruZ/+XdzP/w7OL/8Ozi/+XdzP/Ku5n/po1T7ZN0L46ScisWknIrAJd9NwCUdS8AknMrFpZ3M6u7p3v+8Ozi///////9/fv/9vPu//bz7f/9/Pv///////Ds4v+7p3v+lnczq5JzKxaUdS8AlHQvBpN0L467qHz++ffy//39+//e1cD/tqBx/6OJTf+jiE3/tJ9v/9vQuf/7+vj/+ffy/7uofP6TdC+OlHQvBpBwKUimjVTs8Ovi//38+//MvZv/qI9W/7eidP/FtI//xbSP/7ijdf+njlX/wa+H//j18f/w7OL/po1U7JBwKUiTdC6lyruZ///////v6uD/zsCg/+/r4P/+/fz////////////+/f3/8u7l/9DCo//i2sf//////8q7mf+TdC6lm34+4OTdy////////v39//7+/f/////////////////////////////////+/v7//fz7///////k3cv/m34+4KGGSfnv6+H/////////////////////////////////////////////////////////////////7+vh/6GGSfmhhkn57+vh////////////7efb/9rPt//8+/n////////////8+/n/2s+3/+3n2////////////+/r4f+hhkn5m34+4OTdy////////////8q6mP+fhEb/8/Do////////////8/Do/5+ERv/Kupj////////////k3cv/m34+4JN0LqXKu5n////////////Xy7H/tJ5t//f18P////////////f18P+0nm3/18ux////////////yruZ/5N0LqWQcClIpo1U7PDr4f///////Pv5//j28v//////////////////////+Pby//z7+f//////8Ovh/6aNVOyQcClIlHQvBpN0L467qHz++Pby////////////////////////////////////////////+Pby/7uofP6TdC+OlHQvBpR1LwCScysWlnczq7une/7w7OL/////////////////////////////////8Ozi/7une/6WdzOrknMrFpR1LwCXfTcAknIrAJJyKxaTdC+Opo1U7cq7mf/l3cz/7+vh/+/r4f/l3cz/yruZ/6aNVO2TdC+OknIrFpJyKwCXfTcAAAAAAAAAAACTcy0AlHQvB5BwKUiTdC6lm34+4aGGSfmhhkn5m34+4ZN0LqWQcClIlHQvB5NzLQAAAAAAAAAAAOAHAADAAwAAgAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAAwAMAAOAHAAAoAAAAGAAAADAAAAABACAAAAAAAAAJAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACWdjEAlnYyCJR1MTqTdC6IknMsxZJzLOiScyz6knMs+pJzLOiScyzFk3QuiJR1MTqWdjIIlnYxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAmHYyAJt4NQGVdjExk3QunZN0L+edgEH+rpZi/76sgv/Ht5L/x7eS/76sgv+ulmL/nYBB/pN0L+eTdC6dlXYxMZt4NQGYdjIAAAAAAAAAAAAAAAAAAAAAAAAAAACVdjAAlXcxBZR1MFuTdC7dn4NF/8W0jv/p49X/+vj1//7+/f////////////7+/f/6+PX/6ePV/8W0jv+fg0X/k3Qu3ZR1MFuVdzEFlXYwAAAAAAAAAAAAAAAAAJV3MQCWeTIElHUwcpR1MO+ynGr/6eLU//7+/f////////////////////////////////////////////7+/f/p4tT/spxq/5R1MO+UdTBylnkyBJV3MQAAAAAAl3YyAG9kFQCUdTBblHUw77uofP/18uv////////////+/v3/8u3l/9zSu//OwKH/zsCh/9zRuv/w7OP//v38////////////9fLr/7uofP+UdTDvlHUwW29kFQCXdjIAlHUwAJV2MTGTdC7cspxq//Xx6/////////////Pw6P/IuZX/o4lN/5V3Mv+Sciz/knIr/5V2Mv+ih0r/w7KL/+7p3/////////////Xx6/+ynGr/k3Qu3JV2MTGUdTAAl3czB5N0Lpyfg0b/6OLT////////////6uTX/62VYP+VdjH/nYFB/6qRWv+wmWb/sJlm/6qRW/+egkP/lHYx/6SKT//d073//v7+///////o4tP/n4NG/5N0LpyXdzMHlHUxOpN0L+fFtI7//v79///////x7eT/rZZh/6uTXf/Txqn/7Ofb//f18P/8+/j//Pv4//f18P/t6N3/1sqv/7Gbaf+ih0r/3dO9///////+/v3/xbSO/5N0L+eUdTE6k3QuiJ2AQf7p49X////////////n4ND/0cOl//bz7v////////////////////////////////////////////r49P/az7f/08Wp//7+/f//////6ePU/52AQf6TdC6IknMsxa6WYv/5+PT////////////+/v7////+/////////////////////////////////////////////////////////////v79////////////+fj0/66WYv+ScyzFknMs6L6sgv/+/v7//////////////////////////////////////////////////////////////////////////////////////////////////v7+/76sgv+ScyzoknMs+se3kv///////////////////////////////////////////////////////////////////////////////////////////////////////////8e3kv+Scyz6knMs+se3kv///////////////////////f38/+vl1//w6+L/////////////////////////////////8Ovi/+vl1//9/fz//////////////////////8e3kv+Scyz6knMs6L6sgv/+/v7/////////////////6uTX/6CFSP+vmGT/+PXx///////////////////////49fH/r5hk/6CFSP/q5Nf//////////////////v7+/76sgv+ScyzoknMsxa6WYv/6+PT/////////////////4NfE/5R1MP+fhEb/8+/n///////////////////////z7+f/n4RG/5R1MP/g18T/////////////////+fj0/66WYv+ScyzFk3QuiJ2AQf7p49X/////////////////5t7O/5h7OP+mjFP/9fPs///////////////////////18+z/poxT/5h7OP/m3s7/////////////////6ePU/52AQf6TdC6IlHUxOpN0L+fFtI7//v79////////////+vn2/9jMs//h2MT//v79///////////////////////+/v3/4djE/9jMs//6+fb////////////+/v3/xbSO/5N0L+eUdTE6l3czB5N0Lpyfg0b/6OLT///////////////////////////////////////////////////////////////////////////////////////o4tP/n4NG/5N0LpyXdzMHlHUwAJV2MTGTdC7cspxq//Xx6/////////////////////////////////////////////////////////////////////////////Xx6/+ynGr/k3Qu3JV2MTGUdTAAl3YyAG9kFQCUdTBblHUw77uofP/18uv/////////////////////////////////////////////////////////////////9fLr/7uofP+UdTDvlHUwW29kFQCXdjIAAAAAAJV3MQCWeTIElHUwcpR1MO+ynGr/6eLU//7+/f////////////////////////////////////////////7+/f/p4tT/spxq/5R1MO+UdTBylnkyBJV3MQAAAAAAAAAAAAAAAACVdjAAlXcxBZR1MFuTdC7dn4NF/8W0jv/p49X/+vj0//7+/f////////////7+/f/6+PX/6ePV/8W0jv+fg0X/k3Qu3ZR1MFuVdzEFlXYwAAAAAAAAAAAAAAAAAAAAAAAAAAAAmHYyAJt4NQGVdjExk3QunZN0L+edgEH+rpZi/76sgv/Ht5L/x7eS/76sgv+ulmL/nYBB/pN0L+eTdC6dlXYxMZt4NQGYdjIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACWdjEAlnYyCJR1MTqTdC6IknMsxZJzLOiScyz6knMs+pJzLOiScyzFk3QuiJR1MTqWdjIIlnYxAAAAAAAAAAAAAAAAAAAAAAAAAAAA/AA/APAADwDgAAcAwAADAMAAAwCAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAABAMAAAwDAAAMA4AAHAPAADwD8AD8AKAAAACAAAABAAAAAAQAgAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlXYxAJV2MgaUdjEqlHYxa5V1MKWUdC/Pk3Qv7JN0LvmTdC75k3Qv7JR0L8+VdTCllHYxa5R2MSqVdjIGlXYxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlng0AJd4NQWVdjI4lHUwlJN0L9uTcy34lHUw/5l7Ov+dgUH/n4NF/5+DRf+dgUH/mXs6/5R1MP+Tcy34k3Qv25R1MJSVdjI4l3g1BZZ4NAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAnH87AJJyLQCWdjEZlHUxhpR0L+WTdC7/nYBA/7Sebv/Nv57/4NbC/+zm2f/y7eX/8u3l/+zm2f/g1sL/zb+e/7Sebv+cgED/k3Qu/5R0L+WUdTGGlnYxGZJyLQCcfzsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJV4MACJYTcAlHYxLpR1MLWTdC78m349/7yoff/m3s7/+vn2////////////////////////////////////////////+vn2/+bezv+8qH3/m349/5N0LvyUdTC1lHYxLolhNwCVeDAAAAAAAAAAAAAAAAAAAAAAAAAAAACXfDMAjGUpAJV3MT+UdTDOk3Qv/6uSXP/g1sL/+/r4//////////////////////////////////////////////////////////////////v6+P/g1sL/q5Jc/5N0L/+UdTDOlXcxP4xlKQCXfDMAAAAAAAAAAAAAAAAAm386AJN0LgCUdjEtlHUwzpV2Mf+2oXH/7une/////////////////////////////f38//j28v/18uv/9fLr//j28f/9/fz////////////////////////////u6d7/tqFx/5V2Mf+UdTDOlHYxLZN0LgCbfzoAAAAAAAAAAACVdjEAlnYxGpR1MLSTdC//tqFx//Xy6///////////////////////+Pby/97Vv//CsIj/rpZi/6WKUP+kilD/rpZi/8Guhv/c0br/9vTu///////////////////////18uv/tqFx/5N0L/+UdTC0lnYxGpV2MQAAAAAAlnczAJh5NgSUdTGGk3Qu/auSXP/u6d7//////////////////f37/+LZxv+znWz/mXs5/5JzLP+Scyz/knMt/5JzLf+Scyz/knMs/5h6N/+ulmL/2c61//r59v/////////////////u6d7/q5Jc/5N0Lv2UdTGGmHk2BJZ3MwCVdjEAlXYyOJR0L+Sbfj3/39bC//////////////////v59v/PwKH/nYBB/5FyK/+TdC7/mXs5/52AQf+fg0X/n4NF/52AQf+ZfDr/k3Qv/5FxK/+Yejf/vquB//Lv5v/////////////////f1sL/m349/5R0L+SVdjI4lXYxAJZ2MwWUdTCUk3Qu/7yoff/8+vj////////////9/Pr/y7yb/5d4Nf+ZfDr/sZto/8y9nP/f1cH/6+XX//Ds4//w7OP/6+XX/9/Wwv/Nv5//tJ9u/5yAQP+TdC7/sptp//Ds4/////////////z6+P+8qH3/k3Qu/5R1MJSWdjMFlHYxKpN0L9qdgED/5t7O/////////////////+DXw/+fg0X/tZ9w/+HYxf/59/P////////////////////////////////////////////6+fb/5+DR/8Gvhv+dgUL/uqZ6//v59////////////+bezv+cgED/k3Qv2pR2MSqUdjFrk3Mt97Sebv/6+fX/////////////////4dnF/9fLsf/59/P//////////////////////////////////////////////////////////////////Pz6/+bezf/Nvp7/+Pbx////////////+vn1/7Sebv+Tcy33lHYxa5V1MKWUdTD/zb6e/////////////////////////v7///////////////////////////////////////////////////////////////////////////////////////7+/v//////////////////////zb6e/5R1MP+VdTCllHQvz5l7Ov/f1sL////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////f1sL/mXs6/5R0L8+TdC/snYFB/+zm2f///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////+zm2f+dgUH/k3Qv7JN0Lvmfg0X/8u3l////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8u3l/5+DRf+TdC75k3Qu+Z+DRf/y7eX//////////////////////////////////Pv5//bz7f/8+/n////////////////////////////////////////////8+/n/9vPt//z7+f/////////////////////////////////y7eX/n4NF/5N0LvmTdC/snYFB/+zm2f////////////////////////////z8+v/Ku5n/pYtR/8q7mf/8/Pr//////////////////////////////////Pz6/8q7mf+li1H/yruZ//z8+v///////////////////////////+zm2f+dgUH/k3Qv7JR0L8+Zezr/39bC////////////////////////////9PHr/6KITP+RcSr/oohM//Tx6//////////////////////////////////08ev/oohM/5FxKv+iiEz/9PHr////////////////////////////39bC/5l7Ov+UdC/PlXUwpZR1MP/Nv57////////////////////////////z8Oj/n4RG/5JzLf+fhEb/8/Do//////////////////////////////////Pw6P+fhEb/knMt/5+ERv/z8Oj////////////////////////////Nvp7/lHUw/5V1MKWUdjFrk3Mt97Sebv/6+fX///////////////////////Tx6/+iiEz/kXEq/6KITP/08ev/////////////////////////////////9PHr/6KITP+RcSr/oohM//Tx6///////////////////////+vn1/7Sebv+Tcy33lHYxa5R2MSqTdC/anYBA/+bezv///////////////////////Pz6/8q7mf+li1H/yruZ//z8+v/////////////////////////////////8/Pr/yruZ/6WLUf/Ku5n//Pz6///////////////////////m3s7/nIBA/5N0L9qUdjEqlnYzBZR1MJSTdC7/vKh9//z6+P///////////////////////Pv5//bz7f/8+/n////////////////////////////////////////////8+/n/9vPt//z7+f///////////////////////Pr4/7yoff+TdC7/lHUwlJZ2MwWVdjEAlXYyOJR0L+Sbfj3/39bC///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////f1sL/m349/5R0L+SVdjI4lXYxAJZ3MwCYeTYElHUxhpN0Lv2rklz/7une////////////////////////////////////////////////////////////////////////////////////////////////////////////7une/6uSXP+TdC79lHUxhph5NgSWdzMAAAAAAJV2MQCWdjEalHUwtJN0L/+2oXH/9fLr//////////////////////////////////////////////////////////////////////////////////////////////////Xy6/+2oXH/k3Qv/5R1MLSWdjEalXYxAAAAAAAAAAAAm386AJN0LgCUdjEtlHUwzpV2Mf+2oXH/7une///////////////////////////////////////////////////////////////////////////////////////u6d7/tqFx/5V2Mf+UdTDOlHYxLZN0LgCbfzoAAAAAAAAAAAAAAAAAl3wzAIxlKQCVdzE/lHUwzpN0L/+rklz/4NbC//v6+P//////////////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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAl3k0O5V1MOmUdTD/lHUw/5R1MP+UdTD/lHUw/5h6OP/Ht5P/+PXw////////////////////////////////////////////////////////////////////////////////////////////////////////////9/Xv/8e3k/+Yejj/lHUw/5R1MP+UdTD/lHUw/5R1MP+VdTDpl3k0OwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACZdzMelHUwxJR1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5d4Nf+2oHH/3NK7//n38/////////////////////////////////////////////////////////////////////////////n38//c0rv/tqBx/5d4Nf+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTDEmXczHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///wGWdjJhlHYx6pR1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+WdzP/q5Jc/8Szjf/Vya7/5t7O//Lu5v/49fD//fz7//38+//49fD/8u7m/+bezv/Vya7/xLON/6uSXP+WdzP/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R2MeqWdjJh////AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJ+AQBCVdjKAlXYw7pR1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lXYw7pV2MoCfgEAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJ12Ow2VdjFzlHUx1ZR1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTHVlXYxc512Ow0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACWeDIzlHYxjZR2MdKVdTD+lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+UdTD/lHUw/5R1MP+VdTD+lHYx0pR2MY2WeDIzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAnnkxFZd4MVOWdTF+lHUxpZR2McuVdjDflHYx7JR2MPmUdjD5lHYx7JV2MN+UdjHLlHUxpZZ1MX6XeDFTnnkxFQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///wAA///////4AAAf/////8AAAAP/////AAAAAP////wAAAAAP///+AAAAAAf///wAAAAAA///+AAAAAAB///gAAAAAAB//8AAAAAAAD//wAAAAAAAP/+AAAAAAAAf/wAAAAAAAA/+AAAAAAAAB/wAAAAAAAAD/AAAAAAAAAP4AAAAAAAAAfgAAAAAAAAB8AAAAAAAAADwAAAAAAAAAPAAAAAAAAAA4AAAAAAAAABgAAAAAAAAAGAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAGAAAAAAAAAAYAAAAAAAAABwAAAAAAAAAPAAAAAAAAAA8AAAAAAAAAD4AAAAAAAAAfgAAAAAAAAB/AAAAAAAAAP8AAAAAAAAA/4AAAAAAAAH/wAAAAAAAA//gAAAAAAAH//AAAAAAAA//8AAAAAAAD//4AAAAAAAf//4AAAAAAH///wAAAAAA////gAAAAAH////AAAAAA/////AAAAAP/////AAAAD//////gAAB///////wAA////',
-                del_flag: 0,
-              };
-              // 新增默认书签
-              await pool.query('INSERT INTO bookmark set ?', [snakeCaseKeys(bookmarkData)]);
+    // 检查邮箱是否已存在
+    const [existingUser] = await pool.query('SELECT * FROM user WHERE email = ?', [req.body.email]);
+    if (existingUser?.length > 0) {
+      return res.send(resultData(null, 500, '账号已存在'));
+    }
 
-              const system = JSON.stringify({
-                browser: req.headers['browser'] ?? '未知',
-                os: req.headers['os'] ?? '未知',
-                fingerprint: req.headers['fingerprint'] ?? '未知',
-              });
-              const requestPayload = JSON.stringify(req.method === 'GET' ? req.query : req.body);
-              // 构造日志对象
-              const log = {
-                userId: userId,
-                method: req.method,
-                url: req.originalUrl,
-                req: requestPayload === '{}' ? '' : requestPayload,
-                ip: req.headers['x-forwarded-for'] ?? '未知',
-                location: '未知',
-                system: system,
-                del_flag: 0,
-              };
-              // 将日志保存到数据库
-              const query = 'INSERT INTO api_logs SET ?';
-              await pool.query(query, [snakeCaseKeys(log)]).catch((err) => {
-                console.error('注册日志更新错误: ' + err.message);
-              });
+    // 准备用户数据
+    const params = req.body;
+    params.preferences = JSON.stringify({ theme: 'day', noteViewMode: 'card' });
 
-              res.send(resultData(null, 200, '注册成功')); // 设置状态码为200
-            })
-            .catch((err) => {
-              res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
-            });
-        }
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
+    // 插入新用户
+    await pool.query('INSERT INTO user SET ?', [snakeCaseKeys(params)]);
+
+    // 获取新用户ID
+    const [userRes] = await pool.query('SELECT * FROM user WHERE email = ?', [req.body.email]);
+    const userId = userRes[0].id;
+
+    // 创建示例数据（非关键操作，失败不影响注册）
+    try {
+      // 默认书签
+      const bookmarkData = {
+        name: 'iconify',
+        userId: userId,
+        url: 'https://icon-sets.iconify.design/',
+        description: '全球最大的免费图标网站之一',
+      };
+      await pool.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkData)]);
+
+      // 获取书签ID
+      const [bookmarkRes] = await pool.query('SELECT id FROM bookmark WHERE user_id = ? AND name = ?', [
+        userId,
+        'iconify',
+      ]);
+      const bookmarkId = bookmarkRes[0].id;
+
+      // 示例标签
+      const tagData = {
+        name: '示例标签',
+        userId: userId,
+        iconUrl:
+          'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMTYgMTYiPjxwYXRoIGZpbGw9IiM2YzgyZmYiIGQ9Ik02LjkyMyAxLjM3OGEzIDMgMCAwIDEgMi4xNTQgMGw0Ljk2MiAxLjkwOGExLjUgMS41IDAgMCAxIC45NjEgMS40djYuNjI2YTEuNSAxLjUgMCAwIDEtLjk2MSAxLjRsLTQuOTYyIDEuOTA5YTMgMyAwIDAgMS0yLjE1NCAwbC00Ljk2MS0xLjkwOWExLjUgMS41IDAgMCAxLS45NjItMS40VjQuNjg2YTEuNSAxLjUgMCAwIDEgLjk2Mi0xLjR6bTEuNzk1LjkzM2EyIDIgMCAwIDAtMS40MzYgMGwtMS4zODQuNTMzbDUuNTkgMi4xMTZsMS45NDgtLjgzNHpNMTQgNC45NzFMOC41IDcuMzN2Ni40MjhxLjExLS4wMjguMjE4LS4wN2w0Ljk2Mi0xLjkwOGEuNS41IDAgMCAwIC4zMi0uNDY3em0tNi41IDguNzg2VjcuMzNMMiA0Ljk3MnY2LjM0YS41LjUgMCAwIDAgLjMyLjQ2N2w0Ljk2MiAxLjkwOHEuMTA3LjA0Mi4yMTguMDdNMi41NjQgNC4xMjZMOCA2LjQ1NmwyLjE2NC0uOTI4bC01LjY2Ny0yLjE0NnoiLz48L3N2Zz4=',
+        sort: 0,
+      };
+      await pool.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagData)]);
+
+      // 获取标签ID
+      const [tagRes] = await pool.query('SELECT id FROM tag WHERE user_id = ? AND name = ?', [userId, '示例标签']);
+      const tagId = tagRes[0].id;
+
+      // 关联标签和书签
+      const relationData = {
+        tag_id: tagId,
+        bookmark_id: bookmarkId,
+      };
+      await pool.query('INSERT INTO tag_bookmark_relations SET ?', [snakeCaseKeys(relationData)]);
+
+      // 无标签书签
+      const bookmarkData2 = {
+        name: '示例书签',
+        userId: userId,
+        url: 'https://example.com',
+        description: '这是一个示例书签，没有关联标签',
+      };
+      await pool.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkData2)]);
+
+      // 无书签标签
+      const tagData2 = {
+        name: '示例标签2',
+        userId: userId,
+        iconUrl:
+          'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMTYgMTYiPjxwYXRoIGZpbGw9IiM2YzgyZmYiIGQ9Ik02LjkyMyAxLjM3OGEzIDMgMCAwIDEgMi4xNTQgMGw0Ljk2MiAxLjkwOGExLjUgMS41IDAgMCAxIC45NjEgMS40djYuNjI2YTEuNSAxLjUgMCAwIDEtLjk2MSAxLjRsLTQuOTYyIDEuOTA5YTMgMyAwIDAgMS0yLjE1NCAwbC00Ljk2MS0xLjkwOWExLjUgMS41IDAgMCAxLS45NjItMS40VjQuNjg2YTEuNSAxLjUgMCAwIDEgLjk2Mi0xLjR6bTEuNzk1LjkzM2EyIDIgMCAwIDAtMS40MzYgMGwtMS4zODQuNTMzbDUuNTkgMi4xMTZsMS45NDgtLjgzNHpNMTQgNC45NzFMOC41IDcuMzN2Ni40MjhxLjExLS4wMjguMjE4LS4wN2w0Ljk2Mi0xLjkwOGEuNS41IDAgMCAwIC4zMi0uNDY3em0tNi41IDguNzg2VjcuMzNMMiA0Ljk3MnY2LjM0YS41LjUgMCAwIDAgLjMyLjQ2N2w0Ljk2MiAxLjkwOHEuMTA3LjA0Mi4yMTguMDdNMi41NjQgNC4xMjZMOCA2LjQ1NmwyLjE2NC0uOTI4bC01LjY2Ny0yLjE0NnoiLz48L3N2Zz4=',
+        sort: 1,
+      };
+      await pool.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagData2)]);
+
+      // 示例笔记
+      const noteData = {
+        title: '示例笔记',
+        content: '<p>这是您的第一条笔记，欢迎使用轻笺！</p>',
+        createBy: userId,
+      };
+      await pool.query('INSERT INTO note SET ?', [snakeCaseKeys(noteData)]);
+    } catch (err) {
+      console.error('创建示例数据失败，但不影响注册:', err.message);
+    }
+
+    // 记录日志（非关键，失败不影响注册）
+    try {
+      const system = JSON.stringify({
+        browser: req.headers['browser'] ?? '未知',
+        os: req.headers['os'] ?? '未知',
+        fingerprint: req.headers['fingerprint'] ?? '未知',
       });
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
+      const requestPayload = JSON.stringify(req.method === 'GET' ? req.query : req.body);
+      const log = {
+        userId: userId,
+        method: req.method,
+        url: req.originalUrl,
+        req: requestPayload === '{}' ? '' : requestPayload,
+        ip: req.headers['x-forwarded-for'] ?? '未知',
+        location: '未知',
+        system: system,
+        del_flag: 0,
+      };
+      await pool.query('INSERT INTO api_logs SET ?', [snakeCaseKeys(log)]);
+    } catch (err) {
+      console.error('注册日志更新错误:', err.message);
+    }
+
+    res.send(resultData(null, 200, '注册成功'));
+  } catch (err) {
+    console.error('注册过程中发生错误:', err);
+    if (err.message.includes('邮箱') || err.message.includes('账号')) {
+      res.send(resultData(null, 500, err.message));
+    } else {
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+    }
   }
 };
 export const getUserInfo = async (req, res) => {
@@ -210,7 +267,6 @@ export const getUserList = (req, res) => {
         u.email,
         u.phone_number,
         u.role,
-        u.theme,
         u.ip,
         u.create_time,
         u.password,

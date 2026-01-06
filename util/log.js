@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { snakeCaseKeys, resultData, getClientIp, baseRouter } from './common.js';
+import { snakeCaseKeys, resultData, getClientIp, baseRouter, formatDateTime } from './common.js';
 
 const attackTypes = {
   // 注入类攻击
@@ -151,7 +151,7 @@ export async function logFunction(req, res, next) {
         const { email, password } = req.body;
         const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [email, password]);
         if (!userResult[0]) {
-          throw new Error('邮箱或密码错误');
+          throw new Error('邮箱密码错误或已过期，请重新输入正确信息或者注册新账号');
         }
         if (userResult[0].del_flag === '1') {
           throw new Error('账号已被禁用');
@@ -216,10 +216,10 @@ export async function logFunction(req, res, next) {
           // 将日志保存到数据库
           const query = 'INSERT INTO api_logs SET ?';
           pool.query(query, [snakeCaseKeys(log)]).catch((err) => {
-            console.error('日志更新sql错误: ' + err.message);
+            console.error(formatDateTime(new Date()) + '日志更新sql错误: ' + err.message);
           });
         } catch (err1) {
-          console.error('日志更新错误：', err1);
+          console.error(formatDateTime(new Date()) + '日志更新错误：', err1);
         }
       }
     });

@@ -10,7 +10,7 @@ import jsonRouter from '../router/json.js';
 
 export const resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
-    console.error(status, msg);
+    console.error(status, msg + ' ' + formatDateTime(new Date()));
   }
   return {
     data: camelCaseKeys(data),
@@ -19,7 +19,7 @@ export const resultData = function (data = null, status = 200, msg = '') {
   };
 };
 
-const formatDateTime = function (date) {
+export const formatDateTime = function (date) {
   const pad = (v) => v.toString().padStart(2, '0');
   const year = date.getFullYear();
   const month = pad(date.getMonth() + 1);
