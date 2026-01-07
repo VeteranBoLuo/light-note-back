@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { resultData } from '../util/common.js';
 import { Transform } from 'stream';
@@ -36,35 +35,64 @@ export const receiveMessage = async (req, res) => {
   let stream = false;
 
   try {
-    const { message, sessionId = '',useInternetSearch = false,enableThinking = false } = req.body;
+    const {
+      message,
+      sessionId = '',
+      useInternetSearch = false,
+      enableThinking = false,
+      enableTranslation = false,
+      translationConfig = {},
+    } = req.body;
     stream = req.body.stream ?? false; // 提取到外层作用域
-    const APP_ID = "ff8422dbcc784e8ba170b8ed0408c19b";
+    const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
+
+    // 语言映射
+    const langMap = {
+      auto: '自动识别',
+      zh: '中文',
+      en: '英文',
+      ja: '日文',
+      ko: '韩文',
+      fr: '法文',
+      de: '德文',
+      es: '西班牙文',
+    };
+
+    // 构建 prompt
+    let prompt = message;
+    if (enableTranslation) {
+      const { source = 'auto', target = 'en' } = translationConfig;
+      const sourceLang = source === 'auto' ? '' : langMap[source] || source;
+      const targetLang = langMap[target] || target;
+      const prefix = sourceLang ? `将以下${sourceLang}内容翻译成${targetLang}：` : `将以下内容翻译成${targetLang}：`;
+      prompt = prefix + message;
+    }
 
     if (stream) {
       // 🔧 优化响应头设置
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'Access-Control-Allow-Origin': '*',
         'X-Accel-Buffering': 'no',
-        'Content-Encoding': 'identity' // 防止压缩缓冲
+        'Content-Encoding': 'identity', // 防止压缩缓冲
       });
       res.flushHeaders?.();
     }
 
     const requestData = {
-      input: { prompt: message, session_id: sessionId },
+      input: { prompt: prompt, session_id: sessionId },
       parameters: {
         incremental_output: true,
         // 添加流式控制参数
         stream_interval: 100,
         max_tokens: 2048,
         // 启用联网搜索功能
-        enable_web_search:useInternetSearch,
+        enable_web_search: useInternetSearch,
         // 深度思考功能控制
         has_thoughts: enableThinking,
-        enable_thinking: enableThinking
+        enable_thinking: enableThinking,
       },
     };
 
@@ -72,29 +100,27 @@ export const receiveMessage = async (req, res) => {
       method: 'post',
       url: `https://dashscope.aliyuncs.com/api/v1/apps/${APP_ID}/completion`,
       headers: {
-        'Authorization': `Bearer ${process.env.DASHSCOPE_API_KEY}`,
+        Authorization: `Bearer ${process.env.DASHSCOPE_API_KEY}`,
         'Content-Type': 'application/json',
         'X-DashScope-SSE': stream ? 'enable' : 'disable',
-        'Accept': 'text/event-stream' // 明确接受流式响应
+        Accept: 'text/event-stream', // 明确接受流式响应
       },
       data: requestData,
       responseType: stream ? 'stream' : 'json',
       timeout: 30000, // 设置30秒超时
       // 🔧 重要：禁用axios的响应转换
-      transformResponse: [data => data],
+      transformResponse: [(data) => data],
       // 优化http客户端设置
       httpAgent: new HttpAgent({
         keepAlive: true,
-        maxSockets: 1 // 限制连接数避免竞争
+        maxSockets: 1, // 限制连接数避免竞争
       }),
     };
 
     // 添加超时处理
     const response = await Promise.race([
       axios(config),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('请求超时，请稍后重试')), 30000)
-      )
+      new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时，请稍后重试')), 30000)),
     ]);
 
     if (stream) {
@@ -143,18 +169,16 @@ export const receiveMessage = async (req, res) => {
         sseTransform.destroy();
         response.data.destroy();
       });
-
     } else {
       const aiReply = response.data.output.text;
       res.send(resultData({ response: aiReply }));
     }
-
   } catch (error) {
     console.error('AI 请求错误:', error.message);
     if (stream) {
       try {
         // 发送格式化错误信息
-        res.write(`data: ${JSON.stringify({ error: "服务异常", message: error.message })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: '服务异常', message: error.message })}\n\n`);
         res.end();
       } catch (e) {}
     } else {
