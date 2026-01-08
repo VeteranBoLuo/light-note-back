@@ -502,9 +502,9 @@ const handleUserDatabaseOperation = async (githubUser) => {
   // 3. 创建新用户
   await pool.query(
     `INSERT INTO user 
-      (email, github_id, login_type, head_picture, password)
-     VALUES (?, ?, 'github', ?, ?)`,
-    [safeEmail, githubUser.id, githubUser.avatar_url, '123456'],
+      (email, github_id, login_type, head_picture, password,alias)
+     VALUES (?, ?, 'github', ?, ?, ?)`,
+    [safeEmail, githubUser.id, githubUser.avatar_url, '123456', githubUser.login],
   );
   const [result] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
 
