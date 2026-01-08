@@ -500,16 +500,17 @@ const handleUserDatabaseOperation = async (githubUser) => {
   }
 
   // 3. 创建新用户
-  const [result] = await pool.query(
+  await pool.query(
     `INSERT INTO user 
       (email, github_id, login_type, head_picture, password)
      VALUES (?, ?, 'github', ?, ?)`,
     [safeEmail, githubUser.id, githubUser.avatar_url, '123456'],
   );
+  const [result] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
 
   // 创建示例数据（非关键操作，失败不影响注册）
   try {
-    const userId = result.insertId;
+    const userId = result[0].id;
 
     // 默认书签
     const bookmarkData = {
@@ -579,8 +580,7 @@ const handleUserDatabaseOperation = async (githubUser) => {
   }
 
   // 返回新插入的完整用户数据
-  const [newUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [result.insertId]);
-  return newUser[0];
+  return result[0];
 };
 
 // 修改密码或者设置密码configPassword
