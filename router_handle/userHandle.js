@@ -502,9 +502,9 @@ const handleUserDatabaseOperation = async (githubUser) => {
   // 3. 创建新用户
   const [result] = await pool.query(
     `INSERT INTO user 
-      (email, github_id, login_type, head_picture)
-     VALUES (?, ?, ?, 'github', ?)`,
-    [githubUser.login, safeEmail, githubUser.id, githubUser.avatar_url],
+      (email, github_id, login_type, head_picture, password)
+     VALUES (?, ?, 'github', ?, ?)`,
+    [safeEmail, githubUser.id, githubUser.avatar_url, '123456'],
   );
 
   // 返回新插入的完整用户数据
