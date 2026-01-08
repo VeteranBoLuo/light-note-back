@@ -479,7 +479,7 @@ const getGitHubEmail = async (accessToken, retries = 2) => {
 const handleUserDatabaseOperation = async (githubUser) => {
   // 邮箱降级策略：使用GitHub提供的备用邮箱格式
   const safeEmail = githubUser.email || `${githubUser.login}@users.noreply.github.com`;
-
+  console.log('handleUserDatabaseOperation:', safeEmail, githubUser.id, githubUser.avatar_url);
   // 1. 优先使用github_id查询
   const [existingByGithub] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
   if (existingByGithub.length > 0) return existingByGithub[0];
