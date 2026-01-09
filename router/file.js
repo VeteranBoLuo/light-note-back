@@ -66,7 +66,7 @@ router.post('/confirmUpload', async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const userId = req.headers['x-user-id'];
-    const { files } = req.body || {};
+    const { files, folderId } = req.body || {};
 
     if (!userId) {
       connection.release();
@@ -101,6 +101,7 @@ router.post('/confirmUpload', async (req, res) => {
         file_size: fileSize,
         directory,
         obs_key: objectKey,
+        folder_id: folderId || null,
       };
 
       const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ?';
