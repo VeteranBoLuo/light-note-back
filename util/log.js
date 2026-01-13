@@ -41,7 +41,7 @@ const sqlInjectionCheck = (data) => {
   // 检查是否包含SQL注入特征
   if (attackTypes.SQL_INJECTION.regex.test(str)) {
     // 检查是否在白名单中
-    const keys = Object.keys(data).concat(Object.keys(query));
+    const keys = Object.keys(data);
     if (!keys.some((key) => attackTypes.SQL_INJECTION.whitelist.includes(key))) {
       return true;
     }
@@ -67,8 +67,7 @@ const detectAttack = (req) => {
   if (req.headers['x-user-id'] === '453c9c95-9b2e-11ef-9d4d-84a93e80c16e') {
     return false;
   }
-
-  const { method, path, body, headers, query } = req;
+  const { method, path, body = {}, headers = {}, query = {} } = req;
   let detectedType = null;
 
   // 1. SQL/命令注入检测（基于内容）
@@ -168,9 +167,7 @@ export async function logFunction(req, res, next) {
     const userId = req.headers['x-user-id'];
     let skipUser = false;
     if (userId) {
-      skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e', 'f8fd8402-1316-11f0-973c-fa163e50acdb'].some((key) =>
-        userId.includes(key),
-      );
+      skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
     }
     // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>
