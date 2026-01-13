@@ -12,10 +12,10 @@ export const getApiLogs = (req, res) => {
     const skip = pageSize * (currentPage - 1);
     let sql = `SELECT a.*,u.alias,u.email 
       FROM api_logs a left join user u on a.user_id=u.id  where (u.alias LIKE CONCAT('%', ?, '%') 
-      OR a.ip LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
+      OR a.ip LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
       ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
     pool
-      .query(sql, [filters.key, filters.key, pageSize, skip])
+      .query(sql, [filters.key, filters.key, filters.key, pageSize, skip])
       .then(async ([result]) => {
         result.forEach((row) => {
           const fieldsToParse = ['req', 'system', 'location'];
