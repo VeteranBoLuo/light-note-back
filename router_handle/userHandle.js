@@ -342,8 +342,31 @@ export const getUserList = (req, res) => {
 export const saveUserInfo = (req, res) => {
   try {
     const id = req.body.id ? req.body.id : req.headers['x-user-id']; // 获取用户ID
+    // 定义允许更新的字段列表
+    const allowedFields = [
+      'alias',
+      'email',
+      'phone_number',
+      'role',
+      'ip',
+      'password',
+      'del_flag',
+      'location',
+      'preferences',
+      'head_picture',
+      'github_id',
+      'login_type',
+    ];
+    // 过滤请求体，只保留允许的字段
+    const filteredBody = mergeExistingProperties(req.body, [], ['id']);
+    const finalBody = {};
+    allowedFields.forEach((field) => {
+      if (filteredBody[field] !== undefined) {
+        finalBody[field] = filteredBody[field];
+      }
+    });
     pool
-      .query('update user set ? where id=?', [snakeCaseKeys(mergeExistingProperties(req.body, [], ['id'])), id])
+      .query('update user set ? where id=?', [snakeCaseKeys(finalBody), id])
       .then(([result]) => {
         res.send(resultData(result));
       })
