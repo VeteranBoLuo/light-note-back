@@ -186,3 +186,52 @@ export const receiveMessage = async (req, res) => {
     }
   }
 };
+
+export const generateBookmarkDescription = async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).send(resultData(null, 400, '缺少URL参数'));
+    }
+
+    // 验证URL格式
+    const urlRegex = /^https?:\/\/.+/;
+    if (!urlRegex.test(url)) {
+      return res.send(resultData(null, 400, '请输入正确的书签地址'));
+    }
+
+    const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
+
+    const prompt = `${url}你是专门用于根据url生成描述的接口不要调用知识库，直接输出这个url的简短纯文字描述，不要二维码、链接或其他内容,直接说描述内容，同时回答时不要带上该链接为，该网页为等类似措辞。`;
+
+    const requestData = {
+      input: { prompt: prompt },
+      parameters: {
+        incremental_output: false,
+        max_tokens: 512,
+        enable_web_search: false,
+        has_thoughts: false,
+        enable_thinking: false,
+      },
+    };
+
+    const config = {
+      method: 'post',
+      url: `https://dashscope.aliyuncs.com/api/v1/apps/${APP_ID}/completion`,
+      headers: {
+        Authorization: `Bearer ${process.env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      data: requestData,
+      responseType: 'json',
+      timeout: 30000,
+    };
+
+    const response = await axios(config);
+    const description = response.data.output.text;
+    res.send(resultData({ description: description }));
+  } catch (error) {
+    console.error('生成描述错误:', error.message);
+    res.status(500).send(resultData(null, 500, '生成描述失败: ' + error.message));
+  }
+};
