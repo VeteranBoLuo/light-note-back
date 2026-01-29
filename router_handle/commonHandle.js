@@ -211,7 +211,7 @@ export const analyzeImgUrl = async (req, res) => {
                   await fsP.writeFile(imagePath, buffer);
 
                   // 生成URL
-                  const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
+                  const imageUrl = `https://${req.get('host')}/uploads/${fileName}`;
 
                   // 更新数据库中的 icon_url 字段为生成的URL
                   const insertIconUrlSql = `UPDATE bookmark SET icon_url=? WHERE id=?`;
