@@ -25,7 +25,7 @@ router.post('/uploadImage', upload.single('file'), async (req, res) => {
       return res.send(resultData(null, 400, '没有上传文件'));
     }
     // 构建文件的URL
-    const fileUrl = req.protocol + '://' + req.get('host') + '/uploads/' + req.file.filename;
+    const fileUrl = 'https' + '://' + req.get('host') + '/uploads/' + req.file.filename;
     const userId = req.headers['x-user-id'];
     const noteParams = {
       createBy: userId,
