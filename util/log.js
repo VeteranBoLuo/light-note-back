@@ -64,7 +64,10 @@ const xssCheck = (data) => {
 
 const detectAttack = (req) => {
   // 白名单
-  if (req.headers['x-user-id'] === '453c9c95-9b2e-11ef-9d4d-84a93e80c16e') {
+  if (
+    req.headers['x-user-id'] === '453c9c95-9b2e-11ef-9d4d-84a93e80c16e' ||
+    req.originalUrl.includes('receiveMessage')
+  ) {
     return false;
   }
   const { method, path, body = {}, headers = {}, query = {} } = req;
