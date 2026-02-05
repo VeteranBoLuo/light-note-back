@@ -87,7 +87,7 @@ export const receiveMessage = async (req, res) => {
         incremental_output: true,
         // 添加流式控制参数
         stream_interval: 100,
-        max_tokens: 2048,
+        max_tokens: 4096,
         // 启用联网搜索功能
         enable_web_search: useInternetSearch,
         // 深度思考功能控制
