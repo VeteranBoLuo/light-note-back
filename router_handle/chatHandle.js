@@ -85,12 +85,10 @@ export const receiveMessage = async (req, res) => {
       input: { prompt: prompt, session_id: sessionId },
       parameters: {
         incremental_output: true,
-        // 添加流式控制参数
+        model: 'qwen-plus', // 显式指定模型名称
         stream_interval: 100,
         max_tokens: 4096,
-        // 启用联网搜索功能
         enable_web_search: useInternetSearch,
-        // 深度思考功能控制
         has_thoughts: enableThinking,
         enable_thinking: enableThinking,
       },
@@ -208,6 +206,7 @@ export const generateBookmarkDescription = async (req, res) => {
       input: { prompt: prompt },
       parameters: {
         incremental_output: false,
+        model: 'qwen-plus', // 显式指定模型名称
         max_tokens: 512,
         enable_web_search: false,
         has_thoughts: false,
