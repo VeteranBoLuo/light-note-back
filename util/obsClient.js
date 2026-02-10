@@ -38,9 +38,17 @@ export const createUploadSignedUrl = ({ objectKey, contentType, expires = 900 })
     },
   });
 
+  const sanitizedHeaders = Object.entries(ActualSignedRequestHeaders || {}).reduce((acc, [key, value]) => {
+    if (key && key.toLowerCase() === 'host') {
+      return acc;
+    }
+    acc[key] = value;
+    return acc;
+  }, {});
+
   return {
     url: SignedUrl,
-    headers: ActualSignedRequestHeaders || { 'Content-Type': fallbackContentType },
+    headers: Object.keys(sanitizedHeaders).length > 0 ? sanitizedHeaders : { 'Content-Type': fallbackContentType },
     expiresIn: expires,
   };
 };
