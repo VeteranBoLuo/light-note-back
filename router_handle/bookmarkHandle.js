@@ -499,7 +499,8 @@ export const delBookmark = async (req, res) => {
 export const getCommonBookmarks = async (req, res) => {
   try {
     const [result] = await pool.query(
-      "SELECT REPLACE(operation, '点击书签卡片', '') AS name,COUNT(*) as count FROM `operation_logs` WHERE operation LIKE '点击书签卡片%' GROUP  BY operation ORDER BY count DESC LIMIT 10",
+      "SELECT REPLACE(operation, '点击书签卡片', '') AS name,COUNT(*) as count FROM `operation_logs` WHERE create_by = ? AND operation LIKE '点击书签卡片%' GROUP  BY operation ORDER BY count DESC LIMIT 10",
+      [req.headers['x-user-id']],
     );
     res.send(
       resultData({
