@@ -138,7 +138,28 @@ router.post('/queryFiles', async (req, res) => {
     const userId = req.headers['x-user-id'];
     const { filters = {} } = req.body;
     const params = [userId];
-    // 1. 查询所有该用户创建的文件，并关联文件夹名称
+
+    // 定义文件类型到 MIME 类型的映射
+    const mimeTypeMap = {
+      image: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'],
+      text: [
+        'text/plain',
+        'text/html',
+        'text/css',
+        'text/javascript',
+        'application/javascript',
+        'text/xml',
+        'application/json',
+        'text/csv',
+        'application/x-sh',
+        'application/x-bat',
+      ],
+      pdf: ['application/pdf'],
+      word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      audio: ['audio/mpeg', 'audio/wav'],
+      video: ['video/mp4', 'video/quicktime'],
+      excel: ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    };
     let sql =
       'SELECT files.*, folders.name AS folderName FROM files LEFT JOIN folders ON files.folder_id = folders.id WHERE files.create_by = ?';
     // 添加文件夹ID条件
@@ -154,6 +175,14 @@ router.post('/queryFiles', async (req, res) => {
       id: file.id,
       fileName: file.file_name,
       fileType: file.file_type,
+      type: (() => {
+        for (const [key, mimeTypes] of Object.entries(mimeTypeMap)) {
+          if (mimeTypes.includes(file.file_type)) {
+            return key;
+          }
+        }
+        return 'other';
+      })(),
       fileSize: file.file_size,
       fileUrl: file.obs_key ? buildSignedDownloadUrl(file.obs_key) : file.directory + file.file_name,
       uploadTime: file.create_time,
@@ -170,45 +199,8 @@ router.post('/queryFiles', async (req, res) => {
     // 4. 应用文件类型过滤
     const typeFilters = filters?.type || [];
     if (typeFilters.length > 0) {
-      // 定义文件类型到 MIME 类型的映射
-      const mimeTypeMap = {
-        image: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'],
-        text: [
-          'text/plain',
-          'text/html',
-          'text/css',
-          'text/javascript',
-          'application/javascript',
-          'text/xml',
-          'application/json',
-          'text/csv',
-          'application/x-sh',
-          'application/x-bat',
-        ],
-        pdf: ['application/pdf'],
-        word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-        audio: ['audio/mpeg', 'audio/wav'],
-        video: ['video/mp4', 'video/quicktime'],
-        excel: ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-      };
-
-      // 提取用户选择的类型
-      const selectedNonOtherTypes = typeFilters.filter((t) => t !== 'other');
-      const hasOther = typeFilters.includes('other');
-
-      // 构建需要包含的 MIME 类型（非 other 类型）
-      const includeMimeTypes = selectedNonOtherTypes.flatMap((type) => mimeTypeMap[type] || []);
-
-      // 构建需要排除的 MIME 类型（用于 other 逻辑）
-      const excludeMimeTypes = ['image', 'text', 'pdf', 'word', 'excel', 'audio', 'video'].flatMap(
-        (type) => mimeTypeMap[type],
-      );
-
-      // 过滤文件
       formattedFiles = formattedFiles.filter((file) => {
-        const matchesSelected = includeMimeTypes.includes(file.fileType);
-        const matchesOther = hasOther && !excludeMimeTypes.includes(file.fileType);
-        return matchesSelected || matchesOther;
+        return typeFilters.includes(file.type);
       });
     }
     if ((filters?.type || []).length === 0) {
