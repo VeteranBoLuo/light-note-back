@@ -170,14 +170,15 @@ export async function logFunction(req, res, next) {
     const userId = req.headers['x-user-id'];
     let skipUser = false;
     if (userId) {
-      skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
+      // skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
     }
     // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>
       req.originalUrl.includes(key),
     );
 
-    if (skipApi || skipUser) {
+    // if (skipApi || skipUser) {
+    if (skipApi) {
       next();
       return;
     }
