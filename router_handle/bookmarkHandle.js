@@ -499,7 +499,7 @@ export const delBookmark = async (req, res) => {
 export const getCommonBookmarks = async (req, res) => {
   try {
     const [result] = await pool.query(
-      "SELECT REPLACE(operation, '点击书签卡片', '') AS name,COUNT(*) as count FROM `operation_logs` WHERE create_by = ? AND operation LIKE '点击书签卡片%' GROUP  BY operation ORDER BY count DESC LIMIT 10",
+      "SELECT b.id, b.url, REPLACE(ol.operation, '点击书签卡片', '') AS name, COUNT(*) as count FROM `operation_logs` ol LEFT JOIN bookmark b ON b.user_id = ol.create_by AND b.name = REPLACE(ol.operation, '点击书签卡片', '') AND b.del_flag = 0 WHERE ol.create_by = ? AND ol.operation LIKE '点击书签卡片%' GROUP BY ol.operation, b.id, b.url ORDER BY count DESC LIMIT 10",
       [req.headers['x-user-id']],
     );
     res.send(
