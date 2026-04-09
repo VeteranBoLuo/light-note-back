@@ -153,7 +153,8 @@ router.post('/queryFiles', async (req, res) => {
         'text/csv',
         'application/x-sh',
         'application/x-bat',
-        'application/octet-stream'
+        'application/octet-stream',
+        'text/markdown'
       ],
       pdf: ['application/pdf'],
       word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
