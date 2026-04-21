@@ -27,6 +27,18 @@ router.post('/getHelpConfig', commonHandle.getHelpConfig);
 
 router.post('/updateHelp', commonHandle.updateHelp);
 
+router.post('/getHelpDraftConfig', commonHandle.getHelpDraftConfig);
+
+router.post('/saveHelpDraft', commonHandle.saveHelpDraft);
+
+router.post('/saveHelpDraftBatch', commonHandle.saveHelpDraftBatch);
+
+router.post('/syncHelpDraftFromPublished', commonHandle.syncHelpDraftFromPublished);
+
+router.post('/publishHelpDraft', commonHandle.publishHelpDraft);
+
+router.post('/publishAllHelpDraft', commonHandle.publishAllHelpDraft);
+
 
 
 

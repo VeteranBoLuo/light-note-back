@@ -6,6 +6,25 @@ import path from 'path';
 import pool from '../db/index.js';
 import { validateQueryParams } from '../util/request.js';
 
+const ensureRootRole = async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+      res.send(resultData(null, 403, '无权限操作'));
+      return null;
+    }
+    const [userResult] = await pool.query('SELECT role,del_flag FROM user WHERE id = ? LIMIT 1', [userId]);
+    if (userResult.length === 0 || Number(userResult[0].del_flag) === 1 || userResult[0].role !== 'root') {
+      res.send(resultData(null, 403, '仅root用户可操作'));
+      return null;
+    }
+    return userId;
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+    return null;
+  }
+};
+
 export const getApiLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
@@ -354,10 +373,179 @@ export const getHelpConfig = async (req, res) => {
 
 export const updateHelp = async (req, res) => {
   try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
     const { id, content } = req.body;
     const [result] = await pool.query('UPDATE help_config SET content=? WHERE id=?', [content, id]);
     res.send(resultData(result, 200));
   } catch (e) {
     res.send(resultData(e.message, 200));
+  }
+};
+
+export const getHelpDraftConfig = async (req, res) => {
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    const [draftResult] = await pool.query('SELECT id,title,content FROM help_config_draft');
+    if (draftResult.length > 0) {
+      res.send(resultData(draftResult, 200));
+      return;
+    }
+    const [publishedResult] = await pool.query('SELECT id,title,content FROM help_config');
+    res.send(resultData(publishedResult, 200));
+  } catch (e) {
+    res.send(resultData(e.message, 200));
+  }
+};
+
+export const saveHelpDraft = async (req, res) => {
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    const { id, title, content } = req.body;
+    if (!id || typeof title !== 'string' || typeof content !== 'string') {
+      res.send(resultData(null, 400, '缺少必要参数'));
+      return;
+    }
+    const [result] = await pool.query(
+      `INSERT INTO help_config_draft (id,title,content,updated_by)
+       VALUES (?,?,?,?)
+       ON DUPLICATE KEY UPDATE title=VALUES(title),content=VALUES(content),updated_by=VALUES(updated_by)`,
+      [id, title, content, userId],
+    );
+    res.send(resultData(result, 200));
+  } catch (e) {
+    res.send(resultData(e.message, 200));
+  }
+};
+
+export const saveHelpDraftBatch = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      res.send(resultData(null, 400, '缺少草稿数据'));
+      return;
+    }
+    await connection.beginTransaction();
+    for (const item of items) {
+      if (!item?.id || typeof item?.title !== 'string' || typeof item?.content !== 'string') {
+        continue;
+      }
+      await connection.query(
+        `INSERT INTO help_config_draft (id,title,content,updated_by)
+         VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE title=VALUES(title),content=VALUES(content),updated_by=VALUES(updated_by)`,
+        [item.id, item.title, item.content, userId],
+      );
+    }
+    await connection.commit();
+    res.send(resultData(null, 200, '草稿保存成功'));
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(e.message, 200));
+  } finally {
+    connection.release();
+  }
+};
+
+export const syncHelpDraftFromPublished = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    await connection.beginTransaction();
+    await connection.query('DELETE FROM help_config_draft');
+    const [insertResult] = await connection.query(
+      `INSERT INTO help_config_draft (id,title,content,updated_by)
+       SELECT id,title,content,? FROM help_config`,
+      [userId],
+    );
+    await connection.commit();
+    res.send(resultData(insertResult, 200, '同步成功'));
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(e.message, 200));
+  } finally {
+    connection.release();
+  }
+};
+
+export const publishHelpDraft = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    const { id } = req.body;
+    if (!id) {
+      res.send(resultData(null, 400, '缺少帮助项ID'));
+      return;
+    }
+    await connection.beginTransaction();
+    const [draftResult] = await connection.query('SELECT id,title,content FROM help_config_draft WHERE id=? LIMIT 1', [id]);
+    if (draftResult.length === 0) {
+      await connection.rollback();
+      res.send(resultData(null, 400, '未找到对应草稿'));
+      return;
+    }
+    const target = draftResult[0];
+    const [updateResult] = await connection.query('UPDATE help_config SET title=?,content=? WHERE id=?', [
+      target.title,
+      target.content,
+      target.id,
+    ]);
+    if (updateResult.affectedRows === 0) {
+      await connection.query('INSERT INTO help_config (id,title,content) VALUES (?,?,?)', [
+        target.id,
+        target.title,
+        target.content,
+      ]);
+    }
+    await connection.commit();
+    res.send(resultData(null, 200, '发布成功'));
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(e.message, 200));
+  } finally {
+    connection.release();
+  }
+};
+
+export const publishAllHelpDraft = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    await connection.beginTransaction();
+    const [draftResult] = await connection.query('SELECT id,title,content FROM help_config_draft');
+    if (draftResult.length === 0) {
+      await connection.rollback();
+      res.send(resultData(null, 400, '草稿为空，无法发布'));
+      return;
+    }
+    for (const row of draftResult) {
+      const [updateResult] = await connection.query('UPDATE help_config SET title=?,content=? WHERE id=?', [
+        row.title,
+        row.content,
+        row.id,
+      ]);
+      if (updateResult.affectedRows === 0) {
+        await connection.query('INSERT INTO help_config (id,title,content) VALUES (?,?,?)', [
+          row.id,
+          row.title,
+          row.content,
+        ]);
+      }
+    }
+    await connection.commit();
+    res.send(resultData(null, 200, '全部发布成功'));
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(e.message, 200));
+  } finally {
+    connection.release();
   }
 };
