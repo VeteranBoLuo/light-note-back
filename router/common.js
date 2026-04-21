@@ -35,9 +35,9 @@ router.post('/saveHelpDraftBatch', commonHandle.saveHelpDraftBatch);
 
 router.post('/syncHelpDraftFromPublished', commonHandle.syncHelpDraftFromPublished);
 
-router.post('/publishHelpDraft', commonHandle.publishHelpDraft);
-
 router.post('/publishAllHelpDraft', commonHandle.publishAllHelpDraft);
+
+router.post('/deleteHelpDraft', commonHandle.deleteHelpDraft);
 
 
 

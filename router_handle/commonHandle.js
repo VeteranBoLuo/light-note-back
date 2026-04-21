@@ -25,6 +25,50 @@ const ensureRootRole = async (req, res) => {
   }
 };
 
+const ensureSortColumn = async (connection, tableName) => {
+  const [columnRows] = await connection.query(`SHOW COLUMNS FROM \`${tableName}\` LIKE 'sort'`);
+  if (columnRows.length > 0) {
+    return false;
+  }
+  try {
+    await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN sort INT NOT NULL DEFAULT 0`);
+  } catch (e) {
+    if (e?.code === 'ER_DUP_FIELDNAME') return false;
+    throw e;
+  }
+  return true;
+};
+
+const reseedSortById = async (connection, tableName) => {
+  await connection.query('SET @help_sort_seed := -1');
+  await connection.query(
+    `UPDATE \`${tableName}\`
+     SET sort = (@help_sort_seed := @help_sort_seed + 1)
+     ORDER BY id ASC`,
+  );
+};
+
+let helpSortReady = false;
+const ensureHelpSortReady = async () => {
+  if (helpSortReady) {
+    return;
+  }
+  const connection = await pool.getConnection();
+  try {
+    const addedHelpSort = await ensureSortColumn(connection, 'help_config');
+    if (addedHelpSort) {
+      await reseedSortById(connection, 'help_config');
+    }
+    const addedDraftSort = await ensureSortColumn(connection, 'help_config_draft');
+    if (addedDraftSort) {
+      await reseedSortById(connection, 'help_config_draft');
+    }
+    helpSortReady = true;
+  } finally {
+    connection.release();
+  }
+};
+
 export const getApiLogs = (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
@@ -364,7 +408,8 @@ export const runSql = async (req, res) => {
 
 export const getHelpConfig = async (req, res) => {
   try {
-    const [result] = await pool.query('SELECT * FROM help_config');
+    await ensureHelpSortReady();
+    const [result] = await pool.query('SELECT id,title,content,sort FROM help_config ORDER BY sort ASC, id ASC');
     res.send(resultData(result, 200));
   } catch (e) {
     res.send(resultData(e.message, 200));
@@ -387,12 +432,15 @@ export const getHelpDraftConfig = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
-    const [draftResult] = await pool.query('SELECT id,title,content FROM help_config_draft');
+    await ensureHelpSortReady();
+    const [draftResult] = await pool.query(
+      'SELECT id,title,content,sort FROM help_config_draft ORDER BY sort ASC, id ASC',
+    );
     if (draftResult.length > 0) {
       res.send(resultData(draftResult, 200));
       return;
     }
-    const [publishedResult] = await pool.query('SELECT id,title,content FROM help_config');
+    const [publishedResult] = await pool.query('SELECT id,title,content,sort FROM help_config ORDER BY sort ASC, id ASC');
     res.send(resultData(publishedResult, 200));
   } catch (e) {
     res.send(resultData(e.message, 200));
@@ -403,18 +451,78 @@ export const saveHelpDraft = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
-    const { id, title, content } = req.body;
-    if (!id || typeof title !== 'string' || typeof content !== 'string') {
+    await ensureHelpSortReady();
+    const { id, title, content } = req.body || {};
+    if (typeof title !== 'string' || typeof content !== 'string') {
       res.send(resultData(null, 400, '缺少必要参数'));
       return;
     }
-    const [result] = await pool.query(
-      `INSERT INTO help_config_draft (id,title,content,updated_by)
-       VALUES (?,?,?,?)
-       ON DUPLICATE KEY UPDATE title=VALUES(title),content=VALUES(content),updated_by=VALUES(updated_by)`,
-      [id, title, content, userId],
-    );
-    res.send(resultData(result, 200));
+
+    const normalizedTitle = String(title || '').trim();
+    if (!normalizedTitle) {
+      res.send(resultData(null, 400, '标题不能为空'));
+      return;
+    }
+
+    if (id === undefined || id === null || id === '') {
+      // 新增模式按标题去重，避免重复点击产生同名重复草稿。
+      const [existingRows] = await pool.query(
+        'SELECT id,sort FROM help_config_draft WHERE title=? ORDER BY sort ASC, id ASC LIMIT 1',
+        [normalizedTitle],
+      );
+      if (existingRows.length > 0) {
+        const targetId = existingRows[0].id;
+        await pool.query('UPDATE help_config_draft SET title=?,content=?,updated_by=? WHERE id=?', [
+          normalizedTitle,
+          content,
+          userId,
+          targetId,
+        ]);
+        const [rowResult] = await pool.query('SELECT id,title,content,sort FROM help_config_draft WHERE id=? LIMIT 1', [
+          targetId,
+        ]);
+        res.send(resultData(rowResult[0] || { id: targetId, title: normalizedTitle, content, sort: existingRows[0].sort }, 200));
+        return;
+      }
+
+      const [maxSortRows] = await pool.query('SELECT COALESCE(MAX(sort), -1) AS maxSort FROM help_config_draft');
+      const nextSort = Number(maxSortRows?.[0]?.maxSort ?? -1) + 1;
+      const [insertResult] = await pool.query(
+        'INSERT INTO help_config_draft (title,content,updated_by,sort) VALUES (?,?,?,?)',
+        [normalizedTitle, content, userId, nextSort],
+      );
+      const insertedId = insertResult.insertId;
+      if (insertedId) {
+        const [rowResult] = await pool.query('SELECT id,title,content,sort FROM help_config_draft WHERE id=? LIMIT 1', [
+          insertedId,
+        ]);
+        res.send(resultData(rowResult[0] || { id: insertedId, title: normalizedTitle, content, sort: nextSort }, 200));
+        return;
+      }
+
+      res.send(resultData({ id: '', title: normalizedTitle, content, sort: nextSort }, 200));
+      return;
+    }
+
+    const [updateResult] = await pool.query('UPDATE help_config_draft SET title=?,content=?,updated_by=? WHERE id=?', [
+      normalizedTitle,
+      content,
+      userId,
+      id,
+    ]);
+    if (!updateResult.affectedRows) {
+      const [maxSortRows] = await pool.query('SELECT COALESCE(MAX(sort), -1) AS maxSort FROM help_config_draft');
+      const nextSort = Number(maxSortRows?.[0]?.maxSort ?? -1) + 1;
+      await pool.query('INSERT INTO help_config_draft (id,title,content,updated_by,sort) VALUES (?,?,?,?,?)', [
+        id,
+        normalizedTitle,
+        content,
+        userId,
+        nextSort,
+      ]);
+    }
+    const [rowResult] = await pool.query('SELECT id,title,content,sort FROM help_config_draft WHERE id=? LIMIT 1', [id]);
+    res.send(resultData(rowResult[0] || { id, title: normalizedTitle, content }, 200));
   } catch (e) {
     res.send(resultData(e.message, 200));
   }
@@ -425,22 +533,45 @@ export const saveHelpDraftBatch = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
+    await ensureHelpSortReady();
     const { items } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
       res.send(resultData(null, 400, '缺少草稿数据'));
       return;
     }
     await connection.beginTransaction();
-    for (const item of items) {
-      if (!item?.id || typeof item?.title !== 'string' || typeof item?.content !== 'string') {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (typeof item?.title !== 'string' || typeof item?.content !== 'string') {
         continue;
       }
-      await connection.query(
-        `INSERT INTO help_config_draft (id,title,content,updated_by)
-         VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE title=VALUES(title),content=VALUES(content),updated_by=VALUES(updated_by)`,
-        [item.id, item.title, item.content, userId],
-      );
+      const normalizedTitle = String(item.title || '').trim();
+      if (!normalizedTitle) {
+        continue;
+      }
+      const normalizedSort = Number.isFinite(Number(item?.sort)) ? Number(item.sort) : index;
+      if (item?.id === undefined || item?.id === null || item?.id === '') {
+        await connection.query('INSERT INTO help_config_draft (title,content,updated_by,sort) VALUES (?,?,?,?)', [
+          normalizedTitle,
+          item.content,
+          userId,
+          normalizedSort,
+        ]);
+      } else {
+        const [updateResult] = await connection.query(
+          'UPDATE help_config_draft SET title=?,content=?,updated_by=?,sort=? WHERE id=?',
+          [normalizedTitle, item.content, userId, normalizedSort, item.id],
+        );
+        if (updateResult.affectedRows === 0) {
+          await connection.query('INSERT INTO help_config_draft (id,title,content,updated_by,sort) VALUES (?,?,?,?,?)', [
+            item.id,
+            normalizedTitle,
+            item.content,
+            userId,
+            normalizedSort,
+          ]);
+        }
+      }
     }
     await connection.commit();
     res.send(resultData(null, 200, '草稿保存成功'));
@@ -457,11 +588,12 @@ export const syncHelpDraftFromPublished = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
+    await ensureHelpSortReady();
     await connection.beginTransaction();
     await connection.query('DELETE FROM help_config_draft');
     const [insertResult] = await connection.query(
-      `INSERT INTO help_config_draft (id,title,content,updated_by)
-       SELECT id,title,content,? FROM help_config`,
+      `INSERT INTO help_config_draft (id,title,content,updated_by,sort)
+       SELECT id,title,content,?,sort FROM help_config ORDER BY sort ASC, id ASC`,
       [userId],
     );
     await connection.commit();
@@ -479,30 +611,40 @@ export const publishHelpDraft = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
+    await ensureHelpSortReady();
     const { id } = req.body;
     if (!id) {
       res.send(resultData(null, 400, '缺少帮助项ID'));
       return;
     }
     await connection.beginTransaction();
-    const [draftResult] = await connection.query('SELECT id,title,content FROM help_config_draft WHERE id=? LIMIT 1', [id]);
+    const [draftResult] = await connection.query('SELECT id,title,content,sort FROM help_config_draft WHERE id=? LIMIT 1', [
+      id,
+    ]);
     if (draftResult.length === 0) {
       await connection.rollback();
       res.send(resultData(null, 400, '未找到对应草稿'));
       return;
     }
     const target = draftResult[0];
-    const [updateResult] = await connection.query('UPDATE help_config SET title=?,content=? WHERE id=?', [
-      target.title,
-      target.content,
-      target.id,
+    const title = String(target.title || '').trim();
+    if (!title) {
+      await connection.rollback();
+      res.send(resultData(null, 400, '草稿标题为空，无法发布'));
+      return;
+    }
+    const [existRows] = await connection.query('SELECT id FROM help_config WHERE title=? ORDER BY sort ASC, id ASC LIMIT 1', [
+      title,
     ]);
-    if (updateResult.affectedRows === 0) {
-      await connection.query('INSERT INTO help_config (id,title,content) VALUES (?,?,?)', [
-        target.id,
-        target.title,
+    if (existRows.length > 0) {
+      await connection.query('UPDATE help_config SET title=?,content=?,sort=? WHERE id=?', [
+        title,
         target.content,
+        target.sort,
+        existRows[0].id,
       ]);
+    } else {
+      await connection.query('INSERT INTO help_config (title,content,sort) VALUES (?,?,?)', [title, target.content, target.sort]);
     }
     await connection.commit();
     res.send(resultData(null, 200, '发布成功'));
@@ -519,33 +661,50 @@ export const publishAllHelpDraft = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
+    await ensureHelpSortReady();
     await connection.beginTransaction();
-    const [draftResult] = await connection.query('SELECT id,title,content FROM help_config_draft');
-    if (draftResult.length === 0) {
-      await connection.rollback();
-      res.send(resultData(null, 400, '草稿为空，无法发布'));
-      return;
-    }
+    const [draftResult] = await connection.query('SELECT id,title,content,sort FROM help_config_draft ORDER BY sort ASC, id ASC');
+
+    // 全量替换：先清空帮助中心，再按草稿重建。
+    await connection.query('DELETE FROM help_config');
+    let insertedTotal = 0;
     for (const row of draftResult) {
-      const [updateResult] = await connection.query('UPDATE help_config SET title=?,content=? WHERE id=?', [
-        row.title,
-        row.content,
+      const title = String(row.title || '').trim();
+      if (!title) continue;
+      await connection.query('INSERT INTO help_config (id,title,content,sort) VALUES (?,?,?,?)', [
         row.id,
+        title,
+        row.content,
+        row.sort,
       ]);
-      if (updateResult.affectedRows === 0) {
-        await connection.query('INSERT INTO help_config (id,title,content) VALUES (?,?,?)', [
-          row.id,
-          row.title,
-          row.content,
-        ]);
-      }
+      insertedTotal++;
     }
     await connection.commit();
-    res.send(resultData(null, 200, '全部发布成功'));
+    res.send(resultData({ total: insertedTotal }, 200, '帮助中心已按草稿全量替换'));
   } catch (e) {
     await connection.rollback();
     res.send(resultData(e.message, 200));
   } finally {
     connection.release();
+  }
+};
+
+export const deleteHelpDraft = async (req, res) => {
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    const { id } = req.body || {};
+    if (id === undefined || id === null || id === '') {
+      res.send(resultData(null, 400, '缺少草稿ID'));
+      return;
+    }
+    const [deleteResult] = await pool.query('DELETE FROM help_config_draft WHERE id=?', [id]);
+    if (!deleteResult.affectedRows) {
+      res.send(resultData(null, 404, '草稿不存在'));
+      return;
+    }
+    res.send(resultData(null, 200, '删除草稿成功'));
+  } catch (e) {
+    res.send(resultData(e.message, 200));
   }
 };
