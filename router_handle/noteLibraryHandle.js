@@ -176,7 +176,7 @@ export const updateNoteSort = async (req, res) => {
     const { notes } = req.body;
     for (const note of notes) {
       const { id, sort } = note;
-      const sql = 'UPDATE note SET sort = ? WHERE id = ?';
+      const sql = 'UPDATE note SET sort = ?, update_time = update_time WHERE id = ?';
       await pool.query(sql, [sort, id]);
     }
     await connection.commit(); // 提交事务
