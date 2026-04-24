@@ -1,5 +1,6 @@
 import pool from '../db/index.js';
 import { resultData } from '../util/common.js';
+import { resolveFileCategory } from '../util/fileCategory.js';
 
 const SEARCH_TYPES = ['bookmark', 'note', 'file', 'tag'];
 const TYPE_LABELS = {
@@ -7,6 +8,33 @@ const TYPE_LABELS = {
   note: '笔记',
   file: '文件',
   tag: '标签',
+};
+
+const FILE_CATEGORY_LABELS = {
+  'zh-CN': {
+    image: '图片',
+    video: '视频',
+    audio: '音频',
+    pdf: 'PDF',
+    word: 'Word',
+    excel: 'Excel',
+    ppt: 'PPT',
+    text: '文本',
+    compress: '压缩包',
+    other: '其他',
+  },
+  'en-US': {
+    image: 'Image',
+    video: 'Video',
+    audio: 'Audio',
+    pdf: 'PDF',
+    word: 'Word',
+    excel: 'Excel',
+    ppt: 'PPT',
+    text: 'Text',
+    compress: 'Compress',
+    other: 'Other',
+  },
 };
 
 function toText(value) {
@@ -40,6 +68,25 @@ function groupItems(items) {
 
 function buildLike(keyword) {
   return `%${keyword}%`;
+}
+
+function normalizeLang(value) {
+  return value === 'en-US' ? 'en-US' : 'zh-CN';
+}
+
+function formatFileSizeMb(value) {
+  if (!value) return '';
+  return `${(Number(value) / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function formatFileSearchExtra(item, lang) {
+  const category = resolveFileCategory({
+    fileName: item.file_name,
+    fileType: item.file_type,
+  });
+  const categoryLabel = FILE_CATEGORY_LABELS[normalizeLang(lang)][category] || FILE_CATEGORY_LABELS['zh-CN'].other;
+  const size = formatFileSizeMb(item.file_size);
+  return [categoryLabel, size].filter(Boolean).join(' · ');
 }
 
 async function queryBookmarks(userId, keyword, limit) {
@@ -119,7 +166,7 @@ async function queryNotes(userId, keyword, limit) {
   }));
 }
 
-async function queryFiles(userId, keyword, limit) {
+async function queryFiles(userId, keyword, limit, lang) {
   const like = buildLike(keyword);
   const hasKeyword = keyword.length > 0;
   const sql = `
@@ -138,9 +185,11 @@ async function queryFiles(userId, keyword, limit) {
     type: 'file',
     title: toText(item.file_name) || '未命名文件',
     description: item.folder_name ? `位于 ${item.folder_name}` : '云空间文件',
-    extra: [item.file_type, item.file_size ? `${(Number(item.file_size) / 1024 / 1024).toFixed(2)} MB` : '']
-      .filter(Boolean)
-      .join(' · '),
+    category: resolveFileCategory({
+      fileName: item.file_name,
+      fileType: item.file_type,
+    }),
+    extra: formatFileSearchExtra(item, lang),
     route: '/cloudSpace',
     raw: item,
   }));
@@ -181,11 +230,12 @@ export const globalSearch = async (req, res) => {
 
     const keyword = toText(req.body?.keyword || req.body?.filters?.keyword);
     const limitPerType = normalizeLimit(req.body?.limitPerType || req.body?.pageSize, 12);
+    const lang = normalizeLang(req.headers['x-lang']);
 
     const [bookmarks, notes, files, tags] = await Promise.all([
       queryBookmarks(userId, keyword, limitPerType),
       queryNotes(userId, keyword, limitPerType),
-      queryFiles(userId, keyword, limitPerType),
+      queryFiles(userId, keyword, limitPerType, lang),
       queryTags(userId, keyword, limitPerType),
     ]);
 
