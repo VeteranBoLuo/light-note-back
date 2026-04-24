@@ -3,6 +3,7 @@ import pool from '../db/index.js';
 import { resultData, snakeCaseKeys } from '../util/common.js';
 import { bucketBaseUrl, buildObjectKey, copyObjectInObs, deleteObjectFromObs } from '../util/obsClient.js';
 import { buildSignedDownloadUrl } from '../router/file.js';
+import { getFileExtension, resolveFileCategory } from '../util/fileCategory.js';
 
 export const getFileInfo = async (req, res) => {
   try {
@@ -15,7 +16,15 @@ export const getFileInfo = async (req, res) => {
       return res.send(resultData(null, 404, '数据库中未找到文件'));
     }
     const file = results[0];
+    const category = resolveFileCategory({
+      fileName: file.file_name,
+      fileType: file.file_type,
+    });
+
     file.fileUrl = file.obs_key ? buildSignedDownloadUrl(file.obs_key) : file.directory + file.file_name;
+    file.ext = getFileExtension(file.file_name);
+    file.category = category;
+
     res.send(resultData(file, 200));
   } catch (e) {
     console.error('获取文件信息时出错:', e);

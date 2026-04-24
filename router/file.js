@@ -9,6 +9,7 @@ import {
   createUploadSignedUrl,
   deleteObjectFromObs,
 } from '../util/obsClient.js';
+import { FILE_CATEGORY_ORDER, getFileExtension, resolveFileCategory } from '../util/fileCategory.js';
 import * as fileHandle from '../router_handle/fileHandle.js';
 const router = express.Router();
 
@@ -16,6 +17,27 @@ export const buildSignedDownloadUrl = (objectKey, expires = 600) => {
   if (!objectKey) return null;
   const { url } = createDownloadSignedUrl({ objectKey, expires });
   return url || buildObjectUrl(objectKey);
+};
+
+const formatFileRecord = (file) => {
+  const category = resolveFileCategory({
+    fileName: file.file_name,
+    fileType: file.file_type,
+  });
+
+  return {
+    id: file.id,
+    fileName: file.file_name,
+    fileType: file.file_type,
+    ext: getFileExtension(file.file_name),
+    category,
+    fileSize: file.file_size,
+    fileUrl: file.obs_key ? buildSignedDownloadUrl(file.obs_key) : file.directory + file.file_name,
+    uploadTime: file.create_time,
+    folderId: file.folder_id,
+    folderName: file.folderName,
+    obsKey: file.obs_key,
+  };
 };
 
 router.post('/uploadFiles', async (req, res) => {
@@ -138,30 +160,6 @@ router.post('/queryFiles', async (req, res) => {
     const userId = req.headers['x-user-id'];
     const { filters = {} } = req.body;
     const params = [userId];
-
-    // 定义文件类型到 MIME 类型的映射
-    const mimeTypeMap = {
-      image: ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'],
-      text: [
-        'text/plain',
-        'text/html',
-        'text/css',
-        'text/javascript',
-        'application/javascript',
-        'text/xml',
-        'application/json',
-        'text/csv',
-        'application/x-sh',
-        'application/x-bat',
-        'application/octet-stream',
-        'text/markdown'
-      ],
-      pdf: ['application/pdf'],
-      word: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-      audio: ['audio/mpeg', 'audio/wav'],
-      video: ['video/mp4', 'video/quicktime'],
-      excel: ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-    };
     let sql =
       'SELECT files.*, folders.name AS folderName FROM files LEFT JOIN folders ON files.folder_id = folders.id WHERE files.create_by = ?';
     // 添加文件夹ID条件
@@ -172,26 +170,7 @@ router.post('/queryFiles', async (req, res) => {
     sql += ' AND files.del_Flag=0 ORDER BY files.create_time DESC';
     const [files] = await pool.query(sql, params);
 
-    // 2. 格式化结果
-    let formattedFiles = files.map((file) => ({
-      id: file.id,
-      fileName: file.file_name,
-      fileType: file.file_type,
-      type: (() => {
-        for (const [key, mimeTypes] of Object.entries(mimeTypeMap)) {
-          if (mimeTypes.includes(file.file_type)) {
-            return key;
-          }
-        }
-        return 'other';
-      })(),
-      fileSize: file.file_size,
-      fileUrl: file.obs_key ? buildSignedDownloadUrl(file.obs_key) : file.directory + file.file_name,
-      uploadTime: file.create_time,
-      folderId: file.folder_id,
-      folderName: file.folderName, // 添加文件夹名称
-      obs_key: file.obs_key,
-    }));
+    let formattedFiles = files.map(formatFileRecord);
 
     // 3. 应用文件名过滤
     if (filters?.fileName) {
@@ -199,13 +178,15 @@ router.post('/queryFiles', async (req, res) => {
     }
 
     // 4. 应用文件类型过滤
-    const typeFilters = filters?.type || [];
-    if (typeFilters.length > 0) {
+    const categoryFilters = Array.isArray(filters?.category)
+      ? filters.category.filter((item) => FILE_CATEGORY_ORDER.includes(item))
+      : [];
+    if (categoryFilters.length > 0) {
       formattedFiles = formattedFiles.filter((file) => {
-        return typeFilters.includes(file.type);
+        return categoryFilters.includes(file.category);
       });
     }
-    if ((filters?.type || []).length === 0) {
+    if ((filters?.category || []).length === 0) {
       res.send(resultData([]));
     } else {
       res.send(resultData(formattedFiles));
@@ -242,6 +223,10 @@ router.post('/downloadFileById', async (req, res) => {
         downloadUrl: url,
         fileName: file.file_name,
         fileType: file.file_type,
+        category: resolveFileCategory({
+          fileName: file.file_name,
+          fileType: file.file_type,
+        }),
         fileSize: file.file_size,
         expiresIn,
       }),
