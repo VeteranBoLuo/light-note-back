@@ -8,6 +8,7 @@ import fileRouter from '../router/file.js';
 import chatRouter from '../router/chat.js';
 import jsonRouter from '../router/json.js';
 import searchRouter from '../router/search.js';
+import workbenchRouter from '../router/workbench.js';
 
 export const resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
@@ -196,5 +197,9 @@ export const baseRouter = [
   {
     path: '/search',
     router: searchRouter,
+  },
+  {
+    path: '/workbench',
+    router: workbenchRouter,
   },
 ];
