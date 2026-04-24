@@ -200,7 +200,7 @@ export const generateBookmarkDescription = async (req, res) => {
 
     const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
 
-    const prompt = `${url}你是专门用于根据url生成描述的接口不要调用知识库，直接输出这个url的简短纯文字描述，不要二维码、链接或其他内容,直接说描述内容，同时回答时不要带上该链接为，该网页为等类似措辞。`;
+    const prompt = `${url}你是专门用于根据url生成描述的接口不要调用知识库，直接输出这个url的简短纯文字描述，不要二维码、链接或其他内容,直接说描述内容，同时回答时不要带上该链接为，该网页为，该地址为 ，该网址为等类似措辞。`;
 
     const requestData = {
       input: { prompt: prompt },
