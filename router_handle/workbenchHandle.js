@@ -174,9 +174,9 @@ async function queryHotTags(userId) {
         t.name,
         (
           SELECT COUNT(*)
-          FROM tag_bookmark_relations tb
-          INNER JOIN bookmark b ON tb.bookmark_id = b.id AND b.del_flag = 0
-          WHERE tb.tag_id = t.id
+          FROM resource_tag_relations tb
+          INNER JOIN bookmark b ON tb.resource_id = b.id AND b.del_flag = 0
+          WHERE tb.tag_id = t.id AND tb.resource_type = 'bookmark'
         ) AS bookmarkCount,
         (
           SELECT COUNT(*)
@@ -216,7 +216,7 @@ async function queryRecentNotes(userId) {
         COALESCE(n.update_time, n.create_time) AS updateTime,
         COUNT(ntr.tag_id) AS tagCount
       FROM note n
-      LEFT JOIN note_tag_relations ntr ON n.id = ntr.note_id
+      LEFT JOIN resource_tag_relations ntr ON n.id = ntr.resource_id AND ntr.resource_type = 'note'
       WHERE n.create_by = ? AND n.del_flag = 0
       GROUP BY n.id
       ORDER BY n.sort, COALESCE(n.update_time, n.create_time) DESC

@@ -1,5 +1,16 @@
 import pool from '../db/index.js';
 import { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } from '../util/common.js';
+import {
+  RESOURCE_TYPE,
+  insertBookmarkLegacyRelations,
+  insertResourceTagRelations,
+  insertTagBookmarkLegacyRelations,
+  insertTagResourceRelations,
+  replaceBookmarkLegacyRelations,
+  replaceResourceTagRelations,
+  replaceTagBookmarkLegacyRelations,
+  replaceTagResourceRelations,
+} from '../util/resourceTags.js';
 
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -17,7 +28,8 @@ export const queryTagList = (req, res) => {
             )
         )
         FROM bookmark b
-        INNER JOIN tag_bookmark_relations tb ON b.id = tb.bookmark_id
+        INNER JOIN resource_tag_relations tb
+          ON b.id = tb.resource_id AND tb.resource_type = 'bookmark'
         WHERE tb.tag_id = t.id AND b.del_flag = 0
     ) AS bookmarkList,COALESCE(
         (
@@ -72,8 +84,9 @@ export const getRelatedTag = (req, res) => {
     let sql = `SELECT t.* FROM tag t LEFT JOIN tag_relations a on t.id=a.related_tag_id 
 WHERE t.user_id=? AND a.tag_id=? AND t.del_flag=0`;
     if (req.body.filters.type === 'bookmark') {
-      sql = `SELECT t.* FROM tag t LEFT JOIN tag_bookmark_relations tb on t.id=tb.tag_id 
-WHERE t.user_id=? AND tb.bookmark_id=? AND t.del_flag=0`;
+      sql = `SELECT t.* FROM tag t LEFT JOIN resource_tag_relations tb
+        ON t.id=tb.tag_id AND tb.resource_type='bookmark'
+WHERE t.user_id=? AND tb.resource_id=? AND t.del_flag=0`;
     }
     pool
       .query(sql, [userId, req.body.filters.id])
@@ -166,10 +179,16 @@ export const addTag = async (req, res) => {
 
       // 如果有书签列表，则插入新的关联
       if (bookmarkList && bookmarkList.length > 0) {
-        const bookmarkIds = bookmarkList;
-        const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?`;
-        const bookmarkValues = bookmarkIds.map((bookmarkId) => [insertedTagId, bookmarkId]);
-        await connection.query(insertBookmarkRelationsSql, [bookmarkValues]);
+        await insertTagResourceRelations(connection, {
+          tagId: insertedTagId,
+          resourceType: RESOURCE_TYPE.BOOKMARK,
+          resourceIds: bookmarkList,
+          userId,
+        });
+        await insertTagBookmarkLegacyRelations(connection, {
+          tagId: insertedTagId,
+          bookmarkIds: bookmarkList,
+        });
       }
       await connection.commit(); // 提交事务
       res.send(resultData(insertResult)); // 发送成功响应
@@ -243,15 +262,16 @@ export const updateTag = async (req, res) => {
     // 只要传了bookmarkList，就需要重新处理
     if (bookmarkList !== undefined) {
       // 清空标签和书签的关联
-      const deleteBookmarkRelationsSql = `DELETE FROM tag_bookmark_relations WHERE tag_id = ?`;
-      await connection.query(deleteBookmarkRelationsSql, [id]);
-      // 如果有书签列表，则插入新的关联
-      if (bookmarkList && bookmarkList.length > 0) {
-        const bookmarkIds = bookmarkList;
-        const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?`;
-        const bookmarkValues = bookmarkIds.map((bookmarkId) => [id, bookmarkId]);
-        await connection.query(insertBookmarkRelationsSql, [bookmarkValues]);
-      }
+      await replaceTagResourceRelations(connection, {
+        tagId: id,
+        resourceType: RESOURCE_TYPE.BOOKMARK,
+        resourceIds: bookmarkList || [],
+        userId,
+      });
+      await replaceTagBookmarkLegacyRelations(connection, {
+        tagId: id,
+        bookmarkIds: bookmarkList || [],
+      });
     }
 
     await connection.commit(); // 提交事务
@@ -274,11 +294,12 @@ export const getBookmarkList = (req, res) => {
             )
         )
         FROM tag t
-        INNER JOIN tag_bookmark_relations tb ON t.id = tb.tag_id
-        WHERE tb.bookmark_id = b.id AND t.del_flag = 0
+        INNER JOIN resource_tag_relations tb
+          ON t.id = tb.tag_id AND tb.resource_type = 'bookmark'
+        WHERE tb.resource_id = b.id AND t.del_flag = 0
     ) AS tagList
 FROM bookmark b
-JOIN tag_bookmark_relations tbr ON b.id = tbr.bookmark_id
+JOIN resource_tag_relations tbr ON b.id = tbr.resource_id AND tbr.resource_type = 'bookmark'
 WHERE b.user_id=? AND tbr.tag_id = ? AND  b.del_flag=0   ORDER BY b.sort, b.create_time DESC`;
   let params = [userId, tagId];
   const type = req.body.filters.type;
@@ -293,8 +314,9 @@ WHERE b.user_id=? AND tbr.tag_id = ? AND  b.del_flag=0   ORDER BY b.sort, b.crea
             )
         )
         FROM tag t
-        INNER JOIN tag_bookmark_relations tb ON t.id = tb.tag_id
-        WHERE tb.bookmark_id = b.id AND t.del_flag = 0
+        INNER JOIN resource_tag_relations tb
+          ON t.id = tb.tag_id AND tb.resource_type = 'bookmark'
+        WHERE tb.resource_id = b.id AND t.del_flag = 0
     ) AS tagList
 FROM 
     bookmark b
@@ -316,13 +338,14 @@ FROM
             )
         )
         FROM tag t
-        INNER JOIN tag_bookmark_relations tb ON t.id = tb.tag_id
-        WHERE tb.bookmark_id = b.id AND t.del_flag = 0
+        INNER JOIN resource_tag_relations tb
+          ON t.id = tb.tag_id AND tb.resource_type = 'bookmark'
+        WHERE tb.resource_id = b.id AND t.del_flag = 0
     ) AS tagList
 FROM 
     bookmark b
 LEFT JOIN 
-    tag_bookmark_relations tb ON b.id = tb.bookmark_id
+    resource_tag_relations tb ON b.id = tb.resource_id AND tb.resource_type = 'bookmark'
 LEFT JOIN 
     tag t ON tb.tag_id = t.id AND t.name LIKE CONCAT('%', ?, '%') AND t.del_flag = 0
 WHERE 
@@ -386,9 +409,16 @@ export const addBookmark = async (req, res) => {
     }
     if (req.body.relatedTags && req.body.relatedTags.length > 0) {
       const tagIds = req.body.relatedTags;
-      const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?`;
-      const tagValues = tagIds.map((tagId) => [tagId, insertBookmarkId]);
-      await connection.query(insertBookmarkRelationsSql, [tagValues]);
+      await insertResourceTagRelations(connection, {
+        tagIds,
+        resourceType: RESOURCE_TYPE.BOOKMARK,
+        resourceId: insertBookmarkId,
+        userId,
+      });
+      await insertBookmarkLegacyRelations(connection, {
+        bookmarkId: insertBookmarkId,
+        tagIds,
+      });
     }
     await connection.commit();
     res.send(resultData(result));
@@ -418,17 +448,29 @@ export const updateBookmark = async (req, res) => {
       id,
     ]);
     // 清空标签和书签的关联
-    const deleteBookmarkRelationsSql = `DELETE FROM tag_bookmark_relations WHERE bookmark_id = ?`;
-    await connection.query(deleteBookmarkRelationsSql, [id]);
+    await replaceBookmarkLegacyRelations(connection, {
+      bookmarkId: id,
+      tagIds: req.body.relatedTags || [],
+    });
     // 如果有书签列表，则插入新的关联
     if (req.body.relatedTags && req.body.relatedTags.length > 4) {
       throw new Error('最多选择4个关联标签');
     }
     if (req.body.relatedTags && req.body.relatedTags.length > 0) {
       const tagIds = req.body.relatedTags;
-      const insertBookmarkRelationsSql = `INSERT INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?`;
-      const tagValues = tagIds.map((tagId) => [tagId, id]);
-      await connection.query(insertBookmarkRelationsSql, [tagValues]);
+      await replaceResourceTagRelations(connection, {
+        tagIds,
+        resourceType: RESOURCE_TYPE.BOOKMARK,
+        resourceId: id,
+        userId,
+      });
+    } else {
+      await replaceResourceTagRelations(connection, {
+        tagIds: [],
+        resourceType: RESOURCE_TYPE.BOOKMARK,
+        resourceId: id,
+        userId,
+      });
     }
     await connection.commit(); // 提交事务
     res.send(resultData(updateResult)); // 发送成功响应
@@ -676,13 +718,20 @@ export const importBookmarksHtml = async (req, res) => {
           [tagId, bookmarkId],
         );
         if (existingRelation.length === 0) {
-          const [relationResult] = await connection.query(
-            `INSERT INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES (?, ?)`,
-            [tagId, bookmarkId],
-          );
-          if (relationResult.affectedRows > 0) {
-            boundRelations++;
-          }
+          await insertBookmarkLegacyRelations(connection, {
+            bookmarkId,
+            tagIds: [tagId],
+          });
+        }
+        const inserted = await insertResourceTagRelations(connection, {
+          tagIds: [tagId],
+          resourceType: RESOURCE_TYPE.BOOKMARK,
+          resourceId: bookmarkId,
+          userId,
+          source: 'import',
+        });
+        if (inserted > 0) {
+          boundRelations++;
         }
       }
     }

@@ -2,6 +2,7 @@ import pool from '../db/index.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { snakeCaseKeys, resultData, mergeExistingProperties } from '../util/common.js';
+import { RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '../util/resourceTags.js';
 
 export const addNote = (req, res) => {
   try {
@@ -48,13 +49,13 @@ export const updateNote = async (req, res) => {
       const updateParams = mergeExistingProperties(params, [], ['id', 'tags']);
       await connection.query('update note set ? where id=?', [snakeCaseKeys(updateParams), req.body.id]);
       if (params.tags && Array.isArray(params.tags)) {
-        // 删除旧关联
-        await connection.query('DELETE FROM note_tag_relations WHERE note_id = ?', [req.body.id]);
-        // 插入新关联
-        if (params.tags.length > 0) {
-          const inserts = params.tags.map((tagId) => [req.body.id, tagId]);
-          await connection.query('INSERT INTO note_tag_relations (note_id, tag_id) VALUES ?', [inserts]);
-        }
+        const tagIds = await validateUserTags(connection, { tagIds: params.tags, userId });
+        await replaceResourceTagRelations(connection, {
+          tagIds,
+          resourceType: RESOURCE_TYPE.NOTE,
+          resourceId: req.body.id,
+          userId,
+        });
       }
       await connection.commit();
       res.send(resultData('更新笔记成功'));
@@ -74,10 +75,16 @@ export const queryNoteList = (req, res) => {
     const userId = req.headers['x-user-id'];
     pool
       .query(
-        `SELECT n.*, JSON_ARRAYAGG(JSON_OBJECT('id', nt.id, 'name', nt.name)) AS tags
+        `SELECT n.*,
+          (
+            SELECT JSON_ARRAYAGG(JSON_OBJECT('id', t.id, 'name', t.name))
+            FROM resource_tag_relations r
+            INNER JOIN tag t ON r.tag_id = t.id
+            WHERE r.resource_type = 'note'
+              AND r.resource_id = n.id
+              AND t.del_flag = 0
+          ) AS tags
          FROM note n
-         LEFT JOIN note_tag_relations ntr ON n.id = ntr.note_id
-         LEFT JOIN note_tags nt ON ntr.tag_id = nt.id
          WHERE n.create_by = ? AND n.del_flag = 0
          GROUP BY n.id
          ORDER BY n.sort, n.update_time DESC`,
@@ -189,42 +196,78 @@ export const updateNoteSort = async (req, res) => {
   }
 };
 
-export const addNoteTag = (req, res) => {
+export const addNoteTag = async (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
+    const name = String(req.body.name || '').trim();
+    if (!name) {
+      return res.send(resultData(null, 400, '标签名称不能为空'));
+    }
     const params = {
-      name: req.body.name,
+      name,
       userId: userId,
     };
-    pool
-      .query('INSERT INTO note_tags SET ?', [snakeCaseKeys(params)])
-      .then(() => {
-        res.send(resultData('添加标签成功'));
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
-      });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [checkRes] = await connection.query('SELECT id FROM tag WHERE user_id = ? AND name = ? AND del_flag = 0', [
+        userId,
+        name,
+      ]);
+      if (checkRes.length > 0) {
+        throw new Error('标签已存在');
+      }
+      await connection.query('INSERT INTO tag SET ?', [snakeCaseKeys(params)]);
+      const [[createdTag]] = await connection.query(
+        'SELECT id, name FROM tag WHERE user_id = ? AND name = ? AND del_flag = 0 ORDER BY create_time DESC LIMIT 1',
+        [userId, name],
+      );
+      await connection.commit();
+      res.send(resultData(createdTag || '添加标签成功'));
+    } catch (err) {
+      await connection.rollback();
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+    } finally {
+      connection.release();
+    }
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };
 
-export const editNoteTag = (req, res) => {
+export const editNoteTag = async (req, res) => {
   try {
+    const userId = req.headers['x-user-id'];
+    const name = String(req.body.name || '').trim();
+    if (!name) {
+      return res.send(resultData(null, 400, '标签名称不能为空'));
+    }
     const params = {
-      name: req.body.name,
+      name,
     };
-    pool
-      .query('update note_tags set ? where id=?', [
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [checkRes] = await connection.query('SELECT id FROM tag WHERE user_id = ? AND name = ? AND del_flag = 0', [
+        userId,
+        name,
+      ]);
+      if (checkRes.length > 0 && checkRes[0].id !== req.body.id) {
+        throw new Error('标签已存在');
+      }
+      const [result] = await connection.query('update tag set ? where id=? and user_id=?', [
         snakeCaseKeys(mergeExistingProperties(params, [], ['id'])),
         req.body.id,
-      ])
-      .then(() => {
-        res.send(resultData('更新标签成功'));
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
-      });
+        userId,
+      ]);
+      await connection.commit();
+      res.send(resultData(result));
+    } catch (err) {
+      await connection.rollback();
+      res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
+    } finally {
+      connection.release();
+    }
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e));
   }
@@ -234,7 +277,22 @@ export const queryNoteTagList = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
     pool
-      .query('select * from note_tags where user_id=?', [userId])
+      .query(
+        `
+          SELECT
+            t.*,
+            (
+              SELECT COUNT(*)
+              FROM resource_tag_relations r
+              INNER JOIN note n ON n.id = r.resource_id AND n.del_flag = 0
+              WHERE r.tag_id = t.id AND r.resource_type = 'note'
+            ) AS noteCount
+          FROM tag t
+          WHERE t.user_id = ? AND t.del_flag = 0
+          ORDER BY t.sort, t.create_time DESC
+        `,
+        [userId],
+      )
       .then(([result]) => {
         res.send(resultData(result));
       })
@@ -250,9 +308,14 @@ export const getNoteTags = (req, res) => {
   try {
     const noteId = req.body.id;
     pool
-      .query('SELECT nt.* FROM note_tags nt JOIN note_tag_relations ntr ON nt.id = ntr.tag_id WHERE ntr.note_id = ?', [
-        noteId,
-      ])
+      .query(
+        `SELECT t.*
+         FROM tag t
+         JOIN resource_tag_relations r ON t.id = r.tag_id
+         WHERE r.resource_type = 'note' AND r.resource_id = ? AND t.del_flag = 0
+         ORDER BY t.sort, t.create_time DESC`,
+        [noteId],
+      )
       .then(([result]) => {
         res.send(resultData(result));
       })
@@ -266,9 +329,10 @@ export const getNoteTags = (req, res) => {
 
 export const delNoteTag = (req, res) => {
   try {
+    const userId = req.headers['x-user-id'];
     const tagId = req.body.id;
     pool
-      .query('DELETE FROM note_tags WHERE id = ?', [tagId])
+      .query('UPDATE tag SET del_flag = 1 WHERE id = ? AND user_id = ?', [tagId, userId])
       .then(() => {
         res.send(resultData('删除标签成功'));
       })
@@ -296,26 +360,19 @@ export const updateNoteTags = async (req, res) => {
         userId,
       ]);
       if (noteResult.length === 0) {
+        await connection.rollback();
         return res.send(resultData(null, 403, '无权限操作此笔记'));
       }
       // 验证所有标签属于用户
       if (tags.length > 0) {
-        const placeholders = tags.map(() => '?').join(',');
-        const [tagResult] = await connection.query(
-          `SELECT id FROM note_tags WHERE id IN (${placeholders}) AND user_id = ?`,
-          [...tags, userId],
-        );
-        if (tagResult.length !== tags.length) {
-          return res.send(resultData(null, 403, '包含无效标签'));
-        }
+        await validateUserTags(connection, { tagIds: tags, userId });
       }
-      // 删除旧关联
-      await connection.query('DELETE FROM note_tag_relations WHERE note_id = ?', [noteId]);
-      // 插入新关联
-      if (tags.length > 0) {
-        const inserts = tags.map((tagId) => [noteId, tagId]);
-        await connection.query('INSERT INTO note_tag_relations (note_id, tag_id) VALUES ?', [inserts]);
-      }
+      await replaceResourceTagRelations(connection, {
+        tagIds: tags,
+        resourceType: RESOURCE_TYPE.NOTE,
+        resourceId: noteId,
+        userId,
+      });
       await connection.commit();
       res.send(resultData('更新标签成功'));
     } catch (error) {

@@ -1,5 +1,6 @@
 import pool from '../db/index.js';
 import { resultData, snakeCaseKeys, mergeExistingProperties } from '../util/common.js';
+import { RESOURCE_TYPE, insertResourceTagRelations } from '../util/resourceTags.js';
 import request from '../http/request.js';
 import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
 import nodeMail from '../util/nodemailer.js';
@@ -99,6 +100,12 @@ export const registerUser = async (req, res) => {
         bookmark_id: bookmarkId,
       };
       await pool.query('INSERT INTO tag_bookmark_relations SET ?', [snakeCaseKeys(relationData)]);
+      await insertResourceTagRelations(pool, {
+        tagIds: [tagId],
+        resourceType: RESOURCE_TYPE.BOOKMARK,
+        resourceId: bookmarkId,
+        userId,
+      });
 
       // 无标签书签
       const bookmarkData2 = {
@@ -571,6 +578,12 @@ const handleUserDatabaseOperation = async (githubUser) => {
       bookmark_id: bookmarkId,
     };
     await pool.query('INSERT INTO tag_bookmark_relations SET ?', [snakeCaseKeys(relationData)]);
+    await insertResourceTagRelations(pool, {
+      tagIds: [tagId],
+      resourceType: RESOURCE_TYPE.BOOKMARK,
+      resourceId: bookmarkId,
+      userId,
+    });
 
     // 无标签书签
     const bookmarkData2 = {

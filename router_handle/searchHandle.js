@@ -28,7 +28,7 @@ const SEARCH_TEXTS = {
     fileInFolder: '位于 {folder}',
     cloudFile: '云空间文件',
     tagDescription: '查看该标签下关联的书签与内容',
-    relatedBookmarks: '{count} 个关联书签',
+    relatedBookmarks: '{count} 个关联资源',
   },
   'en-US': {
     unnamedBookmark: 'Untitled Bookmark',
@@ -39,7 +39,7 @@ const SEARCH_TEXTS = {
     fileInFolder: 'In {folder}',
     cloudFile: 'Cloud file',
     tagDescription: 'View bookmarks and content associated with this tag',
-    relatedBookmarks: '{count} related bookmarks',
+    relatedBookmarks: '{count} related resources',
   },
 };
 
@@ -142,8 +142,9 @@ async function queryBookmarks(userId, keyword, limit, lang) {
       (
         SELECT JSON_ARRAYAGG(JSON_OBJECT('id', t.id, 'name', t.name))
         FROM tag t
-        INNER JOIN tag_bookmark_relations tb ON t.id = tb.tag_id
-        WHERE tb.bookmark_id = b.id AND t.del_flag = 0
+        INNER JOIN resource_tag_relations tb
+          ON t.id = tb.tag_id AND tb.resource_type = 'bookmark'
+        WHERE tb.resource_id = b.id AND t.del_flag = 0
       ) AS tag_list
     FROM bookmark b
     WHERE b.user_id = ?
@@ -155,9 +156,10 @@ async function queryBookmarks(userId, keyword, limit, lang) {
         OR b.url LIKE ?
         OR EXISTS (
           SELECT 1
-          FROM tag_bookmark_relations tb2
+          FROM resource_tag_relations tb2
           INNER JOIN tag t2 ON tb2.tag_id = t2.id
-          WHERE tb2.bookmark_id = b.id
+          WHERE tb2.resource_id = b.id
+            AND tb2.resource_type = 'bookmark'
             AND t2.del_flag = 0
             AND t2.name LIKE ?
         )
@@ -190,9 +192,11 @@ async function queryNotes(userId, keyword, limit, lang) {
       n.*,
       (
         SELECT JSON_ARRAYAGG(JSON_OBJECT('id', nt.id, 'name', nt.name))
-        FROM note_tag_relations ntr
-        INNER JOIN note_tags nt ON ntr.tag_id = nt.id
-        WHERE ntr.note_id = n.id
+        FROM resource_tag_relations ntr
+        INNER JOIN tag nt ON ntr.tag_id = nt.id
+        WHERE ntr.resource_type = 'note'
+          AND ntr.resource_id = n.id
+          AND nt.del_flag = 0
       ) AS tags
     FROM note n
     WHERE n.create_by = ?
@@ -252,10 +256,9 @@ async function queryTags(userId, keyword, limit, lang) {
   const like = buildLike(keyword);
   const hasKeyword = keyword.length > 0;
   const sql = `
-    SELECT t.*, COUNT(b.id) AS bookmark_count
+    SELECT t.*, COUNT(r.resource_id) AS resource_count
     FROM tag t
-    LEFT JOIN tag_bookmark_relations tb ON t.id = tb.tag_id
-    LEFT JOIN bookmark b ON tb.bookmark_id = b.id AND b.del_flag = 0
+    LEFT JOIN resource_tag_relations r ON t.id = r.tag_id
     WHERE t.user_id = ?
       AND t.del_flag = 0
       AND (? = 0 OR t.name LIKE ?)
@@ -271,7 +274,7 @@ async function queryTags(userId, keyword, limit, lang) {
     type: 'tag',
     title: `#${toText(item.name) || text.unnamedTag}`,
     description: text.tagDescription,
-    extra: formatText(text.relatedBookmarks, { count: Number(item.bookmark_count || 0) }),
+    extra: formatText(text.relatedBookmarks, { count: Number(item.resource_count || 0) }),
     route: `/home/${item.id}`,
     iconUrl: item.icon_url,
     raw: item,
