@@ -5,7 +5,7 @@ const router = express.Router();
 
 import * as bookmarkHandle from '../router_handle/bookmarkHandle.js';
 
-const upload = multer({ dest: '/www/wwwroot/temp' }); // 临时目录用于上传文件
+const upload = multer({ dest: '/' }); // 临时目录用于上传文件
 
 router.post('/queryTagList', bookmarkHandle.queryTagList);
 
