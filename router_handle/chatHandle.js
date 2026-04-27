@@ -28,6 +28,38 @@ class SSETransform extends Transform {
   }
 }
 
+const extractTextFromProvider = (payload) => {
+  if (!payload) return '';
+  let data = payload;
+  if (typeof payload === 'string') {
+    try {
+      data = JSON.parse(payload);
+    } catch (error) {
+      return String(payload).trim();
+    }
+  }
+  return String(
+    data?.output?.text ||
+      data?.output?.choices?.[0]?.message?.content ||
+      data?.text ||
+      data?.content ||
+      '',
+  ).trim();
+};
+
+const extractSvg = (text) => {
+  if (!text) return '';
+  const cleaned = String(text).replace(/```svg|```/gi, '').trim();
+  const match = cleaned.match(/<svg[\s\S]*<\/svg>/i);
+  return match?.[0]?.trim() || '';
+};
+
+const encodeSvgToDataUrl = (svg) => {
+  const normalized = String(svg || '').replace(/\r?\n|\r/g, '').trim();
+  const encoded = Buffer.from(normalized, 'utf8').toString('base64');
+  return `data:image/svg+xml;base64,${encoded}`;
+};
+
 export const receiveMessage = async (req, res) => {
   req.setTimeout(0);
 
@@ -168,7 +200,10 @@ export const receiveMessage = async (req, res) => {
         response.data.destroy();
       });
     } else {
-      const aiReply = response.data.output.text;
+      const aiReply = extractTextFromProvider(response?.data);
+      if (!aiReply) {
+        return res.status(500).send(resultData(null, 500, 'AI 返回内容为空'));
+      }
       res.send(resultData({ response: aiReply }));
     }
   } catch (error) {
@@ -182,6 +217,73 @@ export const receiveMessage = async (req, res) => {
     } else {
       res.status(500).send(resultData(null, 500, 'AI 服务异常: ' + error.message));
     }
+  }
+};
+
+export const generateTagIcon = async (req, res) => {
+  try {
+    const tagName = String(req.body?.tagName || req.body?.name || '').trim();
+    if (!tagName) {
+      return res.status(400).send(resultData(null, 400, '缺少标签名称'));
+    }
+
+    if (!process.env.DASHSCOPE_API_KEY) {
+      return res.status(500).send(resultData(null, 500, '未配置 DASHSCOPE_API_KEY，请检查 .env.development 或 .env.production'));
+    }
+
+    const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
+    const prompt = [
+      `请根据标签名称生成一个简洁的图标：${tagName}`,
+      '仅输出一个完整的 SVG 字符串，不要输出 markdown，不要输出解释。',
+      '图标适配 20px 左右显示，viewBox 固定为 0 0 24 24。',
+      '只使用 1 到 2 种颜色，不要渐变，不要阴影，不要滤镜。',
+      '不要包含脚本、foreignObject、外链资源。',
+    ].join('');
+
+    const requestData = {
+      input: { prompt },
+      parameters: {
+        incremental_output: false,
+        model: 'qwen-plus',
+        max_tokens: 512,
+        enable_web_search: false,
+        has_thoughts: false,
+        enable_thinking: false,
+      },
+    };
+
+    const response = await axios({
+      method: 'post',
+      url: `https://dashscope.aliyuncs.com/api/v1/apps/${APP_ID}/completion`,
+      headers: {
+        Authorization: `Bearer ${process.env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      data: requestData,
+      responseType: 'json',
+      timeout: 30000,
+    });
+
+    const rawText = extractTextFromProvider(response?.data);
+    const svg = extractSvg(rawText);
+    if (!svg) {
+      return res.status(500).send(resultData(null, 500, 'AI 返回结果解析失败'));
+    }
+
+    res.send(
+      resultData({
+        svg,
+        iconUrl: encodeSvgToDataUrl(svg),
+      }),
+    );
+  } catch (error) {
+    const statusCode = error?.response?.status;
+    const providerMsg = error?.response?.data?.message || error?.response?.data?.code || error.message;
+    console.error('生成标签图标错误:', providerMsg);
+    if (statusCode === 401) {
+      return res.status(500).send(resultData(null, 500, '生成标签图标失败：DashScope 鉴权失败，请检查 DASHSCOPE_API_KEY 或应用权限配置'));
+    }
+    res.status(500).send(resultData(null, 500, '生成标签图标失败: ' + providerMsg));
   }
 };
 
