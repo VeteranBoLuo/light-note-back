@@ -28,7 +28,7 @@ const SEARCH_TEXTS = {
     fileInFolder: '位于 {folder}',
     cloudFile: '云空间文件',
     tagDescription: '查看该标签下关联的书签与内容',
-    relatedBookmarks: '{count} 个关联资源',
+    relatedBookmarks: '{count} 个关联内容',
   },
   'en-US': {
     unnamedBookmark: 'Untitled Bookmark',
@@ -39,7 +39,7 @@ const SEARCH_TEXTS = {
     fileInFolder: 'In {folder}',
     cloudFile: 'Cloud file',
     tagDescription: 'View bookmarks and content associated with this tag',
-    relatedBookmarks: '{count} related resources',
+    relatedBookmarks: '{count} related items',
   },
 };
 
@@ -275,7 +275,7 @@ async function queryTags(userId, keyword, limit, lang) {
     title: `#${toText(item.name) || text.unnamedTag}`,
     description: text.tagDescription,
     extra: formatText(text.relatedBookmarks, { count: Number(item.resource_count || 0) }),
-    route: `/home/${item.id}`,
+    route: `/tag/${item.id}`,
     iconUrl: item.icon_url,
     raw: item,
   }));

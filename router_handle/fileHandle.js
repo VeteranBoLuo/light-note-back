@@ -4,6 +4,7 @@ import { resultData, snakeCaseKeys } from '../util/common.js';
 import { bucketBaseUrl, buildObjectKey, copyObjectInObs, deleteObjectFromObs } from '../util/obsClient.js';
 import { buildSignedDownloadUrl } from '../router/file.js';
 import { getFileExtension, resolveFileCategory } from '../util/fileCategory.js';
+import { queryTagsForResource, RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '../util/resourceTags.js';
 
 export const getFileInfo = async (req, res) => {
   try {
@@ -206,5 +207,47 @@ export const updateFolderSort = async (req, res) => {
     res.send(resultData(null, 500, '服务器内部错误' + e)); // 设置状态码为400
   } finally {
     connection.release(); // 释放连接回连接池
+  }
+};
+
+export const getFileTags = async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.send(resultData(null, 400, '缺少文件ID'));
+    }
+    const tags = await queryTagsForResource({
+      resourceType: RESOURCE_TYPE.FILE,
+      resourceId: id,
+    });
+    res.send(resultData(tags));
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+};
+
+export const updateFileTags = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = req.headers['x-user-id'];
+    const { id, tags = [] } = req.body;
+    if (!id) {
+      return res.send(resultData(null, 400, '缺少文件ID'));
+    }
+    await connection.beginTransaction();
+    const tagIds = await validateUserTags(connection, { tagIds: tags, userId });
+    await replaceResourceTagRelations(connection, {
+      tagIds,
+      resourceType: RESOURCE_TYPE.FILE,
+      resourceId: id,
+      userId,
+    });
+    await connection.commit();
+    res.send(resultData(null, 200, '文件标签更新成功'));
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 };

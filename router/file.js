@@ -37,6 +37,7 @@ const formatFileRecord = (file) => {
     folderId: file.folder_id,
     folderName: file.folderName,
     obsKey: file.obs_key,
+    tags: Array.isArray(file.tags) ? file.tags : [],
   };
 };
 
@@ -161,16 +162,33 @@ router.post('/queryFiles', async (req, res) => {
     const { filters = {} } = req.body;
     const params = [userId];
     let sql =
-      'SELECT files.*, folders.name AS folderName FROM files LEFT JOIN folders ON files.folder_id = folders.id WHERE files.create_by = ?';
+      `SELECT files.*, folders.name AS folderName,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', t.id, 'name', t.name))
+         FROM resource_tag_relations r
+         INNER JOIN tag t ON r.tag_id = t.id
+         WHERE r.resource_type = 'file' AND r.resource_id = files.id AND t.del_flag = 0
+        ) AS tags
+       FROM files LEFT JOIN folders ON files.folder_id = folders.id WHERE files.create_by = ?`;
     // 添加文件夹ID条件
-    if (filters.folderId !== 'all') {
+    if (filters.folderId !== undefined && filters.folderId !== null && filters.folderId !== '' && filters.folderId !== 'all') {
       sql += ' AND files.folder_id = ?';
       params.push(filters.folderId);
+    }
+    // 添加标签ID条件
+    if (filters.tagId) {
+      sql += ` AND files.id IN (SELECT resource_id FROM resource_tag_relations WHERE tag_id = ? AND resource_type = 'file')`;
+      params.push(filters.tagId);
     }
     sql += ' AND files.del_Flag=0 ORDER BY files.create_time DESC';
     const [files] = await pool.query(sql, params);
 
     let formattedFiles = files.map(formatFileRecord);
+
+    // 处理 tags 为数组
+    formattedFiles.forEach((file) => {
+      file.tags =
+        file.tags && Array.isArray(file.tags) && file.tags.every((tag) => tag && tag.id !== null) ? file.tags : [];
+    });
 
     // 3. 应用文件名过滤
     if (filters?.fileName) {
@@ -186,11 +204,7 @@ router.post('/queryFiles', async (req, res) => {
         return categoryFilters.includes(file.category);
       });
     }
-    if ((filters?.category || []).length === 0) {
-      res.send(resultData([]));
-    } else {
-      res.send(resultData(formattedFiles));
-    }
+    res.send(resultData(formattedFiles));
   } catch (error) {
     console.error('查询文件时出错:', error);
     res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
@@ -325,4 +339,6 @@ router.post('/associateFile', fileHandle.associateFile);
 router.post('/updateFolder', fileHandle.updateFolder);
 router.post('/deleteFolder', fileHandle.deleteFolder);
 router.post('/updateFolderSort', fileHandle.updateFolderSort);
+router.post('/getFileTags', fileHandle.getFileTags);
+router.post('/updateFileTags', fileHandle.updateFileTags);
 export default router;

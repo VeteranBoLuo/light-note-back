@@ -180,6 +180,18 @@ async function queryHotTags(userId) {
         ) AS bookmarkCount,
         (
           SELECT COUNT(*)
+          FROM resource_tag_relations tn
+          INNER JOIN note n ON tn.resource_id = n.id AND n.del_flag = 0
+          WHERE tn.tag_id = t.id AND tn.resource_type = 'note'
+        ) AS noteCount,
+        (
+          SELECT COUNT(*)
+          FROM resource_tag_relations tf
+          INNER JOIN files f ON tf.resource_id = f.id AND f.del_flag = 0
+          WHERE tf.tag_id = t.id AND tf.resource_type = 'file'
+        ) AS fileCount,
+        (
+          SELECT COUNT(*)
           FROM tag_relations tr
           INNER JOIN tag related ON tr.related_tag_id = related.id AND related.del_flag = 0
           WHERE tr.tag_id = t.id
@@ -195,14 +207,22 @@ async function queryHotTags(userId) {
         ) AS relatedTagNames
       FROM tag t
       WHERE t.user_id = ? AND t.del_flag = 0
-      ORDER BY (bookmarkCount + relatedTagCount) DESC, t.sort, t.create_time DESC
+      ORDER BY (bookmarkCount + noteCount + fileCount + relatedTagCount) DESC, t.sort, t.create_time DESC
       LIMIT 10
     `,
     [userId],
   );
   return rows.map((item, index) => ({
     ...item,
-    total: Number(item.bookmarkCount || 0) + Number(item.relatedTagCount || 0),
+    resourceTotal:
+      Number(item.bookmarkCount || 0) +
+      Number(item.noteCount || 0) +
+      Number(item.fileCount || 0),
+    total:
+      Number(item.bookmarkCount || 0) +
+      Number(item.noteCount || 0) +
+      Number(item.fileCount || 0) +
+      Number(item.relatedTagCount || 0),
     index: index + 1,
   }));
 }

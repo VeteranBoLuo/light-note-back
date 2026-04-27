@@ -185,11 +185,15 @@ export const receiveMessage = async (req, res) => {
   }
 };
 
-export const generateBookmarkDescription = async (req, res) => {
+export const generateBookmarkMeta = async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) {
       return res.status(400).send(resultData(null, 400, '缺少URL参数'));
+    }
+
+    if (!process.env.DASHSCOPE_API_KEY) {
+      return res.status(500).send(resultData(null, 500, '未配置 DASHSCOPE_API_KEY，请检查 .env.development 或 .env.production'));
     }
 
     // 验证URL格式
@@ -200,7 +204,13 @@ export const generateBookmarkDescription = async (req, res) => {
 
     const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
 
-    const prompt = `${url}你是专门用于根据url生成描述的接口不要调用知识库，直接输出这个url的简短纯文字描述，不要二维码、链接或其他内容,直接说描述内容，同时回答时不要带上该链接为，该网页为，该地址为 ，该网址为等类似措辞。`;
+    const prompt = [
+      `请根据这个网址生成一个适合书签保存的名称和描述：${url}`,
+      '输出 JSON 对象，格式必须是 {"name":"...","description":"..."}。',
+      'name 要简洁自然，像用户自己会给书签起的标题，不超过 20 个字。',
+      'description 用一句简短自然的中文概括网站内容或用途，不超过 50 个字。',
+      '不要输出 markdown，不要输出代码块，不要输出多余解释。',
+    ].join('');
 
     const requestData = {
       input: { prompt: prompt },
@@ -208,7 +218,7 @@ export const generateBookmarkDescription = async (req, res) => {
         incremental_output: false,
         model: 'qwen-plus', // 显式指定模型名称
         max_tokens: 512,
-        enable_web_search: false,
+        enable_web_search: true,
         has_thoughts: false,
         enable_thinking: false,
       },
@@ -227,10 +237,40 @@ export const generateBookmarkDescription = async (req, res) => {
     };
 
     const response = await axios(config);
-    const description = response.data.output.text;
-    res.send(resultData({ description: description }));
+    const rawText = String(response.data.output.text || '').trim();
+    const cleanText = rawText.replace(/```json|```/g, '').trim();
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(cleanText);
+    } catch (error) {
+      const match = cleanText.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = JSON.parse(match[0]);
+      }
+    }
+
+    if (!parsed || (!parsed.name && !parsed.description)) {
+      return res.status(500).send(resultData(null, 500, 'AI 返回结果解析失败'));
+    }
+
+    res.send(
+      resultData({
+        name: String(parsed.name || '').trim(),
+        description: String(parsed.description || '').trim(),
+      }),
+    );
   } catch (error) {
-    console.error('生成描述错误:', error.message);
-    res.status(500).send(resultData(null, 500, '生成描述失败: ' + error.message));
+    const statusCode = error?.response?.status;
+    const providerMsg = error?.response?.data?.message || error?.response?.data?.code || error.message;
+    console.error('生成书签元信息错误:', providerMsg);
+    if (statusCode === 401) {
+      return res
+        .status(500)
+        .send(resultData(null, 500, '生成名称和描述失败：DashScope 鉴权失败，请检查 DASHSCOPE_API_KEY 或应用权限配置'));
+    }
+    res.status(500).send(resultData(null, 500, '生成名称和描述失败: ' + providerMsg));
   }
 };
+
+export const generateBookmarkDescription = generateBookmarkMeta;

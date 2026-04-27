@@ -17,21 +17,43 @@ import path from 'path';
 export const queryTagList = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
-    let sql = `SELECT 
+    let sql = `SELECT
     t.*,
     (
         SELECT JSON_ARRAYAGG(
             JSON_OBJECT(
                 'id', b.id,
                 'name', b.name,
-                'url',b.url
+                'url', b.url
             )
         )
         FROM bookmark b
-        INNER JOIN resource_tag_relations tb
-          ON b.id = tb.resource_id AND tb.resource_type = 'bookmark'
-        WHERE tb.tag_id = t.id AND b.del_flag = 0
-    ) AS bookmarkList,COALESCE(
+        INNER JOIN resource_tag_relations r ON b.id = r.resource_id AND r.resource_type = 'bookmark'
+        WHERE r.tag_id = t.id AND b.del_flag = 0
+    ) AS bookmarkList,
+    (
+        SELECT JSON_ARRAYAGG(
+            JSON_OBJECT(
+                'id', n.id,
+                'name', n.title
+            )
+        )
+        FROM note n
+        INNER JOIN resource_tag_relations r ON n.id = r.resource_id AND r.resource_type = 'note'
+        WHERE r.tag_id = t.id AND n.del_flag = 0
+    ) AS noteList,
+    (
+        SELECT JSON_ARRAYAGG(
+            JSON_OBJECT(
+                'id', f.id,
+                'name', f.file_name
+            )
+        )
+        FROM files f
+        INNER JOIN resource_tag_relations r ON f.id = r.resource_id AND r.resource_type = 'file'
+        WHERE r.tag_id = t.id AND f.del_flag = 0
+    ) AS fileList,
+    COALESCE(
         (
             SELECT JSON_ARRAYAGG(
                 JSON_OBJECT(
@@ -45,31 +67,32 @@ export const queryTagList = (req, res) => {
         ),
         JSON_ARRAY()
     ) AS relatedTagList
-FROM 
+FROM
     tag t
     LEFT JOIN tag_relations ta ON t.id = ta.tag_id
       WHERE
       t.user_id = ? AND t.del_flag = 0
-      GROUP BY 
+      GROUP BY
     t.id
       ORDER BY
-      t.sort, 
+      t.sort,
       t.create_time DESC;
 `;
     pool
       .query(sql, [userId])
       .then(([result]) => {
-        const tagsWithBookmarks = result.map((tag) => {
-          // 将bookmarkList字段中的JSON字符串转换为数组
+        const tagsWithResources = result.map((tag) => {
           const bookmarkList = tag.bookmarkList ? tag.bookmarkList : [];
-
-          // 返回新的tag对象，包含bookmarkList数组
+          const noteList = tag.noteList ? tag.noteList : [];
+          const fileList = tag.fileList ? tag.fileList : [];
           return {
             ...tag,
-            bookmarkList: bookmarkList,
+            bookmarkList,
+            noteList,
+            fileList,
           };
         });
-        res.send(resultData(tagsWithBookmarks));
+        res.send(resultData(tagsWithResources));
       })
       .catch((e) => {
         return res.send(resultData(null, 500, '服务器内部错误: ' + e));
@@ -81,11 +104,13 @@ FROM
 export const getRelatedTag = (req, res) => {
   const userId = req.headers['x-user-id'];
   try {
-    let sql = `SELECT t.* FROM tag t LEFT JOIN tag_relations a on t.id=a.related_tag_id 
+    const type = req.body.filters.type;
+    let sql = `SELECT t.* FROM tag t LEFT JOIN tag_relations a on t.id=a.related_tag_id
 WHERE t.user_id=? AND a.tag_id=? AND t.del_flag=0`;
-    if (req.body.filters.type === 'bookmark') {
+    const validTypes = [RESOURCE_TYPE.BOOKMARK, RESOURCE_TYPE.NOTE, RESOURCE_TYPE.FILE];
+    if (validTypes.includes(type)) {
       sql = `SELECT t.* FROM tag t LEFT JOIN resource_tag_relations tb
-        ON t.id=tb.tag_id AND tb.resource_type='bookmark'
+        ON t.id=tb.tag_id AND tb.resource_type='${type}'
 WHERE t.user_id=? AND tb.resource_id=? AND t.del_flag=0`;
     }
     pool
@@ -158,10 +183,15 @@ export const addTag = async (req, res) => {
       // 插入新的标签
       let sql = `INSERT INTO Tag SET ?`;
       const [insertResult] = await connection.query(sql, [
-        mergeExistingProperties(snakeCaseKeys(params), [undefined, '', []], ['related_tag_ids', 'bookmark_list']),
+        mergeExistingProperties(snakeCaseKeys(params), [undefined, '', []], [
+          'related_tag_ids',
+          'bookmark_list',
+          'note_list',
+          'file_list',
+        ]),
       ]);
       // 处理关联标签数量限制
-      const { relatedTagIds, bookmarkList } = req.body;
+      const { relatedTagIds, bookmarkList, noteList, fileList } = req.body;
       if (relatedTagIds && relatedTagIds.length > 4) {
         throw new Error('最多选择4个相关标签');
       }
@@ -177,7 +207,7 @@ export const addTag = async (req, res) => {
         }
       }
 
-      // 如果有书签列表，则插入新的关联
+      // 处理各类资源关联
       if (bookmarkList && bookmarkList.length > 0) {
         await insertTagResourceRelations(connection, {
           tagId: insertedTagId,
@@ -188,6 +218,22 @@ export const addTag = async (req, res) => {
         await insertTagBookmarkLegacyRelations(connection, {
           tagId: insertedTagId,
           bookmarkIds: bookmarkList,
+        });
+      }
+      if (noteList && noteList.length > 0) {
+        await insertTagResourceRelations(connection, {
+          tagId: insertedTagId,
+          resourceType: RESOURCE_TYPE.NOTE,
+          resourceIds: noteList,
+          userId,
+        });
+      }
+      if (fileList && fileList.length > 0) {
+        await insertTagResourceRelations(connection, {
+          tagId: insertedTagId,
+          resourceType: RESOURCE_TYPE.FILE,
+          resourceIds: fileList,
+          userId,
         });
       }
       await connection.commit(); // 提交事务
@@ -224,7 +270,7 @@ export const updateTag = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
-    const { relatedTagIds, id: id1, bookmarkList } = req.body;
+    const { relatedTagIds, id: id1, bookmarkList, noteList, fileList } = req.body;
     const id = id1; // 获取标签ID
     const paramsData = JSON.parse(JSON.stringify(req.body));
     const params = {
@@ -261,7 +307,6 @@ export const updateTag = async (req, res) => {
 
     // 只要传了bookmarkList，就需要重新处理
     if (bookmarkList !== undefined) {
-      // 清空标签和书签的关联
       await replaceTagResourceRelations(connection, {
         tagId: id,
         resourceType: RESOURCE_TYPE.BOOKMARK,
@@ -271,6 +316,22 @@ export const updateTag = async (req, res) => {
       await replaceTagBookmarkLegacyRelations(connection, {
         tagId: id,
         bookmarkIds: bookmarkList || [],
+      });
+    }
+    if (noteList !== undefined) {
+      await replaceTagResourceRelations(connection, {
+        tagId: id,
+        resourceType: RESOURCE_TYPE.NOTE,
+        resourceIds: noteList || [],
+        userId,
+      });
+    }
+    if (fileList !== undefined) {
+      await replaceTagResourceRelations(connection, {
+        tagId: id,
+        resourceType: RESOURCE_TYPE.FILE,
+        resourceIds: fileList || [],
+        userId,
       });
     }
 

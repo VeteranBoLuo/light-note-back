@@ -73,9 +73,8 @@ export const updateNote = async (req, res) => {
 export const queryNoteList = (req, res) => {
   try {
     const userId = req.headers['x-user-id'];
-    pool
-      .query(
-        `SELECT n.*,
+    const tagId = req.body.tagId;
+    let sql = `SELECT n.*,
           (
             SELECT JSON_ARRAYAGG(JSON_OBJECT('id', t.id, 'name', t.name))
             FROM resource_tag_relations r
@@ -85,11 +84,15 @@ export const queryNoteList = (req, res) => {
               AND t.del_flag = 0
           ) AS tags
          FROM note n
-         WHERE n.create_by = ? AND n.del_flag = 0
-         GROUP BY n.id
-         ORDER BY n.sort, n.update_time DESC`,
-        [userId],
-      )
+         WHERE n.create_by = ? AND n.del_flag = 0`;
+    const params = [userId];
+    if (tagId) {
+      sql += ` AND n.id IN (SELECT resource_id FROM resource_tag_relations WHERE tag_id = ? AND resource_type = 'note')`;
+      params.push(tagId);
+    }
+    sql += ` GROUP BY n.id ORDER BY n.sort, n.update_time DESC`;
+    pool
+      .query(sql, params)
       .then(([result]) => {
         // 处理 tags 为数组，如果 NULL 或包含无效标签则为空数组
         result.forEach((note) => {
