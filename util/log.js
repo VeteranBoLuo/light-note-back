@@ -173,7 +173,7 @@ export async function logFunction(req, res, next) {
       // skipUser = ['453c9c95-9b2e-11ef-9d4d-84a93e80c16e'].some((key) => userId.includes(key));
     }
     // 跳过不记录的接口
-    const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag'].some((key) =>
+    const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag','getOpinionNotice'].some((key) =>
       req.originalUrl.includes(key),
     );
 
@@ -209,11 +209,14 @@ export async function logFunction(req, res, next) {
             method: req.method,
             url: req.originalUrl,
             req: requestPayload === '{}' ? '' : requestPayload,
+            res: responsePayload || '',
+            status_code: res.statusCode,
             ip: getClientIp(req) || '',
             location: location,
             system: system,
             del_flag: 0,
           };
+          console.log(formatDateTime(new Date()) + '日志更新：', log);
           // 将日志保存到数据库
           const query = 'INSERT INTO api_logs SET ?';
           pool.query(query, [snakeCaseKeys(log)]).catch((err) => {

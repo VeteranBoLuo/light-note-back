@@ -96,6 +96,11 @@ export const getApiLogs = (req, res) => {
           "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.alias LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
           [filters.key, filters.key],
         );
+        console.log('req.body.filters.filterRoot',req.body.filters.filterRoot)
+        if(req.body.filters.filterRoot){
+          console.log('过滤root用户操作日志');
+          result = result.filter(item => item.user_id !== '453c9c95-9b2e-11ef-9d4d-84a93e80c16e');
+        }
         res.send(
           resultData({
             items: result,
