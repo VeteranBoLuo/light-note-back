@@ -204,6 +204,8 @@ export const getUserInfo = async (req, res) => {
             COALESCE(t.tag_count, 0) AS tagTotal,
             COALESCE(n.note_count, 0) AS noteTotal,
             COALESCE(o.opinion_count, 0) AS opinionTotal,
+            COALESCE(op.pending_opinion_count, 0) AS pendingOpinionTotal,
+            COALESCE(ou.unread_reply_count, 0) AS unreadOpinionReplyTotal,
             COALESCE(f.storage_used, 0) AS storageUsed
           FROM user u
           LEFT JOIN (
@@ -225,10 +227,22 @@ export const getUserInfo = async (req, res) => {
             GROUP BY create_by
           ) n ON u.id = n.create_by
           LEFT JOIN (
-            SELECT COUNT(*) AS opinion_count
+            SELECT user_id, COUNT(*) AS opinion_count
             FROM opinion
             WHERE del_flag = 0
-          ) o ON 1=1
+            GROUP BY user_id
+          ) o ON u.id = o.user_id
+          LEFT JOIN (
+            SELECT COUNT(*) AS pending_opinion_count
+            FROM opinion
+            WHERE del_flag = 0 AND status = 'pending'
+          ) op ON 1=1
+          LEFT JOIN (
+            SELECT user_id, COUNT(*) AS unread_reply_count
+            FROM opinion
+            WHERE del_flag = 0 AND status = 'replied' AND reply_viewed = 0
+            GROUP BY user_id
+          ) ou ON u.id = ou.user_id
           LEFT JOIN (
             SELECT create_by, ROUND(SUM(file_size) / 1048576, 2) AS storage_used
             FROM files
