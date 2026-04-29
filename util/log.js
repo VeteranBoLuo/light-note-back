@@ -216,7 +216,6 @@ export async function logFunction(req, res, next) {
             system: system,
             del_flag: 0,
           };
-          console.log(formatDateTime(new Date()) + '日志更新：', log);
           // 将日志保存到数据库
           const query = 'INSERT INTO api_logs SET ?';
           pool.query(query, [snakeCaseKeys(log)]).catch((err) => {

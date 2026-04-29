@@ -34,16 +34,29 @@ export const recordOpinion = async (req, res) => {
 export const getOpinionList = async (req, res) => {
   const connection = await pool.getConnection();
   const { pageSize, currentPage, userId, filters = {} } = req.body;
+  const currentUserId = req.headers['x-user-id'];
+  const role = req.headers['role'];
+  const targetUserId = role === 'root' ? userId : currentUserId;
   const skip = pageSize * (currentPage - 1);
+
+  if (!pageSize || !currentPage) {
+    connection.release();
+    return res.send(resultData(null, 400, '缺少分页参数'));
+  }
+
+  if (role !== 'root' && !currentUserId) {
+    connection.release();
+    return res.send(resultData(null, 400, '缺少用户信息'));
+  }
 
   try {
     let query = 'SELECT o.*, u.alias FROM opinion o LEFT JOIN user u ON o.user_id = u.id WHERE o.del_flag = 0';
     const params = [];
     const whereClauses = [];
 
-    if (userId !== undefined) {
+    if (targetUserId !== undefined) {
       whereClauses.push('o.user_id = ?');
-      params.push(userId);
+      params.push(targetUserId);
     }
 
     if (filters.key) {
@@ -71,9 +84,9 @@ export const getOpinionList = async (req, res) => {
         let totalQuery = 'SELECT COUNT(*) FROM opinion o LEFT JOIN user u ON o.user_id = u.id WHERE o.del_flag = 0';
         const totalParams = [];
 
-        if (userId !== undefined) {
+        if (targetUserId !== undefined) {
           totalQuery += ' AND o.user_id = ?';
-          totalParams.push(userId);
+          totalParams.push(targetUserId);
         }
 
         if (filters.key) {
@@ -98,9 +111,9 @@ export const getOpinionList = async (req, res) => {
           WHERE o.del_flag = 0
         `;
         const summaryParams = [];
-        if (userId !== undefined) {
+        if (targetUserId !== undefined) {
           summaryQuery += ' AND o.user_id = ?';
-          summaryParams.push(userId);
+          summaryParams.push(targetUserId);
         }
         const [summaryRes] = await pool.query(summaryQuery, summaryParams);
         res.send(
