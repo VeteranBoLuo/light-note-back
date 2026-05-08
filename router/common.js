@@ -21,8 +21,6 @@ router.post('/clearImages', commonHandle.clearImages);
 
 router.post('/runSql', commonHandle.runSql);
 
-router.post('/getAttackLogs', commonHandle.getAttackLogs);
-
 router.post('/getHelpConfig', commonHandle.getHelpConfig);
 
 router.post('/updateHelp', commonHandle.updateHelp);

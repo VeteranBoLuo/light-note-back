@@ -126,33 +126,6 @@ export const clearApiLogs = (req, res) => {
       res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
     });
 };
-export const getAttackLogs = (req, res) => {
-  try {
-    const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT * FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') OR source_ip LIKE CONCAT('%', ?, '%') ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-    pool
-      .query(sql, [filters.key, filters.key, pageSize, skip])
-      .then(async ([result]) => {
-        const [totalRes] = await pool.query(
-          "SELECT COUNT(*) FROM attack_logs WHERE attack_type LIKE CONCAT('%', ?, '%') OR source_ip LIKE CONCAT('%', ?, '%')",
-          [filters.key, filters.key],
-        );
-        res.send(
-          resultData({
-            items: result,
-            total: totalRes[0]['COUNT(*)'],
-          }),
-        );
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
-      });
-  } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
-  }
-};
-
 // 用户操作日志
 export const recordOperationLogs = (req, res) => {
   try {

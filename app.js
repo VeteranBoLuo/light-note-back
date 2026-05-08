@@ -2,8 +2,9 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import { logFunction } from './util/log.js';
 import { baseRouter } from './util/common.js';
-import { authMiddleware, startSessionMaintenance } from './util/auth.js';
-import { ensureSessionTable } from './util/sessionStore.js';
+import { accountBanMiddleware, authMiddleware, startSessionMaintenance } from './util/auth.js';
+import { attackMonitor, ensureSecurityTables } from './util/security/index.js';
+
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,20 +15,9 @@ import './db/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 判断是否是生产环境（比如：运行在 Linux 上）
-function isProduction() {
-  return process.platform === 'linux';
-}
-// 设置 mode
-const mode = isProduction() ? 'production' : 'development';
-// 根据 NODE_ENV 加载对应的 .env 文件
-const envPath = path.resolve(__dirname, `.env.${mode}`);
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+console.log('Loaded env from: 【.env】');
 
-dotenv.config({ path: envPath });
-// 打印当前加载的环境变量（可选）
-console.log(`Running in 【${mode}】 mode`);
-console.log(`Loaded env from: 【${envPath}】`);
-console.log('BASE_URL:', process.env.BASE_URL);
 // 建立一个Express服务器
 const app = express();
 app.set('trust proxy', 1);
@@ -37,6 +27,10 @@ app.use(express.json());
 
 // 还原可信登录态
 app.use(authMiddleware);
+// 账号封禁只拦业务访问，登录/退出等入口继续放行
+app.use(accountBanMiddleware);
+// 安全防护与攻击事件采集
+app.use(attackMonitor);
 // 日志记录中间件
 app.use(logFunction);
 
@@ -55,8 +49,9 @@ allRouter.forEach((item) => {
   app.use(item.path, item.router);
 });
 
-await ensureSessionTable();
+
 startSessionMaintenance();
+ensureSecurityTables().catch((err) => console.error('安全模块初始化失败:', err.message));
 
 // 启动 Express 服务器
 app.listen(9001, () => {

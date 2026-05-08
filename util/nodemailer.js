@@ -5,8 +5,8 @@ const nodeMail = nodemailer.createTransport({
   port: 465,
   secure: true,
   auth: {
-    user: '1902013368@qq.com',
-    pass: 'vqmyhzpyuxujefgf',
+    user: process.env.SMTP_USER || '1902013368@qq.com',
+    pass: process.env.SMTP_PASS,
   },
   logger: true,
 });

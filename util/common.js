@@ -1,4 +1,3 @@
-import '../db/index.js';
 import userRouter from '../router/user.js';
 import commonRouter from '../router/common.js';
 import noteLibraryRouter from '../router/noteLibrary.js';
@@ -9,6 +8,7 @@ import chatRouter from '../router/chat.js';
 import jsonRouter from '../router/json.js';
 import searchRouter from '../router/search.js';
 import workbenchRouter from '../router/workbench.js';
+import securityRouter from '../router/security.js';
 
 export const resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
@@ -177,5 +177,9 @@ export const baseRouter = [
   {
     path: '/workbench',
     router: workbenchRouter,
+  },
+  {
+    path: '/security',
+    router: securityRouter,
   },
 ];

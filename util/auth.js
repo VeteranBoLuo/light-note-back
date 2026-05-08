@@ -6,6 +6,7 @@ const COOKIE_NAME = 'sid';
 const AUTH_EXPIRED_HEADER = 'X-Auth-Expired';
 const AUTH_ROLE_HEADER = 'X-Auth-Role';
 const AUTH_EXPIRES_IN_HEADER = 'X-Auth-Expires-In';
+const USER_BANNED_HEADER = 'X-User-Banned';
 const LOGIN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -63,9 +64,10 @@ export const issueLoginSession = async (req, res, user, rememberMe = false) => {
 
 const findVisitorUser = async () => {
   const [rows] = await pool.query(
-    `SELECT id, role
+    `SELECT id, role, del_flag
      FROM user
-     WHERE role = ? AND del_flag = 0
+     WHERE role = ?
+     ORDER BY del_flag ASC, create_time ASC
      LIMIT 1`,
     ['visitor'],
   );
@@ -73,13 +75,18 @@ const findVisitorUser = async () => {
 };
 
 const attachUserToRequest = (req, res, user, sessionId = '', expiresInSeconds = 0) => {
+  const isBanned = Number(user.del_flag || 0) === 1;
   req.user = {
     id: user.id || '',
     role: user.role || 'visitor',
     sessionId,
     isAuthenticated: Boolean(sessionId && user.id && user.role !== 'visitor'),
+    isBanned,
   };
   res.setHeader(AUTH_ROLE_HEADER, req.user.role);
+  if (isBanned) {
+    res.setHeader(USER_BANNED_HEADER, '1');
+  }
   if (req.user.isAuthenticated && expiresInSeconds > 0) {
     res.setHeader(AUTH_EXPIRES_IN_HEADER, String(expiresInSeconds));
   }
@@ -105,9 +112,9 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT id, role
+      `SELECT id, role, del_flag
        FROM user
-       WHERE id = ? AND del_flag = 0
+       WHERE id = ?
        LIMIT 1`,
       [session.user_id],
     );
@@ -127,6 +134,28 @@ export const authMiddleware = async (req, res, next) => {
     attachUserToRequest(req, res, await findVisitorUser());
     return next();
   }
+};
+
+const ACCOUNT_BAN_ALLOWED_PATHS = [
+  '/user/login',
+  '/user/logout',
+  '/user/github',
+  '/user/registerUser',
+  '/user/sendEmail',
+  '/user/verifyCode',
+  '/user/configPassword',
+];
+
+export const accountBanMiddleware = (req, res, next) => {
+  if (!req.user?.isBanned) {
+    return next();
+  }
+  const path = req.path || req.originalUrl || '';
+  if (ACCOUNT_BAN_ALLOWED_PATHS.some((item) => path.startsWith(item))) {
+    return next();
+  }
+  res.setHeader(USER_BANNED_HEADER, '1');
+  return res.status(423).json(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
 };
 
 export const logoutCurrentSession = async (req, res) => {

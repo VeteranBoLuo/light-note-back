@@ -76,7 +76,7 @@ export const receiveMessage = async (req, res) => {
       translationConfig = {},
     } = req.body;
     stream = req.body.stream ?? false; // 提取到外层作用域
-    const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
+    const APP_ID = process.env.DASHSCOPE_APP_ID 
 
     // 语言映射
     const langMap = {
@@ -228,10 +228,10 @@ export const generateTagIcon = async (req, res) => {
     }
 
     if (!process.env.DASHSCOPE_API_KEY) {
-      return res.status(500).send(resultData(null, 500, '未配置 DASHSCOPE_API_KEY，请检查 .env.development 或 .env.production'));
+      return res.status(500).send(resultData(null, 500, '未配置 DASHSCOPE_API_KEY，请检查 .env 文件'));
     }
 
-    const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
+    const APP_ID = process.env.DASHSCOPE_APP_ID || 'ff8422dbcc784e8ba170b8ed0408c19b';
     const prompt = [
       `请根据标签名称生成一个简洁的图标：${tagName}`,
       '仅输出一个完整的 SVG 字符串，不要输出 markdown，不要输出解释。',
@@ -295,7 +295,7 @@ export const generateBookmarkMeta = async (req, res) => {
     }
 
     if (!process.env.DASHSCOPE_API_KEY) {
-      return res.status(500).send(resultData(null, 500, '未配置 DASHSCOPE_API_KEY，请检查 .env.development 或 .env.production'));
+      return res.status(500).send(resultData(null, 500, '未配置 DASHSCOPE_API_KEY，请检查 .env 文件'));
     }
 
     // 验证URL格式
@@ -304,7 +304,7 @@ export const generateBookmarkMeta = async (req, res) => {
       return res.send(resultData(null, 400, '请输入正确的书签地址'));
     }
 
-    const APP_ID = 'ff8422dbcc784e8ba170b8ed0408c19b';
+    const APP_ID = process.env.DASHSCOPE_APP_ID || 'ff8422dbcc784e8ba170b8ed0408c19b';
 
     const prompt = [
       `请根据这个网址生成一个适合书签保存的名称和描述：${url}`,

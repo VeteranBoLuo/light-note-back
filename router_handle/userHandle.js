@@ -89,7 +89,7 @@ export const login = async (req, res) => {
       return;
     }
     if (Number(result[0].del_flag) === 1) {
-      res.send(resultData(null, 401, '账号已被禁用'));
+      res.send(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
       return;
     }
     await issueLoginSession(req, res, result[0], Boolean(rememberMe));
@@ -242,7 +242,7 @@ export const getUserInfo = async (req, res) => {
     // 没有储存ip或者ip地址改变，则更新用户ip相关信息
     if (userRes[0].ip === null || userRes[0].ip !== req.headers['x-forwarded-for']) {
       const { data } = await request.get(
-        `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=d72f302bf6c39e1e6973a0d3bdbf302f`,
+        `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=${process.env.AMAP_API_KEY}`,
       );
       const location = {
         city: data.city ?? '接口错误，获取失败',
@@ -266,7 +266,7 @@ export const getUserInfo = async (req, res) => {
       return;
     }
     if (Number(result.del_flag) === 1) {
-      res.send(resultData(null, 401, '账号已被禁用'));
+      res.send(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
       return;
     }
     const safeUser = sanitizeUser(result);
