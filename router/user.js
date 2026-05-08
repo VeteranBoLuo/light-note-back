@@ -7,6 +7,8 @@ router.post('/login', userHandle.login);
 
 router.get('/getUserInfo', userHandle.getUserInfo);
 
+router.get('/me', userHandle.me);
+
 router.post('/getUserList', userHandle.getUserList);
 
 router.post('/registerUser', userHandle.registerUser);
@@ -16,6 +18,8 @@ router.post('/saveUserInfo', userHandle.saveUserInfo);
 router.get('/deleteUserById', userHandle.deleteUserById);
 
 router.post('/github', userHandle.github);
+
+router.post('/logout', userHandle.logout);
 
 router.post('/configPassword', userHandle.configPassword);
 

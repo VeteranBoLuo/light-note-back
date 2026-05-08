@@ -8,8 +8,8 @@ import { validateQueryParams } from '../util/request.js';
 
 const ensureRootRole = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
-    if (!userId) {
+    const userId = req.user?.id;
+    if (!userId || req.user?.role !== 'root') {
       res.send(resultData(null, 403, '无权限操作'));
       return null;
     }
@@ -116,6 +116,9 @@ export const getApiLogs = (req, res) => {
   }
 };
 export const clearApiLogs = (req, res) => {
+  if (req.user?.role !== 'root') {
+    return res.send(resultData(null, 403, '没有操作权限'));
+  }
   pool
     .query('UPDATE api_logs set del_flag=1')
     .then(() => {
@@ -155,7 +158,7 @@ export const getAttackLogs = (req, res) => {
 // 用户操作日志
 export const recordOperationLogs = (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user?.id;
     const log = {
       createBy: userId,
       ...req.body,
@@ -216,6 +219,9 @@ AND o.del_flag=0 AND u.alias!='菠萝'`;
 };
 
 export const clearOperationLogs = (req, res) => {
+  if (req.user?.role !== 'root') {
+    return res.send(resultData(null, 403, '没有操作权限'));
+  }
   pool
     .query('UPDATE operation_logs set del_flag=1')
     .then(() => {
@@ -371,6 +377,8 @@ export const getImages = async (req, res) => {
 };
 
 export const clearImages = async (req, res) => {
+  const userId = await ensureRootRole(req, res);
+  if (!userId) return;
   const directoryPath = '/www/wwwroot/images';
   const images = req.body.images;
 
@@ -404,6 +412,8 @@ export const clearImages = async (req, res) => {
 
 export const runSql = async (req, res) => {
   try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
     const [result] = await pool.query(req.body.sql);
     res.send(resultData(result, 200));
   } catch (e) {

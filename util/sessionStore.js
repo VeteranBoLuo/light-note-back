@@ -1,0 +1,71 @@
+import crypto from 'crypto';
+import pool from '../db/index.js';
+
+const SESSION_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS user_sessions (
+    sid varchar(128) NOT NULL PRIMARY KEY,
+    user_id varchar(255) NOT NULL,
+    role varchar(32) NOT NULL,
+    expires_at datetime NOT NULL,
+    create_time datetime DEFAULT CURRENT_TIMESTAMP,
+    last_active_time datetime DEFAULT CURRENT_TIMESTAMP,
+    ip varchar(100),
+    user_agent varchar(500),
+    INDEX idx_user_sessions_user_id (user_id),
+    INDEX idx_user_sessions_expires_at (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+`;
+
+export const createSessionId = () => crypto.randomBytes(32).toString('hex');
+
+export const ensureSessionTable = async () => {
+  await pool.query(SESSION_TABLE_SQL);
+};
+
+export const createSession = async ({ userId, role, maxAgeMs, ip = '', userAgent = '' }) => {
+  const sid = createSessionId();
+  const maxAgeSeconds = Math.max(1, Math.ceil(maxAgeMs / 1000));
+  await pool.query(
+    `INSERT INTO user_sessions (sid, user_id, role, expires_at, ip, user_agent)
+     VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND), ?, ?)`,
+    [sid, userId, role || 'visitor', maxAgeSeconds, ip, userAgent],
+  );
+  return { sid };
+};
+
+export const getSession = async (sid) => {
+  if (!sid) return null;
+  const [rows] = await pool.query(
+    `SELECT
+       sid,
+       user_id,
+       role,
+       expires_at,
+       GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), expires_at)) AS expires_in_seconds
+     FROM user_sessions
+     WHERE sid = ? AND expires_at > NOW()
+     LIMIT 1`,
+    [sid],
+  );
+  const session = rows[0];
+  if (!session) {
+    await removeSession(sid);
+    return null;
+  }
+  await pool.query('UPDATE user_sessions SET last_active_time = NOW() WHERE sid = ?', [sid]);
+  return session;
+};
+
+export const removeSession = async (sid) => {
+  if (!sid) return;
+  await pool.query('DELETE FROM user_sessions WHERE sid = ?', [sid]);
+};
+
+export const removeUserSessions = async (userId) => {
+  if (!userId) return;
+  await pool.query('DELETE FROM user_sessions WHERE user_id = ?', [userId]);
+};
+
+export const cleanupExpiredSessions = async () => {
+  await pool.query('DELETE FROM user_sessions WHERE expires_at <= NOW()');
+};

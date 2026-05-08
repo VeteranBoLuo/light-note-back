@@ -4,42 +4,99 @@ import { RESOURCE_TYPE, insertResourceTagRelations } from '../util/resourceTags.
 import request from '../http/request.js';
 import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
 import nodeMail from '../util/nodemailer.js';
+import { issueLoginSession, logoutCurrentSession } from '../util/auth.js';
+import { removeUserSessions } from '../util/sessionStore.js';
 let redisClient;
 if (process.platform === 'linux') {
   redisClient = (await import('../util/redisClient.js')).default;
 }
 
-export const login = (req, res) => {
+const queryUserInfoById = async (id) => {
+  const [result] = await pool.query(
+    `
+      SELECT 
+        u.*,
+        COALESCE(b.bookmark_count, 0) AS bookmarkTotal,
+        COALESCE(t.tag_count, 0) AS tagTotal,
+        COALESCE(n.note_count, 0) AS noteTotal,
+        COALESCE(o.opinion_count, 0) AS opinionTotal,
+        COALESCE(op.pending_opinion_count, 0) AS pendingOpinionTotal,
+        COALESCE(ou.unread_reply_count, 0) AS unreadOpinionReplyTotal,
+        COALESCE(f.storage_used, 0) AS storageUsed
+      FROM user u
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS bookmark_count
+        FROM bookmark
+        WHERE del_flag = 0
+        GROUP BY user_id
+      ) b ON u.id = b.user_id
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS tag_count
+        FROM tag
+        WHERE del_flag = 0
+        GROUP BY user_id
+      ) t ON u.id = t.user_id
+      LEFT JOIN (
+        SELECT create_by, COUNT(*) AS note_count
+        FROM note
+        WHERE del_flag = 0
+        GROUP BY create_by
+      ) n ON u.id = n.create_by
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS opinion_count
+        FROM opinion
+        WHERE del_flag = 0
+        GROUP BY user_id
+      ) o ON u.id = o.user_id
+      LEFT JOIN (
+        SELECT COUNT(*) AS pending_opinion_count
+        FROM opinion
+        WHERE del_flag = 0 AND status = 'pending'
+      ) op ON 1=1
+      LEFT JOIN (
+        SELECT user_id, COUNT(*) AS unread_reply_count
+        FROM opinion
+        WHERE del_flag = 0 AND status = 'replied' AND reply_viewed = 0
+        GROUP BY user_id
+      ) ou ON u.id = ou.user_id
+      LEFT JOIN (
+        SELECT create_by, ROUND(SUM(file_size) / 1048576, 2) AS storage_used
+        FROM files
+        WHERE del_flag = 0
+        GROUP BY create_by
+      ) f ON u.id = f.create_by
+      WHERE u.id = ?
+    `,
+    [id],
+  );
+  return result[0] || null;
+};
+
+const sanitizeUser = (user) => {
+  if (!user) return user;
+  const safeUser = { ...user };
+  safeUser.password = safeUser.password ? '******' : '';
+  return safeUser;
+};
+
+export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
     const sql = 'SELECT * FROM user WHERE email = ? AND password = ?';
-    pool
-      .query(sql, [email, password])
-      .then(async ([result]) => {
-        if (result.length === 0) {
-          res.send(resultData(null, 401, '邮箱密码错误或已过期，请重新输入正确信息或者注册新账号' + formatDateTime())); // 设置状态码为401
-          return;
-        }
-        if (result[0].del_flag === 1) {
-          res.send(resultData(null, 401, '账号已被禁用')); // 设置状态码为401
-          return;
-        }
-        const bookmarkTotalSql = `SELECT COUNT(*) FROM bookmark WHERE user_id=? and del_flag = 0`;
-        const [bookmarkTotalRes] = await pool.query(bookmarkTotalSql, [result[0].id]);
-        const tagTotalSql = `SELECT COUNT(*) FROM tag WHERE user_id=? and del_flag = 0`;
-        const [tagTotalRes] = await pool.query(tagTotalSql, [result[0].id]);
-        const noteTotalSql = `SELECT COUNT(*) FROM note WHERE create_by=? and del_flag = 0`;
-        const [noteTotalRes] = await pool.query(noteTotalSql, [result[0].id]);
-        result[0].bookmarkTotal = bookmarkTotalRes[0]['COUNT(*)'];
-        result[0].tagTotal = tagTotalRes[0]['COUNT(*)'];
-        result[0].noteTotal = noteTotalRes[0]['COUNT(*)'];
-        res.send(resultData(result[0]));
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message)); // 设置状态码为500
-      });
+    const [result] = await pool.query(sql, [email, password]);
+    if (result.length === 0) {
+      res.send(resultData(null, 401, '邮箱密码错误或已过期，请重新输入正确信息或者注册新账号'));
+      return;
+    }
+    if (Number(result[0].del_flag) === 1) {
+      res.send(resultData(null, 401, '账号已被禁用'));
+      return;
+    }
+    await issueLoginSession(req, res, result[0], Boolean(rememberMe));
+    const userInfo = await queryUserInfoById(result[0].id);
+    res.send(resultData(sanitizeUser(userInfo)));
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
 };
 
@@ -172,8 +229,17 @@ export const registerUser = async (req, res) => {
 };
 export const getUserInfo = async (req, res) => {
   try {
-    const id = req.headers['x-user-id']; // 获取用户ID
+    const requestedId = req.query?.id || req.query?.params?.id;
+    const id = req.user?.role === 'root' && requestedId ? requestedId : req.user?.id;
+    if (!id) {
+      res.send(resultData(null, 401, '请先登录'));
+      return;
+    }
     const [userRes] = await pool.query('SELECT * FROM user WHERE id = ?', [id]);
+    if (!userRes[0]) {
+      res.send(resultData(null, 401, '用户不存在,请重新登录！'));
+      return;
+    }
     // 没有储存ip或者ip地址改变，则更新用户ip相关信息
     if (userRes[0].ip === null || userRes[0].ip !== req.headers['x-forwarded-for']) {
       const { data } = await request.get(
@@ -195,89 +261,32 @@ export const getUserInfo = async (req, res) => {
         // 不发送响应，继续执行获取用户信息
       }
     }
-    pool
-      .query(
-        `
-          SELECT 
-            u.*,
-            COALESCE(b.bookmark_count, 0) AS bookmarkTotal,
-            COALESCE(t.tag_count, 0) AS tagTotal,
-            COALESCE(n.note_count, 0) AS noteTotal,
-            COALESCE(o.opinion_count, 0) AS opinionTotal,
-            COALESCE(op.pending_opinion_count, 0) AS pendingOpinionTotal,
-            COALESCE(ou.unread_reply_count, 0) AS unreadOpinionReplyTotal,
-            COALESCE(f.storage_used, 0) AS storageUsed
-          FROM user u
-          LEFT JOIN (
-            SELECT user_id, COUNT(*) AS bookmark_count
-            FROM bookmark
-            WHERE del_flag = 0
-            GROUP BY user_id
-          ) b ON u.id = b.user_id
-          LEFT JOIN (
-            SELECT user_id, COUNT(*) AS tag_count
-            FROM tag
-            WHERE del_flag = 0
-            GROUP BY user_id
-          ) t ON u.id = t.user_id
-          LEFT JOIN (
-            SELECT create_by, COUNT(*) AS note_count
-            FROM note
-            WHERE del_flag = 0
-            GROUP BY create_by
-          ) n ON u.id = n.create_by
-          LEFT JOIN (
-            SELECT user_id, COUNT(*) AS opinion_count
-            FROM opinion
-            WHERE del_flag = 0
-            GROUP BY user_id
-          ) o ON u.id = o.user_id
-          LEFT JOIN (
-            SELECT COUNT(*) AS pending_opinion_count
-            FROM opinion
-            WHERE del_flag = 0 AND status = 'pending'
-          ) op ON 1=1
-          LEFT JOIN (
-            SELECT user_id, COUNT(*) AS unread_reply_count
-            FROM opinion
-            WHERE del_flag = 0 AND status = 'replied' AND reply_viewed = 0
-            GROUP BY user_id
-          ) ou ON u.id = ou.user_id
-          LEFT JOIN (
-            SELECT create_by, ROUND(SUM(file_size) / 1048576, 2) AS storage_used
-            FROM files
-            WHERE del_flag = 0
-            GROUP BY create_by
-          ) f ON u.id = f.create_by
-          WHERE u.id = ?
-        `,
-        [id],
-      )
-      .then(async ([result]) => {
-        if (result.length === 0) {
-          res.send(resultData(null, 401, '用户不存在,请重新登录！')); // 设置状态码为401
-          return;
-        }
-        if (result[0].del_flag === '1') {
-          res.send(resultData(null, 401, '账号已被禁用')); // 设置状态码为401
-          return;
-        }
-        result[0].password = result[0].password ? '******' : '';
-        if (result[0].role === 'visitor') {
-          res.send(resultData(result[0], 'visitor'));
-        } else {
-          res.send(resultData(result[0]));
-        }
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误' + err)); // 设置状态码为500
-      });
+    const result = await queryUserInfoById(id);
+    if (!result) {
+      res.send(resultData(null, 401, '用户不存在,请重新登录！'));
+      return;
+    }
+    if (Number(result.del_flag) === 1) {
+      res.send(resultData(null, 401, '账号已被禁用'));
+      return;
+    }
+    const safeUser = sanitizeUser(result);
+    if (safeUser.role === 'visitor') {
+      res.send(resultData(safeUser, 'visitor'));
+    } else {
+      res.send(resultData(safeUser));
+    }
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
   }
 };
+
+export const me = getUserInfo;
 export const getUserList = (req, res) => {
   try {
+    if (req.user?.role !== 'root') {
+      return res.send(resultData(null, 403, '没有操作权限'));
+    }
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const key = filters.key;
     const skip = pageSize * (currentPage - 1);
@@ -362,22 +371,31 @@ export const getUserList = (req, res) => {
 
 export const saveUserInfo = (req, res) => {
   try {
-    const id = req.body.id ? req.body.id : req.headers['x-user-id']; // 获取用户ID
+    const targetId = req.body.id || req.user?.id;
+    const isRoot = req.user?.role === 'root';
+    const id = isRoot ? targetId : req.user?.id;
+    if (!id || (!isRoot && req.body.id && req.body.id !== req.user?.id)) {
+      return res.send(resultData(null, 403, '没有操作权限'));
+    }
     // 定义允许更新的字段列表
-    const allowedFields = [
+    const selfAllowedFields = [
       'alias',
       'email',
       'phone_number',
-      'role',
-      'ip',
-      'password',
-      'del_flag',
       'location',
       'preferences',
       'head_picture',
+    ];
+    const rootAllowedFields = [
+      ...selfAllowedFields,
+      'password',
+      'role',
+      'ip',
+      'del_flag',
       'github_id',
       'login_type',
     ];
+    const allowedFields = isRoot ? rootAllowedFields : selfAllowedFields;
     // 过滤请求体，只保留允许的字段
     const filteredBody = mergeExistingProperties(req.body, [], ['id']);
     const finalBody = {};
@@ -401,9 +419,15 @@ export const saveUserInfo = (req, res) => {
 
 export const deleteUserById = (req, res) => {
   try {
+    if (req.user?.role !== 'root') {
+      return res.send(resultData(null, 403, '没有操作权限'));
+    }
     pool
       .query('update user set del_flag=1 where id=?', [req.query.id])
-      .then(([result]) => res.send(resultData(result)))
+      .then(async ([result]) => {
+        await removeUserSessions(req.query.id);
+        res.send(resultData(result));
+      })
       .catch((err) => res.send(resultData(null, 500, '服务器内部错误: ' + err.message)));
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常：' + e)); // 设置状态码为400
@@ -430,6 +454,7 @@ export const github = async (req, res) => {
 
     // 3. 数据库操作（查找/创建用户）
     const user = await handleUserDatabaseOperation(githubUser);
+    await issueLoginSession(req, res, user, true);
 
     res.send(
       resultData({
@@ -445,6 +470,15 @@ export const github = async (req, res) => {
   } catch (error) {
     console.error('GitHub Auth Error:', error);
     res.send(resultData(null, 500, 'GitHub认证失败：' + error));
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    await logoutCurrentSession(req, res);
+    res.send(resultData(null, 200, '退出成功'));
+  } catch (e) {
+    res.send(resultData(null, 500, '退出登录失败：' + e.message));
   }
 };
 
@@ -637,7 +671,10 @@ const handleUserDatabaseOperation = async (githubUser) => {
 
 export const configPassword = async (req, res) => {
   try {
-    const id = req.headers['x-user-id']; // 获取用户ID
+    const id = req.user?.id; // 获取用户ID
+    if (!id || req.user?.role === 'visitor') {
+      return res.send(resultData(null, 401, '请先登录'));
+    }
     const { password, type } = req.body;
     const [oldUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [id]);
     if (type === 'update') {
@@ -651,7 +688,9 @@ export const configPassword = async (req, res) => {
     }
     pool
       .query('update user set password=? where id=?', [password, id])
-      .then(([result]) => {
+      .then(async ([result]) => {
+        await removeUserSessions(id);
+        await logoutCurrentSession(req, res);
         res.send(resultData(result));
       })
       .catch((err) => {

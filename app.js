@@ -2,6 +2,8 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import { logFunction } from './util/log.js';
 import { baseRouter, requestTime } from './util/common.js';
+import { authMiddleware, startSessionMaintenance } from './util/auth.js';
+import { ensureSessionTable } from './util/sessionStore.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -34,6 +36,8 @@ app.use(express.json());
 
 //  记录请求时间
 app.use(requestTime);
+// 还原可信登录态，兼容旧接口需要的 x-user-id/role
+app.use(authMiddleware);
 // 日志记录中间件
 app.use(logFunction);
 
@@ -51,6 +55,9 @@ const allRouter = [
 allRouter.forEach((item) => {
   app.use(item.path, item.router);
 });
+
+await ensureSessionTable();
+startSessionMaintenance();
 
 // 启动 Express 服务器
 app.listen(9001, () => {

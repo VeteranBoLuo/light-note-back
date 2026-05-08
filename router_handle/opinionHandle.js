@@ -9,7 +9,7 @@ const OPINION_STATUS = {
 
 export const recordOpinion = async (req, res) => {
   const connection = await pool.getConnection();
-  const userId = req.headers['x-user-id'];
+  const userId = req.user?.id;
   const insertSql = 'INSERT INTO opinion SET ?';
   const params = req.body;
   params.userId = userId;
@@ -34,8 +34,8 @@ export const recordOpinion = async (req, res) => {
 export const getOpinionList = async (req, res) => {
   const connection = await pool.getConnection();
   const { pageSize, currentPage, userId, filters = {} } = req.body;
-  const currentUserId = req.headers['x-user-id'];
-  const role = req.headers['role'];
+  const currentUserId = req.user?.id;
+  const role = req.user?.role;
   const targetUserId = role === 'root' ? userId : currentUserId;
   const skip = pageSize * (currentPage - 1);
 
@@ -135,7 +135,7 @@ export const getOpinionList = async (req, res) => {
 };
 
 export const replyOpinion = async (req, res) => {
-  const role = req.headers['role'];
+  const role = req.user?.role;
   if (role !== 'root') {
     return res.send(resultData(null, 403, '没有操作权限'));
   }
@@ -164,7 +164,7 @@ export const replyOpinion = async (req, res) => {
 };
 
 export const markOpinionReplyViewed = async (req, res) => {
-  const userId = req.headers['x-user-id'];
+  const userId = req.user?.id;
   const { ids = [] } = req.body || {};
 
   if (!userId) {
@@ -198,8 +198,8 @@ export const markOpinionReplyViewed = async (req, res) => {
 };
 
 export const getOpinionNotice = async (req, res) => {
-  const userId = req.headers['x-user-id'];
-  const role = req.headers['role'];
+  const userId = req.user?.id;
+  const role = req.user?.role;
 
   if (!userId) {
     return res.send(resultData(null, 400, '缺少用户信息'));

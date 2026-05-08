@@ -143,28 +143,17 @@ export async function logFunction(req, res, next) {
     if (noPass) {
       return res.status(403).json({ code: 403, msg: '系统检测为非法请求' });
     }
-    // 角色为游客，需要查询获取
-    if (!req.headers['x-user-id'] && req.headers.role === 'visitor') {
+    if (req.originalUrl.includes('/login')) {
+      // 登录成败交给登录接口处理，日志中间件只记录请求。
+    } else if (!req.headers['x-user-id'] && req.headers.role === 'visitor') {
       const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
       req.headers['x-user-id'] = visitorResult[0].id;
     } else {
-      if (req.originalUrl.includes('login')) {
-        // 登录接口调用时还没有userID和角色权限等信息，需要查询获取
-        const { email, password } = req.body;
-        const [userResult] = await pool.query('SELECT * FROM user WHERE email = ? AND password = ?', [email, password]);
-        if (!userResult[0]) {
-          throw new Error('邮箱密码错误或已过期，请重新输入正确信息或者注册新账号');
-        }
-        if (userResult[0].del_flag === '1') {
-          throw new Error('账号已被禁用');
-        }
-      } else {
-        const [userResult] = await pool.query('SELECT * FROM user WHERE id = ?', [req.headers['x-user-id']]);
-        // 用户删除或不存在则使用游客账号
-        if (!userResult[0] || userResult[0].del_flag === '1') {
-          const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
-          req.headers['x-user-id'] = visitorResult[0].id;
-        }
+      const [userResult] = await pool.query('SELECT * FROM user WHERE id = ?', [req.headers['x-user-id']]);
+      // 用户删除或不存在则使用游客账号
+      if (!userResult[0] || userResult[0].del_flag === '1') {
+        const [visitorResult] = await pool.query('SELECT id FROM user WHERE role = ?', ['visitor']);
+        req.headers['x-user-id'] = visitorResult[0].id;
       }
     }
     const userId = req.headers['x-user-id'];

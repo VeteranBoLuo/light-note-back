@@ -1,0 +1,155 @@
+import pool from '../db/index.js';
+import { resultData, getClientIp } from './common.js';
+import { cleanupExpiredSessions, createSession, getSession, removeSession } from './sessionStore.js';
+
+const COOKIE_NAME = 'sid';
+const AUTH_EXPIRED_HEADER = 'X-Auth-Expired';
+const AUTH_ROLE_HEADER = 'X-Auth-Role';
+const AUTH_EXPIRES_IN_HEADER = 'X-Auth-Expires-In';
+const LOGIN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const REMEMBER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const parseCookies = (cookieHeader = '') => {
+  return cookieHeader.split(';').reduce((cookies, pair) => {
+    const index = pair.indexOf('=');
+    if (index === -1) return cookies;
+    const key = pair.slice(0, index).trim();
+    const value = pair.slice(index + 1).trim();
+    if (key) {
+      cookies[key] = decodeURIComponent(value);
+    }
+    return cookies;
+  }, {});
+};
+
+export const getRequestSid = (req) => parseCookies(req.headers.cookie || '')[COOKIE_NAME] || '';
+
+const getCookieOptions = (maxAge) => ({
+  httpOnly: true,
+  secure: process.platform === 'linux',
+  sameSite: 'lax',
+  path: '/',
+  maxAge,
+});
+
+export const setAuthCookie = (res, sid, maxAge) => {
+  res.cookie(COOKIE_NAME, sid, getCookieOptions(maxAge));
+};
+
+export const clearAuthCookie = (res) => {
+  res.clearCookie(COOKIE_NAME, getCookieOptions(0));
+};
+
+const markAuthExpired = (res) => {
+  res.setHeader(AUTH_EXPIRED_HEADER, '1');
+};
+
+export const getSessionMaxAge = (rememberMe) => (rememberMe ? REMEMBER_MAX_AGE_MS : LOGIN_MAX_AGE_MS);
+
+export const issueLoginSession = async (req, res, user, rememberMe = false) => {
+  const maxAgeMs = getSessionMaxAge(rememberMe);
+  const { sid } = await createSession({
+    userId: user.id,
+    role: user.role || 'visitor',
+    maxAgeMs,
+    ip: getClientIp(req) || '',
+    userAgent: req.headers['user-agent'] || '',
+  });
+  setAuthCookie(res, sid, maxAgeMs);
+  res.setHeader(AUTH_ROLE_HEADER, user.role || 'visitor');
+  res.setHeader(AUTH_EXPIRES_IN_HEADER, String(Math.max(1, Math.ceil(maxAgeMs / 1000))));
+  return sid;
+};
+
+const findVisitorUser = async () => {
+  const [rows] = await pool.query(
+    `SELECT id, role
+     FROM user
+     WHERE role = ? AND del_flag = 0
+     LIMIT 1`,
+    ['visitor'],
+  );
+  return rows[0] || { id: '', role: 'visitor' };
+};
+
+const attachUserToRequest = (req, res, user, sessionId = '', expiresInSeconds = 0) => {
+  req.user = {
+    id: user.id || '',
+    role: user.role || 'visitor',
+    sessionId,
+    isAuthenticated: Boolean(sessionId && user.id && user.role !== 'visitor'),
+  };
+  res.setHeader(AUTH_ROLE_HEADER, req.user.role);
+  if (req.user.isAuthenticated && expiresInSeconds > 0) {
+    res.setHeader(AUTH_EXPIRES_IN_HEADER, String(expiresInSeconds));
+  }
+  // Compatibility layer for old handlers. New code should use req.user.
+  req.headers['x-user-id'] = req.user.id;
+  req.headers.role = req.user.role;
+};
+
+export const authMiddleware = async (req, res, next) => {
+  try {
+    const sid = getRequestSid(req);
+    if (!sid) {
+      attachUserToRequest(req, res, await findVisitorUser());
+      return next();
+    }
+
+    const session = await getSession(sid);
+    if (!session) {
+      markAuthExpired(res);
+      clearAuthCookie(res);
+      attachUserToRequest(req, res, await findVisitorUser());
+      return next();
+    }
+
+    const [rows] = await pool.query(
+      `SELECT id, role
+       FROM user
+       WHERE id = ? AND del_flag = 0
+       LIMIT 1`,
+      [session.user_id],
+    );
+    const user = rows[0];
+    if (!user) {
+      markAuthExpired(res);
+      await removeSession(sid);
+      clearAuthCookie(res);
+      attachUserToRequest(req, res, await findVisitorUser());
+      return next();
+    }
+
+    attachUserToRequest(req, res, user, sid, Number(session.expires_in_seconds || 0));
+    return next();
+  } catch (e) {
+    console.error('鉴权中间件异常:', e.message);
+    attachUserToRequest(req, res, await findVisitorUser());
+    return next();
+  }
+};
+
+export const logoutCurrentSession = async (req, res) => {
+  const sid = getRequestSid(req) || req.user?.sessionId;
+  if (sid) {
+    await removeSession(sid);
+  }
+  clearAuthCookie(res);
+};
+
+export const requireRole = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user?.id || !roles.includes(req.user.role)) {
+      return res.send(resultData(null, 403, '没有操作权限'));
+    }
+    return next();
+  };
+};
+
+export const startSessionMaintenance = () => {
+  cleanupExpiredSessions().catch((e) => console.error('清理过期登录态失败:', e.message));
+  setInterval(
+    () => cleanupExpiredSessions().catch((e) => console.error('清理过期登录态失败:', e.message)),
+    60 * 60 * 1000,
+  );
+};
