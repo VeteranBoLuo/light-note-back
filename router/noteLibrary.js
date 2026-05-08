@@ -26,7 +26,7 @@ router.post('/uploadImage', upload.single('file'), async (req, res) => {
     }
     // 构建文件的URL
     const fileUrl = `https://boluo66.top/uploads/${req.file.filename}`;
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const noteParams = {
       createBy: userId,
       title: '未命名文档',

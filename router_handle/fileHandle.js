@@ -92,7 +92,7 @@ export const queryFolder = async (req, res) => {
   const connection = await pool.getConnection();
 
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const params = [userId];
     // 获取用户ID
     let query = `SELECT * FROM folders`;
@@ -130,7 +130,7 @@ export const addFolder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { name } = req.body;
-    const createBy = req.headers['x-user-id'];
+    const createBy = req.user.id;
     const folder = {
       name: name,
       createBy,
@@ -229,7 +229,7 @@ export const getFileTags = async (req, res) => {
 export const updateFileTags = async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const { id, tags = [] } = req.body;
     if (!id) {
       return res.send(resultData(null, 400, '缺少文件ID'));

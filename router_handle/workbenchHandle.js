@@ -264,7 +264,7 @@ async function queryRecentFiles(userId) {
 
 export const getWorkbenchSummary = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     if (!userId) return res.send(resultData(null, 400, '缺少用户信息'));
 
     const [counts, weeklyStats, trend, fileTypeStats, commonBookmarks, hotTags, recentNotes, recentFiles] =

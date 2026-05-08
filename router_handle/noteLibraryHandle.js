@@ -6,7 +6,7 @@ import { RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '..
 
 export const addNote = (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const params = {
       ...req.body,
       createBy: userId,
@@ -37,7 +37,7 @@ export const addNote = (req, res) => {
 
 export const updateNote = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const params = {
       ...req.body,
       updateBy: userId,
@@ -72,7 +72,7 @@ export const updateNote = async (req, res) => {
 
 export const queryNoteList = (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const tagId = req.body.tagId;
     let sql = `SELECT n.*,
           (
@@ -201,7 +201,7 @@ export const updateNoteSort = async (req, res) => {
 
 export const addNoteTag = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const name = String(req.body.name || '').trim();
     if (!name) {
       return res.send(resultData(null, 400, '标签名称不能为空'));
@@ -240,7 +240,7 @@ export const addNoteTag = async (req, res) => {
 
 export const editNoteTag = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const name = String(req.body.name || '').trim();
     if (!name) {
       return res.send(resultData(null, 400, '标签名称不能为空'));
@@ -278,7 +278,7 @@ export const editNoteTag = async (req, res) => {
 
 export const queryNoteTagList = (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     pool
       .query(
         `
@@ -332,7 +332,7 @@ export const getNoteTags = (req, res) => {
 
 export const delNoteTag = (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const tagId = req.body.id;
     pool
       .query('UPDATE tag SET del_flag = 1 WHERE id = ? AND user_id = ?', [tagId, userId])
@@ -349,7 +349,7 @@ export const delNoteTag = (req, res) => {
 
 export const updateNoteTags = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const { noteId, tags } = req.body;
     if (!noteId || !Array.isArray(tags)) {
       return res.send(resultData(null, 400, '参数错误'));

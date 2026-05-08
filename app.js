@@ -1,7 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import { logFunction } from './util/log.js';
-import { baseRouter, requestTime } from './util/common.js';
+import { baseRouter } from './util/common.js';
 import { authMiddleware, startSessionMaintenance } from './util/auth.js';
 import { ensureSessionTable } from './util/sessionStore.js';
 import dotenv from 'dotenv';
@@ -30,12 +30,11 @@ console.log(`Loaded env from: 【${envPath}】`);
 console.log('BASE_URL:', process.env.BASE_URL);
 // 建立一个Express服务器
 const app = express();
+app.set('trust proxy', 1);
 app.use(bodyParser.json({ limit: '10mb', extended: true }));
 //  解析请求体中的JSON数据
 app.use(express.json());
 
-//  记录请求时间
-app.use(requestTime);
 // 还原可信登录态，兼容旧接口需要的 x-user-id/role
 app.use(authMiddleware);
 // 日志记录中间件
@@ -61,7 +60,5 @@ startSessionMaintenance();
 
 // 启动 Express 服务器
 app.listen(9001, () => {
-  console.log('环境变量:', process.env);
-
   console.log('服务器已启动：' + new Date().toLocaleString('zh-CN'));
 });

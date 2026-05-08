@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { resultData, getClientIp } from './common.js';
+import { resultData } from './common.js';
 import { cleanupExpiredSessions, createSession, getSession, removeSession } from './sessionStore.js';
 
 const COOKIE_NAME = 'sid';
@@ -52,7 +52,7 @@ export const issueLoginSession = async (req, res, user, rememberMe = false) => {
     userId: user.id,
     role: user.role || 'visitor',
     maxAgeMs,
-    ip: getClientIp(req) || '',
+    ip: req.ip || '',
     userAgent: req.headers['user-agent'] || '',
   });
   setAuthCookie(res, sid, maxAgeMs);

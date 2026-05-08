@@ -128,18 +128,6 @@ export const mergeExistingProperties = function (source, outValue = [undefined],
   }
   return target;
 };
-// 当前时间拼接
-export const requestTime = function (req, res, next) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
-  const hours = now.getHours().toString().padStart(2, '0');
-  const minutes = now.getMinutes().toString().padStart(2, '0');
-  const seconds = now.getSeconds().toString().padStart(2, '0');
-  req.requestTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-  next();
-};
 // 生成随机数
 export const generateUUID = function () {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -147,18 +135,6 @@ export const generateUUID = function () {
       v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
-};
-
-export const getClientIp = function (req) {
-  // 处理多层代理场景
-  const xff = req.headers['x-forwarded-for'] || '';
-  const ips = xff.split(/, ?/g).filter((ip) => ip); // 拆分并过滤空值
-
-  // 排除内网 IP（防止伪造）
-  const isPrivate = (ip) => ip.match(/^(10\.|192\.168|172\.(1[6-9]|2\d|3[0-1]))/);
-
-  // 取第一个非内网 IP
-  return ips.find((ip) => !isPrivate(ip)) || req.ip;
 };
 
 export const baseRouter = [

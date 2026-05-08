@@ -283,7 +283,7 @@ async function queryTags(userId, keyword, limit, lang) {
 
 export const globalSearch = async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     if (!userId) return res.send(resultData(null, 400, '缺少用户信息'));
 
     const keyword = toText(req.body?.keyword || req.body?.filters?.keyword);

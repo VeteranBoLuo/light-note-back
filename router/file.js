@@ -43,7 +43,7 @@ const formatFileRecord = (file) => {
 
 router.post('/uploadFiles', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const { files } = req.body || {};
 
     if (!userId) {
@@ -88,7 +88,7 @@ router.post('/uploadFiles', async (req, res) => {
 router.post('/confirmUpload', async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const { files, folderId } = req.body || {};
 
     if (!userId) {
@@ -158,7 +158,7 @@ router.post('/confirmUpload', async (req, res) => {
 // 查询所有文件
 router.post('/queryFiles', async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const { filters = {} } = req.body;
     const params = [userId];
     let sql =
@@ -313,12 +313,11 @@ router.post('/deleteFileById', async (req, res) => {
 router.post('/queryTotalFileSize', async (req, res) => {
   try {
     // 获取用户ID
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
 
     // 构建SQL查询
     const sql = 'SELECT SUM(file_size) as total_size FROM files WHERE create_by = ?';
     const [result] = await pool.query(sql, [userId]);
-    console.log(result[0].total_size / 1024);
     // 提取总大小（MB）保留两位小数
     const totalSizeMB = parseFloat((result[0].total_size / (1024 * 1024)).toFixed(2));
     // 返回结果

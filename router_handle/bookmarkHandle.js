@@ -15,7 +15,7 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 export const queryTagList = (req, res) => {
-  const userId = req.headers['x-user-id'];
+  const userId = req.user.id;
   try {
     let sql = `SELECT
     t.*,
@@ -102,7 +102,7 @@ FROM
   }
 };
 export const getRelatedTag = (req, res) => {
-  const userId = req.headers['x-user-id'];
+  const userId = req.user.id;
   try {
     const type = req.body.filters.type;
     let sql = `SELECT t.* FROM tag t LEFT JOIN tag_relations a on t.id=a.related_tag_id
@@ -170,7 +170,7 @@ export const addTag = async (req, res) => {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction(); // 开始事务
-      const userId = req.headers['x-user-id'];
+      const userId = req.user.id;
       const params = {
         ...req.body,
         userId: userId,
@@ -277,7 +277,7 @@ export const updateTag = async (req, res) => {
       name: paramsData.name,
       iconUrl: paramsData.iconUrl,
     };
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const sqlCheck = 'SELECT * FROM tag WHERE user_id=? AND name = ? AND del_flag = 0';
     const [checkRes] = await connection.query(sqlCheck, [userId, params.name]);
     if (checkRes.length > 0 && checkRes[0].id !== id) {
@@ -345,7 +345,7 @@ export const updateTag = async (req, res) => {
   }
 };
 export const getBookmarkList = (req, res) => {
-  const userId = req.headers['x-user-id']; // 获取用户ID
+  const userId = req.user.id; // 获取用户ID
   const tagId = req.body.filters.tagId; // 获取标签ID
   let sql = `SELECT b.*,(
         SELECT JSON_ARRAYAGG(
@@ -446,7 +446,7 @@ export const addBookmark = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const params = {
       ...req.body,
       userId: userId,
@@ -496,7 +496,7 @@ export const updateBookmark = async (req, res) => {
   try {
     await connection.beginTransaction();
     const id = req.body.id;
-    const userId = req.headers['x-user-id'];
+    const userId = req.user.id;
     const sqlCheck = 'SELECT * FROM bookmark WHERE user_id=? AND name = ? AND del_flag = 0';
     const [checkRes] = await connection.query(sqlCheck, [userId, req.body.name]);
     if (checkRes.length > 0 && checkRes[0].id != id) {
@@ -603,7 +603,7 @@ export const getCommonBookmarks = async (req, res) => {
   try {
     const [result] = await pool.query(
       "SELECT b.id, b.url, REPLACE(ol.operation, '点击书签卡片', '') AS name, COUNT(*) as count FROM `operation_logs` ol LEFT JOIN bookmark b ON b.user_id = ol.create_by AND b.name = REPLACE(ol.operation, '点击书签卡片', '') AND b.del_flag = 0 WHERE ol.create_by = ? AND ol.operation LIKE '点击书签卡片%' GROUP BY ol.operation, b.id, b.url ORDER BY count DESC LIMIT 10",
-      [req.headers['x-user-id']],
+      [req.user.id],
     );
     res.send(
       resultData({
@@ -673,7 +673,7 @@ const parseBookmarksFromHtml = (html = '') => {
 
 // HTML 书签导入：新增缺失的标签/书签，并建立关联
 export const importBookmarksHtml = async (req, res) => {
-  const userId = req.headers['x-user-id'];
+  const userId = req.user.id;
 
   if (!userId) {
     return res.send(resultData(null, 401, '缺少用户身份')); // 无法继续
