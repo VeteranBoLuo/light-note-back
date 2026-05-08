@@ -208,7 +208,6 @@ export const registerUser = async (req, res) => {
         url: req.originalUrl,
         req: requestPayload === '{}' ? '' : requestPayload,
         ip: req.headers['x-forwarded-for'] ?? '未知',
-        location: '未知',
         system: system,
         del_flag: 0,
       };

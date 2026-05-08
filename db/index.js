@@ -10,6 +10,8 @@ const pool = mysql.createPool({
   database: 'tag_db',
   namedPlaceholders: true,
   charset: 'utf8mb4',
+  enableKeepAlive: true,        // 定期发心跳包检测连接是否存活                                                                                                                                                                                                              
+  keepAliveInitialDelay: 10000, // 每10秒检测一次    
 });
 
 pool
