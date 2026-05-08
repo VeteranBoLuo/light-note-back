@@ -52,7 +52,22 @@ export const getSession = async (sid) => {
     await removeSession(sid);
     return null;
   }
-  await pool.query('UPDATE user_sessions SET last_active_time = NOW() WHERE sid = ?', [sid]);
+
+  // 滑动过期策略：剩余不足 24h 时延长到 24h，让活跃用户不掉线
+  const ONE_DAY_SEC = 86400;
+  if (session.expires_in_seconds < ONE_DAY_SEC) {
+    await pool.query(
+      `UPDATE user_sessions
+       SET expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND),
+           last_active_time = NOW()
+       WHERE sid = ?`,
+      [ONE_DAY_SEC, sid],
+    );
+    session.expires_in_seconds = ONE_DAY_SEC;
+  } else {
+    await pool.query('UPDATE user_sessions SET last_active_time = NOW() WHERE sid = ?', [sid]);
+  }
+
   return session;
 };
 
