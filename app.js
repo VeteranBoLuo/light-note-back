@@ -1,7 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import { logFunction } from './util/log.js';
-import { baseRouter } from './util/common.js';
+import { baseRouter, requestTime } from './util/common.js';
 import { authMiddleware, startSessionMaintenance } from './util/auth.js';
 import { ensureSessionTable } from './util/sessionStore.js';
 import dotenv from 'dotenv';
@@ -35,7 +35,9 @@ app.use(bodyParser.json({ limit: '10mb', extended: true }));
 //  解析请求体中的JSON数据
 app.use(express.json());
 
-// 还原可信登录态，兼容旧接口需要的 x-user-id/role
+//  记录请求时间
+app.use(requestTime);
+// 还原可信登录态
 app.use(authMiddleware);
 // 日志记录中间件
 app.use(logFunction);
