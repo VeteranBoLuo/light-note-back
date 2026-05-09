@@ -44,6 +44,7 @@ export const writeSecurityEvent = async ({ context, evidenceList, threat, decisi
     headers_summary: safeJsonStringify(context.headersSummary),
     ip_attack_count_5m: ipAttackCount5m,
     ip_attack_count_24h: ipAttackCount24h,
+    ip_risk_delta: 0,
     decision_reason: decision.reason || '',
   };
   await pool.query('INSERT INTO security_events SET ?', [event]);
@@ -70,13 +71,21 @@ export const writeSecurityEvent = async ({ context, evidenceList, threat, decisi
     );
   }
   if (Number(threat.threatScore || 0) >= 20 || decision.shouldBan) {
-    await updateIpReputation({
+    const reputationChange = await updateIpReputation({
       ip: context.sourceIp,
       attackType: threat.attackType,
       severity: threat.severity,
       threatScore: threat.threatScore,
       shouldBan: decision.shouldBan,
-    }).catch(() => {});
+    }).catch(() => null);
+    if (reputationChange) {
+      await pool
+        .query('UPDATE security_events SET ip_risk_delta = ? WHERE event_id = ?', [
+          reputationChange.riskDelta || 0,
+          eventId,
+        ])
+        .catch(() => {});
+    }
   }
   return eventId;
 };

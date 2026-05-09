@@ -122,7 +122,7 @@ const detectFileUpload = (context) => {
       name: '恶意文件上传',
       attackType: 'MALICIOUS_FILE_UPLOAD',
       severity: 'critical',
-      baseScore: 72,
+      baseScore: 86,
       confidence: 88,
     };
     evidence.push(

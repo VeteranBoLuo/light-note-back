@@ -1,5 +1,45 @@
 import pool from '../../db/index.js';
-import { SIGNATURE_RULES } from './rules.js';
+import { SECURITY_RULE_CATALOG } from './rules.js';
+
+const ensureColumn = async (tableName, columnName, definition) => {
+  const [rows] = await pool.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?
+     LIMIT 1`,
+    [tableName, columnName],
+  );
+  if (!rows[0]) {
+    await pool.query(`ALTER TABLE ${tableName} ADD COLUMN ${definition}`);
+  }
+};
+
+const ensureSecurityEventSchema = async () => {
+  await ensureColumn('security_events', 'ip_risk_delta', 'ip_risk_delta INT DEFAULT 0 AFTER ip_attack_count_24h');
+  await ensureColumn(
+    'security_events',
+    'ip_risk_reverted',
+    'ip_risk_reverted BOOLEAN DEFAULT FALSE AFTER ip_risk_delta',
+  );
+  await ensureColumn(
+    'security_events',
+    'ip_risk_reverted_at',
+    'ip_risk_reverted_at DATETIME AFTER ip_risk_reverted',
+  );
+  await pool.query(`
+    ALTER TABLE security_events
+    MODIFY handled_status ENUM('unhandled','processed','confirmed','false_positive','ignored','resolved') DEFAULT 'unhandled'
+  `);
+  await pool.query(`
+    UPDATE security_events
+    SET handled_status = 'processed'
+    WHERE handled_status IN ('confirmed','resolved','ignored')
+  `);
+  await pool.query(`
+    ALTER TABLE security_events
+    MODIFY handled_status ENUM('unhandled','processed','false_positive') DEFAULT 'unhandled'
+  `);
+};
 
 export const ensureSecurityTables = async () => {
   await pool.query(`
@@ -28,8 +68,11 @@ export const ensureSecurityTables = async () => {
       headers_summary JSON,
       ip_attack_count_5m INT DEFAULT 0,
       ip_attack_count_24h INT DEFAULT 0,
+      ip_risk_delta INT DEFAULT 0,
+      ip_risk_reverted BOOLEAN DEFAULT FALSE,
+      ip_risk_reverted_at DATETIME,
       decision_reason VARCHAR(255),
-      handled_status ENUM('unhandled','confirmed','false_positive','ignored','resolved') DEFAULT 'unhandled',
+      handled_status ENUM('unhandled','processed','false_positive') DEFAULT 'unhandled',
       handled_by VARCHAR(64),
       handled_at DATETIME,
       remark TEXT,
@@ -117,7 +160,9 @@ export const ensureSecurityTables = async () => {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
-  for (const rule of SIGNATURE_RULES) {
+  await ensureSecurityEventSchema();
+
+  for (const rule of SECURITY_RULE_CATALOG) {
     await pool.query(
       `INSERT INTO security_rules
         (rule_code,rule_name,attack_type,severity,base_score,confidence,action,enabled,description)
@@ -128,6 +173,8 @@ export const ensureSecurityTables = async () => {
         severity = VALUES(severity),
         base_score = VALUES(base_score),
         confidence = VALUES(confidence),
+        action = VALUES(action),
+        description = VALUES(description),
         updated_at = NOW()`,
       [
         rule.code,
@@ -138,7 +185,7 @@ export const ensureSecurityTables = async () => {
         rule.confidence,
         rule.baseScore >= 50 ? 'block' : 'log',
         1,
-        '系统内置安全检测规则',
+        rule.description || '系统内置安全检测规则',
       ],
     );
   }

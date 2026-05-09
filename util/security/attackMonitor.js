@@ -64,12 +64,28 @@ export const attackMonitor = async (req, res, next) => {
     const finalDecision = decision.blocked
       ? decision
       : decideSecurityAction({ threatScore: finalThreat.threatScore, ipReputation: effectiveIpReputation });
+    const observedDecision =
+      !decision.blocked && finalDecision.blocked && !finalDecision.shouldBan
+        ? {
+            ...finalDecision,
+            actionTaken: 'log',
+            blocked: false,
+            reason: '响应完成后识别风险，已记录并更新画像',
+          }
+        : {
+            ...finalDecision,
+            blocked: decision.blocked ? finalDecision.blocked : false,
+            reason:
+              !decision.blocked && finalDecision.shouldBan
+                ? `${finalDecision.reason}，后续请求生效`
+                : finalDecision.reason,
+          };
     loggedRequests.add(req);
     await writeEventSafely({
       context,
       evidenceList: allEvidence,
       threat: finalThreat,
-      decision: finalDecision,
+      decision: observedDecision,
       statusCode: res.statusCode,
       responseTimeMs: Date.now() - context.startedAt,
     });

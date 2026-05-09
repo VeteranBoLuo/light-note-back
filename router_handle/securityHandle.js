@@ -1,7 +1,7 @@
 import pool from '../db/index.js';
 import { resultData } from '../util/common.js';
 import { validateQueryParams } from '../util/request.js';
-import { setIpBan } from '../util/security/services/ipReputation.js';
+import { rebuildIpReputationFromEvents, revertIpReputationImpact, setIpBan } from '../util/security/services/ipReputation.js';
 import { removeUserSessions } from '../util/sessionStore.js';
 
 const ensureRootRole = async (req, res) => {
@@ -55,6 +55,10 @@ const buildEventWhere = (filters = {}) => {
   if (filters.source_ip) {
     conditions.push('e.source_ip = ?');
     params.push(filters.source_ip);
+  }
+  if (filters.user_id) {
+    conditions.push('e.user_id = ?');
+    params.push(filters.user_id);
   }
   if (filters.blocked !== undefined && filters.blocked !== '' && filters.blocked !== null) {
     conditions.push('e.blocked = ?');
@@ -212,23 +216,66 @@ export const getSecurityEventDetail = async (req, res) => {
 };
 
 export const handleSecurityEvent = async (req, res) => {
+  let connection;
   try {
     if (!(await ensureRootRole(req, res))) return;
     const { eventId } = req.params;
-    const { handledStatus = 'confirmed', remark = '' } = req.body || {};
-    const allowed = ['unhandled', 'confirmed', 'false_positive', 'ignored', 'resolved'];
-    if (!allowed.includes(handledStatus)) {
+    const { handledStatus = 'processed', remark = '' } = req.body || {};
+    const statusMap = {
+      confirmed: 'processed',
+      resolved: 'processed',
+      ignored: 'processed',
+      processed: 'processed',
+      false_positive: 'false_positive',
+      unhandled: 'unhandled',
+    };
+    const normalizedStatus = statusMap[handledStatus];
+    const allowed = ['unhandled', 'processed', 'false_positive'];
+    if (!allowed.includes(normalizedStatus)) {
       return res.send(resultData(null, 400, '无效的处理状态'));
     }
-    await pool.query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT * FROM security_events WHERE event_id = ? LIMIT 1 FOR UPDATE', [eventId]);
+    const event = rows[0];
+    if (!event) {
+      await connection.rollback();
+      return res.send(resultData(null, 404, '安全事件不存在'));
+    }
+
+    await connection.query(
       `UPDATE security_events
        SET handled_status = ?, remark = ?, handled_by = ?, handled_at = NOW()
        WHERE event_id = ?`,
-      [handledStatus, remark, req.user.id, eventId],
+      [normalizedStatus, remark, req.user.id, eventId],
     );
-    res.send(resultData(null, 200, '处理状态已更新'));
+
+    if (normalizedStatus === 'false_positive' && !event.ip_risk_reverted) {
+      if (Number(event.ip_risk_delta || 0) > 0) {
+        await revertIpReputationImpact({
+          ip: event.source_ip,
+          attackType: event.attack_type,
+          severity: event.severity,
+          riskDelta: event.ip_risk_delta,
+          connection,
+        });
+      } else {
+        await rebuildIpReputationFromEvents({ ip: event.source_ip, connection });
+      }
+      await connection.query(
+        `UPDATE security_events
+         SET ip_risk_reverted = 1, ip_risk_reverted_at = NOW()
+         WHERE event_id = ?`,
+        [eventId],
+      );
+    }
+    await connection.commit();
+    res.send(resultData(null, 200, normalizedStatus === 'false_positive' ? '已标记误报并回滚风险影响' : '处理状态已更新'));
   } catch (e) {
+    if (connection) await connection.rollback().catch(() => {});
     res.send(resultData(null, 500, '更新处理状态失败：' + e.message));
+  } finally {
+    if (connection) connection.release();
   }
 };
 
