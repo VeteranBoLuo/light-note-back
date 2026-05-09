@@ -5,6 +5,7 @@ export const SECURITY_CONFIG = {
   pathEnumerationPerMinute: Number(process.env.SECURITY_PATH_ENUMERATION_PER_MINUTE || 40),
   scanner404FiveMinutes: Number(process.env.SECURITY_404_FIVE_MINUTES || 20),
   loginFailFiveMinutes: Number(process.env.SECURITY_LOGIN_FAIL_FIVE_MINUTES || 8),
+  ipAutoBanRiskScore: Number(process.env.SECURITY_IP_AUTO_BAN_RISK_SCORE || 80),
   blockEnabled: process.env.SECURITY_BLOCK_ENABLED !== 'false',
 };
 

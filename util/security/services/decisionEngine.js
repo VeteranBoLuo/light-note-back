@@ -1,8 +1,5 @@
 import { SECURITY_CONFIG } from '../rules.js';
 
-const isPrivateOrLocalIp = (ip = '') =>
-  /^(127\.|10\.|192\.168\.|::1$|::ffff:127\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(String(ip));
-
 export const decideSecurityAction = ({ threatScore, ipReputation = {} }) => {
   const bannedUntil = ipReputation?.banned_until ? new Date(ipReputation.banned_until).getTime() : 0;
   if (ipReputation?.is_banned && bannedUntil > Date.now()) {
@@ -12,13 +9,7 @@ export const decideSecurityAction = ({ threatScore, ipReputation = {} }) => {
     return { actionTaken: threatScore > 0 ? 'log' : 'allow', blocked: false, shouldBan: false, reason: '防护拦截未启用' };
   }
   if (threatScore >= 90) {
-    const canBan = !isPrivateOrLocalIp(ipReputation?.ip);
-    return {
-      actionTaken: canBan ? 'ban' : 'block',
-      blocked: true,
-      shouldBan: canBan,
-      reason: canBan ? '严重威胁，临时封禁' : '严重威胁，已拦截',
-    };
+    return { actionTaken: 'block', blocked: true, shouldBan: false, reason: '严重威胁，已拦截' };
   }
   if (threatScore >= 80) {
     return { actionTaken: 'block', blocked: true, shouldBan: false, reason: '严重威胁，已拦截' };

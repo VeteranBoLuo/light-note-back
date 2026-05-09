@@ -1,7 +1,11 @@
 import pool from '../../../db/index.js';
+import { SECURITY_CONFIG } from '../rules.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000;
+const isPrivateOrLocalIp = (ip = '') =>
+  /^(127\.|10\.|192\.168\.|::1$|::ffff:127\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(String(ip));
+const isAutoBanReason = (reason = '') => /^IP风险分 \d+ 达到自动封禁阈值 \d+$/.test(String(reason || ''));
 
 const defaultReputation = (ip) => ({
   ip,
@@ -53,8 +57,27 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
   const theoreticalRiskDelta = Math.max(3, Math.ceil(Number(threatScore || 0) / 10));
   const nextRiskScore = Math.min(100, currentRiskScore + theoreticalRiskDelta);
   const riskDelta = Math.max(0, nextRiskScore - currentRiskScore);
-  const bannedUntil = shouldBan ? new Date(Date.now() + banMinutes * 60 * 1000) : current.banned_until;
-  const isBanned = shouldBan ? 1 : Number(current.is_banned || 0);
+  const currentBanActive =
+    Number(current.is_banned || 0) === 1 &&
+    current.banned_until &&
+    new Date(current.banned_until).getTime() > Date.now();
+  const canAutoBan = SECURITY_CONFIG.blockEnabled && !isPrivateOrLocalIp(ip);
+  const autoBanThreshold = Number(SECURITY_CONFIG.ipAutoBanRiskScore || 80);
+  const autoBanned = canAutoBan && !currentBanActive && nextRiskScore >= autoBanThreshold;
+  const explicitBanned = canAutoBan && Boolean(shouldBan);
+  const nextBanned = explicitBanned || autoBanned || currentBanActive;
+  const bannedUntil = nextBanned
+    ? explicitBanned || autoBanned
+      ? new Date(Date.now() + banMinutes * 60 * 1000)
+      : current.banned_until
+    : null;
+  const banReason = explicitBanned
+    ? `${attackType} 威胁分 ${threatScore}`
+    : autoBanned
+      ? `IP风险分 ${nextRiskScore} 达到自动封禁阈值 ${autoBanThreshold}`
+      : currentBanActive
+        ? current.ban_reason || ''
+        : '';
 
   await pool.query(
     `INSERT INTO security_ip_reputation
@@ -77,14 +100,14 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
       highRisk,
       critical,
       nextRiskScore,
-      isBanned,
+      nextBanned ? 1 : 0,
       bannedUntil,
-      shouldBan ? `${attackType} 威胁分 ${threatScore}` : current.ban_reason || '',
+      banReason,
       JSON.stringify(breakdown),
     ],
   );
   cache.delete(ip);
-  return { riskDelta, theoreticalRiskDelta, nextRiskScore, highRisk, critical };
+  return { riskDelta, theoreticalRiskDelta, nextRiskScore, highRisk, critical, autoBanned, autoBanThreshold };
 };
 
 export const revertIpReputationImpact = async ({ ip, attackType, severity, riskDelta = 0, connection = null }) => {
@@ -109,16 +132,30 @@ export const revertIpReputationImpact = async ({ ip, attackType, severity, riskD
 
   const highRisk = ['high', 'critical'].includes(severity) ? 1 : 0;
   const critical = severity === 'critical' ? 1 : 0;
+  const nextRiskScore = Math.max(0, Number(current.risk_score || 0) - Math.max(0, Number(riskDelta || 0)));
+  const clearAutoBan = isAutoBanReason(current.ban_reason) && nextRiskScore < Number(SECURITY_CONFIG.ipAutoBanRiskScore || 80);
   await executor.query(
     `UPDATE security_ip_reputation
      SET total_attacks = GREATEST(0, total_attacks - 1),
          high_risk_count = GREATEST(0, high_risk_count - ?),
          critical_count = GREATEST(0, critical_count - ?),
          risk_score = GREATEST(0, risk_score - ?),
+         is_banned = ?,
+         banned_until = ?,
+         ban_reason = ?,
          attack_type_breakdown = ?,
          last_seen_at = NOW()
      WHERE ip = ?`,
-    [highRisk, critical, Math.max(0, Number(riskDelta || 0)), JSON.stringify(breakdown), ip],
+    [
+      highRisk,
+      critical,
+      Math.max(0, Number(riskDelta || 0)),
+      clearAutoBan ? 0 : Number(current.is_banned || 0),
+      clearAutoBan ? null : current.banned_until,
+      clearAutoBan ? '' : current.ban_reason || '',
+      JSON.stringify(breakdown),
+      ip,
+    ],
   );
   cache.delete(ip);
   return true;
@@ -159,6 +196,7 @@ export const rebuildIpReputationFromEvents = async ({ ip, connection = null }) =
     lastAttackTime = event.created_at;
   }
 
+  const clearAutoBan = isAutoBanReason(current.ban_reason) && riskScore < Number(SECURITY_CONFIG.ipAutoBanRiskScore || 80);
   await executor.query(
     `INSERT INTO security_ip_reputation
       (ip,total_requests,total_attacks,high_risk_count,critical_count,risk_score,attack_type_breakdown,is_banned,banned_until,ban_reason,first_seen_at,last_seen_at,last_attack_time)
@@ -169,6 +207,9 @@ export const rebuildIpReputationFromEvents = async ({ ip, connection = null }) =
       critical_count = VALUES(critical_count),
       risk_score = VALUES(risk_score),
       attack_type_breakdown = VALUES(attack_type_breakdown),
+      is_banned = VALUES(is_banned),
+      banned_until = VALUES(banned_until),
+      ban_reason = VALUES(ban_reason),
       last_seen_at = NOW(),
       last_attack_time = VALUES(last_attack_time)`,
     [
@@ -179,9 +220,9 @@ export const rebuildIpReputationFromEvents = async ({ ip, connection = null }) =
       criticalCount,
       riskScore,
       JSON.stringify(breakdown),
-      Number(current.is_banned || 0),
-      current.banned_until || null,
-      current.ban_reason || null,
+      clearAutoBan ? 0 : Number(current.is_banned || 0),
+      clearAutoBan ? null : current.banned_until || null,
+      clearAutoBan ? '' : current.ban_reason || null,
       current.first_seen_at || null,
       lastAttackTime,
     ],

@@ -85,6 +85,16 @@ export const writeSecurityEvent = async ({ context, evidenceList, threat, decisi
           eventId,
         ])
         .catch(() => {});
+      if (reputationChange.autoBanned) {
+        await pool
+          .query(
+            `UPDATE security_events
+             SET decision_reason = CONCAT(COALESCE(decision_reason, ''), '；IP画像风险分达到', ?, '，已自动封禁IP')
+             WHERE event_id = ?`,
+            [reputationChange.autoBanThreshold || 80, eventId],
+          )
+          .catch(() => {});
+      }
     }
   }
   return eventId;

@@ -65,7 +65,7 @@ export const attackMonitor = async (req, res, next) => {
       ? decision
       : decideSecurityAction({ threatScore: finalThreat.threatScore, ipReputation: effectiveIpReputation });
     const observedDecision =
-      !decision.blocked && finalDecision.blocked && !finalDecision.shouldBan
+      !decision.blocked && finalDecision.blocked
         ? {
             ...finalDecision,
             actionTaken: 'log',
@@ -75,10 +75,7 @@ export const attackMonitor = async (req, res, next) => {
         : {
             ...finalDecision,
             blocked: decision.blocked ? finalDecision.blocked : false,
-            reason:
-              !decision.blocked && finalDecision.shouldBan
-                ? `${finalDecision.reason}，后续请求生效`
-                : finalDecision.reason,
+            reason: finalDecision.reason,
           };
     loggedRequests.add(req);
     await writeEventSafely({
