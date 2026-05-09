@@ -6,10 +6,17 @@ import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
 import nodeMail from '../util/nodemailer.js';
 import { issueLoginSession, logoutCurrentSession } from '../util/auth.js';
 import { removeUserSessions } from '../util/sessionStore.js';
+import { getClientIp } from '../util/security/requestContext.js';
+import { getIpReputation } from '../util/security/services/ipReputation.js';
 let redisClient;
 if (process.platform === 'linux') {
   redisClient = (await import('../util/redisClient.js')).default;
 }
+
+const isActiveIpBan = (ipReputation) => {
+  const bannedUntil = ipReputation?.banned_until ? new Date(ipReputation.banned_until).getTime() : 0;
+  return Number(ipReputation?.is_banned || 0) === 1 && bannedUntil > Date.now();
+};
 
 const queryUserInfoById = async (id) => {
   const [result] = await pool.query(
@@ -82,13 +89,24 @@ const sanitizeUser = (user) => {
 export const login = async (req, res) => {
   try {
     const { email, password, rememberMe } = req.body;
+    const ipReputation = await getIpReputation(getClientIp(req));
+    const isIpBanned = isActiveIpBan(ipReputation);
     const sql = 'SELECT * FROM user WHERE email = ? AND password = ?';
     const [result] = await pool.query(sql, [email, password]);
     if (result.length === 0) {
+      if (isIpBanned) {
+        res.send(resultData(null, 403, 'IP 已处于封禁期，禁止登录'));
+        return;
+      }
       res.send(resultData(null, 401, '邮箱密码错误或已过期，请重新输入正确信息或者注册新账号'));
       return;
     }
-    if (Number(result[0].del_flag) === 1) {
+    const isRootLogin = result[0].role === 'root';
+    if (isIpBanned && !isRootLogin) {
+      res.send(resultData(null, 403, 'IP 已处于封禁期，禁止登录'));
+      return;
+    }
+    if (Number(result[0].del_flag) === 1 && !isRootLogin) {
       res.send(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
       return;
     }
@@ -265,7 +283,7 @@ export const getUserInfo = async (req, res) => {
       res.send(resultData(null, 401, '用户不存在,请重新登录！'));
       return;
     }
-    if (Number(result.del_flag) === 1) {
+    if (Number(result.del_flag) === 1 && result.role !== 'root') {
       res.send(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
       return;
     }

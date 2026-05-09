@@ -89,12 +89,13 @@ const findVisitorUser = async () => {
 };
 
 const attachUserToRequest = (req, res, user, sessionId = '', expiresInSeconds = 0) => {
-  const isBanned = Number(user.del_flag || 0) === 1;
+  const role = user.role || 'visitor';
+  const isBanned = role !== 'root' && Number(user.del_flag || 0) === 1;
   req.user = {
     id: user.id || '',
-    role: user.role || 'visitor',
+    role,
     sessionId,
-    isAuthenticated: Boolean(sessionId && user.id && user.role !== 'visitor'),
+    isAuthenticated: Boolean(sessionId && user.id && role !== 'visitor'),
     isBanned,
   };
   res.setHeader(AUTH_ROLE_HEADER, req.user.role);

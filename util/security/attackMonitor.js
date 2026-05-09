@@ -14,7 +14,7 @@ const debugSecurity = (...args) => {
   }
 };
 
-const IP_BAN_RECOVERY_PATHS = ['/user/login', '/user/logout', '/user/github', '/user/sendEmail', '/user/verifyCode', '/user/configPassword'];
+const IP_BAN_RECOVERY_PATHS = ['/user/login', '/user/logout'];
 
 const isIpBanRecoveryRequest = (path = '') => IP_BAN_RECOVERY_PATHS.some((item) => path.startsWith(item));
 
@@ -35,11 +35,13 @@ export const attackMonitor = async (req, res, next) => {
   recordIpRequest(context.sourceIp);
 
   const ipReputation = await getIpReputation(context.sourceIp);
+  const effectiveIpReputation =
+    req.user?.role === 'root' ? { ...ipReputation, is_banned: 0, banned_until: null } : ipReputation;
   const signatureEvidence = detectSignatures(context);
   const behaviorResult = detectRequestBehavior(context);
   const evidenceList = [...signatureEvidence, ...behaviorResult.evidence];
-  const threat = calculateThreat(evidenceList, ipReputation);
-  const decision = decideSecurityAction({ threatScore: threat.threatScore, ipReputation });
+  const threat = calculateThreat(evidenceList, effectiveIpReputation);
+  const decision = decideSecurityAction({ threatScore: threat.threatScore, ipReputation: effectiveIpReputation });
   debugSecurity(context.method, context.originalUrl, evidenceList.length, threat.threatScore, decision.actionTaken);
 
   let responsePayload = '';
@@ -58,10 +60,10 @@ export const attackMonitor = async (req, res, next) => {
     if (allEvidence.length === 0) {
       return;
     }
-    const finalThreat = calculateThreat(allEvidence, ipReputation);
+    const finalThreat = calculateThreat(allEvidence, effectiveIpReputation);
     const finalDecision = decision.blocked
       ? decision
-      : decideSecurityAction({ threatScore: finalThreat.threatScore, ipReputation });
+      : decideSecurityAction({ threatScore: finalThreat.threatScore, ipReputation: effectiveIpReputation });
     loggedRequests.add(req);
     await writeEventSafely({
       context,

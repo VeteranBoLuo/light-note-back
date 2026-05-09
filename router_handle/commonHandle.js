@@ -14,7 +14,7 @@ const ensureRootRole = async (req, res) => {
       return null;
     }
     const [userResult] = await pool.query('SELECT role,del_flag FROM user WHERE id = ? LIMIT 1', [userId]);
-    if (userResult.length === 0 || Number(userResult[0].del_flag) === 1 || userResult[0].role !== 'root') {
+    if (userResult.length === 0 || userResult[0].role !== 'root') {
       res.send(resultData(null, 403, '仅root用户可操作'));
       return null;
     }
