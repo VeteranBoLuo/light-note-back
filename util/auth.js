@@ -45,6 +45,19 @@ const markAuthExpired = (res) => {
   res.setHeader(AUTH_EXPIRED_HEADER, '1');
 };
 
+const AUTH_EXPIRED_SILENT_PATHS = [
+  '/user/login',
+  '/user/github',
+  '/user/registerUser',
+  '/user/sendEmail',
+  '/user/verifyCode',
+];
+
+const shouldMarkAuthExpired = (req) => {
+  const path = req.path || req.originalUrl || '';
+  return !AUTH_EXPIRED_SILENT_PATHS.some((item) => path.startsWith(item));
+};
+
 export const getSessionMaxAge = (rememberMe) => (rememberMe ? REMEMBER_MAX_AGE_MS : LOGIN_MAX_AGE_MS);
 
 export const issueLoginSession = async (req, res, user, rememberMe = false) => {
@@ -57,6 +70,7 @@ export const issueLoginSession = async (req, res, user, rememberMe = false) => {
     userAgent: req.headers['user-agent'] || '',
   });
   setAuthCookie(res, sid, maxAgeMs);
+  res.removeHeader(AUTH_EXPIRED_HEADER);
   res.setHeader(AUTH_ROLE_HEADER, user.role || 'visitor');
   res.setHeader(AUTH_EXPIRES_IN_HEADER, String(Math.max(1, Math.ceil(maxAgeMs / 1000))));
   return sid;
@@ -105,7 +119,9 @@ export const authMiddleware = async (req, res, next) => {
 
     const session = await getSession(sid);
     if (!session) {
-      markAuthExpired(res);
+      if (shouldMarkAuthExpired(req)) {
+        markAuthExpired(res);
+      }
       clearAuthCookie(res);
       attachUserToRequest(req, res, await findVisitorUser());
       return next();
@@ -120,7 +136,9 @@ export const authMiddleware = async (req, res, next) => {
     );
     const user = rows[0];
     if (!user) {
-      markAuthExpired(res);
+      if (shouldMarkAuthExpired(req)) {
+        markAuthExpired(res);
+      }
       await removeSession(sid);
       clearAuthCookie(res);
       attachUserToRequest(req, res, await findVisitorUser());
