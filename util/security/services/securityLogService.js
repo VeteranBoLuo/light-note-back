@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import pool from '../../../db/index.js';
 import { safeJsonStringify } from '../payloadSanitizer.js';
 import { updateIpReputation } from './ipReputation.js';
+import { updateAccountReputation } from './accountReputation.js';
 
 const countIpAttacks = async (ip, intervalExpr) => {
   const [rows] = await pool.query(
@@ -93,6 +94,22 @@ export const writeSecurityEvent = async ({ context, evidenceList, threat, decisi
              WHERE event_id = ?`,
             [reputationChange.autoBanThreshold || 80, eventId],
           )
+          .catch(() => {});
+      }
+    }
+    if (context.userId) {
+      const acctChange = await updateAccountReputation({
+        userId: context.userId,
+        attackType: threat.attackType,
+        severity: threat.severity,
+        threatScore: threat.threatScore,
+      }).catch(() => null);
+      if (acctChange?.riskDelta) {
+        await pool
+          .query('UPDATE security_events SET user_risk_delta = ? WHERE event_id = ?', [
+            acctChange.riskDelta || 0,
+            eventId,
+          ])
           .catch(() => {});
       }
     }

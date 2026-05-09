@@ -12,6 +12,7 @@ router.post('/ipAccounts', securityHandle.getIpAccounts);
 router.post('/ipBan', securityHandle.banIp);
 router.post('/ipUnban', securityHandle.unbanIp);
 router.post('/accountBans', securityHandle.getAccountBanList);
+router.post('/accountReputation', securityHandle.getAccountReputationList);
 router.post('/accountBan', securityHandle.banAccount);
 router.post('/accountUnban', securityHandle.unbanAccount);
 router.post('/rules', securityHandle.getSecurityRules);

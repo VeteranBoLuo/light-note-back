@@ -26,6 +26,21 @@ const ensureSecurityEventSchema = async () => {
     'ip_risk_reverted_at',
     'ip_risk_reverted_at DATETIME AFTER ip_risk_reverted',
   );
+  await ensureColumn(
+    'security_events',
+    'user_risk_delta',
+    'user_risk_delta INT DEFAULT 0 AFTER ip_risk_reverted_at',
+  );
+  await ensureColumn(
+    'security_events',
+    'user_risk_reverted',
+    'user_risk_reverted BOOLEAN DEFAULT FALSE AFTER user_risk_delta',
+  );
+  await ensureColumn(
+    'security_events',
+    'user_risk_reverted_at',
+    'user_risk_reverted_at DATETIME AFTER user_risk_reverted',
+  );
   await pool.query(`
     ALTER TABLE security_events
     MODIFY handled_status ENUM('unhandled','processed','confirmed','false_positive','ignored','resolved') DEFAULT 'unhandled'
@@ -157,6 +172,23 @@ export const ensureSecurityTables = async () => {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY uniq_user_id (user_id),
       INDEX idx_active_time (is_active, banned_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS security_account_reputation (
+      user_id VARCHAR(64) PRIMARY KEY,
+      total_events INT DEFAULT 0,
+      high_risk_count INT DEFAULT 0,
+      critical_count INT DEFAULT 0,
+      risk_score INT DEFAULT 0,
+      attack_type_breakdown JSON,
+      first_event_at DATETIME,
+      last_event_at DATETIME,
+      last_attack_time DATETIME,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_risk_score (risk_score),
+      INDEX idx_last_event_at (last_event_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 

@@ -2,6 +2,7 @@ import pool from '../db/index.js';
 import { resultData } from '../util/common.js';
 import { validateQueryParams } from '../util/request.js';
 import { rebuildIpReputationFromEvents, revertIpReputationImpact, setIpBan } from '../util/security/services/ipReputation.js';
+import { rebuildAccountReputationFromEvents, revertAccountReputationImpact } from '../util/security/services/accountReputation.js';
 import { removeUserSessions } from '../util/sessionStore.js';
 
 const ensureRootRole = async (req, res) => {
@@ -209,7 +210,15 @@ export const getSecurityEventDetail = async (req, res) => {
     );
     const [ipInfo] = await pool.query('SELECT * FROM security_ip_reputation WHERE ip = ? LIMIT 1', [event.source_ip]);
     if (ipInfo[0]) parseJsonField(ipInfo[0], 'attack_type_breakdown', {});
-    res.send(resultData({ event, evidence, ipRecent, ipInfo: ipInfo[0] || null }));
+    let userInfo = null;
+    if (event.user_id) {
+      const [uRows] = await pool.query('SELECT * FROM security_account_reputation WHERE user_id = ? LIMIT 1', [event.user_id]);
+      if (uRows[0]) {
+        userInfo = uRows[0];
+        parseJsonField(userInfo, 'attack_type_breakdown', {});
+      }
+    }
+    res.send(resultData({ event, evidence, ipRecent, ipInfo: ipInfo[0] || null, userInfo }));
   } catch (e) {
     res.send(resultData(null, 500, '获取安全事件详情失败：' + e.message));
   }
@@ -265,6 +274,25 @@ export const handleSecurityEvent = async (req, res) => {
       await connection.query(
         `UPDATE security_events
          SET ip_risk_reverted = 1, ip_risk_reverted_at = NOW()
+         WHERE event_id = ?`,
+        [eventId],
+      );
+    }
+    if (normalizedStatus === 'false_positive' && event.user_id && !event.user_risk_reverted) {
+      if (Number(event.user_risk_delta || 0) > 0) {
+        await revertAccountReputationImpact({
+          userId: event.user_id,
+          attackType: event.attack_type,
+          severity: event.severity,
+          riskDelta: event.user_risk_delta,
+          connection,
+        });
+      } else {
+        await rebuildAccountReputationFromEvents({ userId: event.user_id, connection });
+      }
+      await connection.query(
+        `UPDATE security_events
+         SET user_risk_reverted = 1, user_risk_reverted_at = NOW()
          WHERE event_id = ?`,
         [eventId],
       );
@@ -388,14 +416,21 @@ export const getAccountBanList = async (req, res) => {
          b.banned_by,
          b.banned_at,
          b.unbanned_at,
-         b.updated_at
+         b.updated_at,
+         r.risk_score,
+         r.total_events,
+         r.high_risk_count,
+         r.critical_count,
+         r.last_event_at
        FROM user u
        LEFT JOIN security_account_bans b ON b.user_id = u.id
+       LEFT JOIN security_account_reputation r ON r.user_id = u.id
        WHERE ${where}
        ORDER BY COALESCE(b.banned_at, u.create_time) DESC
        LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), Number(skip)],
     );
+    rows.forEach((row) => parseJsonField(row, 'attack_type_breakdown', {}));
     const [totalRows] = await pool.query(
       `SELECT COUNT(*) AS total
        FROM user u
@@ -406,6 +441,54 @@ export const getAccountBanList = async (req, res) => {
     res.send(resultData({ items: rows, total: totalRows[0].total }));
   } catch (e) {
     res.send(resultData(null, 500, '获取账号封禁列表失败：' + e.message));
+  }
+};
+
+export const getAccountReputationList = async (req, res) => {
+  try {
+    if (!(await ensureRootRole(req, res))) return;
+    const { filters, pageSize, currentPage } = validateQueryParams(req.body);
+    const skip = pageSize * (currentPage - 1);
+    const params = [];
+    const conditions = [];
+    if (filters.key) {
+      conditions.push(
+        '(u.id LIKE CONCAT("%", ?, "%") OR u.alias LIKE CONCAT("%", ?, "%") OR u.email LIKE CONCAT("%", ?, "%"))',
+      );
+      params.push(filters.key, filters.key, filters.key);
+    }
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await pool.query(
+      `SELECT
+         u.id AS user_id,
+         u.alias,
+         u.email,
+         u.role,
+         u.head_picture,
+         u.del_flag,
+         r.risk_score,
+         r.total_events,
+         r.high_risk_count,
+         r.critical_count,
+         r.last_event_at
+       FROM user u
+       LEFT JOIN security_account_reputation r ON r.user_id = u.id
+       ${where}
+       ORDER BY u.del_flag DESC, COALESCE(r.risk_score, 0) DESC, u.create_time DESC
+       LIMIT ? OFFSET ?`,
+      [...params, Number(pageSize), Number(skip)],
+    );
+    rows.forEach((row) => parseJsonField(row, 'attack_type_breakdown', {}));
+    const [totalRows] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM user u
+       LEFT JOIN security_account_reputation r ON r.user_id = u.id
+       ${where}`,
+      params,
+    );
+    res.send(resultData({ items: rows, total: totalRows[0].total }));
+  } catch (e) {
+    res.send(resultData(null, 500, '获取账号画像失败：' + e.message));
   }
 };
 
