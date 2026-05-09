@@ -414,7 +414,7 @@ export const saveUserInfo = (req, res) => {
     ];
     const allowedFields = isRoot ? rootAllowedFields : selfAllowedFields;
     // 过滤请求体，只保留允许的字段
-    const filteredBody = mergeExistingProperties(req.body, [], ['id']);
+    const filteredBody = snakeCaseKeys(mergeExistingProperties(req.body, [], ['id']));
     const finalBody = {};
     allowedFields.forEach((field) => {
       if (filteredBody[field] !== undefined) {
@@ -422,7 +422,7 @@ export const saveUserInfo = (req, res) => {
       }
     });
     pool
-      .query('update user set ? where id=?', [snakeCaseKeys(finalBody), id])
+      .query('update user set ? where id=?', [finalBody, id])
       .then(([result]) => {
         res.send(resultData(result));
       })
