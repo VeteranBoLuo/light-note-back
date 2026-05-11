@@ -1,6 +1,6 @@
 import path from 'path';
 import pool from '../db/index.js';
-import { resultData, snakeCaseKeys } from '../util/common.js';
+import { resultData, snakeCaseKeys, insertData } from '../util/common.js';
 import { bucketBaseUrl, buildObjectKey, copyObjectInObs, deleteObjectFromObs } from '../util/obsClient.js';
 import { buildSignedDownloadUrl } from '../router/file.js';
 import { getFileExtension, resolveFileCategory } from '../util/fileCategory.js';

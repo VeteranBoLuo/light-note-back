@@ -128,13 +128,30 @@ export const mergeExistingProperties = function (source, outValue = [undefined],
   }
   return target;
 };
-// 生成随机数
+// 生成 UUID v1（时间戳-based，与 MySQL UUID() 格式一致，InnoDB 友好）
 export const generateUUID = function () {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    let r = (Math.random() * 16) | 0,
-      v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  const EPOCH_OFFSET = 122192928000000000;
+  const timestamp = Date.now() * 10000 + EPOCH_OFFSET;
+
+  const timeLow = (timestamp & 0xFFFFFFFF) >>> 0;
+  const timeMid = ((timestamp / 0x100000000) & 0xFFFF) >>> 0;
+  const timeHi = (((timestamp / 0x10000000000) & 0x0FFF) | 0x1000) >>> 0;
+
+  const clockSeq = ((Math.random() * 0x4000) | 0x8000) >>> 0;
+
+  const node = Array.from({ length: 6 }, () => Math.floor(Math.random() * 256));
+
+  const h = (n, len) => n.toString(16).padStart(len, '0');
+  return `${h(timeLow, 8)}-${h(timeMid, 4)}-${h(timeHi, 4)}-${h(clockSeq, 4)}-${node.map(b => h(b, 2)).join('')}`;
+};
+
+// INSERT 专用：自动注入 UUID 并转 snake_case
+export const insertData = function (params) {
+  const data = { ...params };
+  if (!data.id || data.id === '') {
+    data.id = generateUUID();
+  }
+  return snakeCaseKeys(data);
 };
 
 export const baseRouter = [

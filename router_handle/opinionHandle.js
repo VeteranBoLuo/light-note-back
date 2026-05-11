@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { snakeCaseKeys, resultData } from '../util/common.js';
+import { snakeCaseKeys, resultData, insertData } from '../util/common.js';
 
 const OPINION_STATUS = {
   PENDING: 'pending',
@@ -17,7 +17,7 @@ export const recordOpinion = async (req, res) => {
   params.replyViewed = 0;
   try {
     pool
-      .query(insertSql, [snakeCaseKeys(params)])
+      .query(insertSql, [insertData(params)])
       .then(() => {
         res.send(resultData('反馈成功'));
       })

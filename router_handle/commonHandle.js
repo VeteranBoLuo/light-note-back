@@ -1,4 +1,4 @@
-import { resultData, snakeCaseKeys } from '../util/common.js';
+import { resultData, snakeCaseKeys, insertData, generateUUID } from '../util/common.js';
 import https from 'https';
 import fs from 'fs';
 import fsP from 'fs/promises';
@@ -136,7 +136,7 @@ export const recordOperationLogs = (req, res) => {
       del_flag: 0,
     };
     pool
-      .query('INSERT INTO operation_logs SET ?', [snakeCaseKeys(log)])
+      .query('INSERT INTO operation_logs SET ?', [insertData(log)])
       .then(() => {
         res.send(resultData(null));
       })
@@ -473,21 +473,12 @@ export const saveHelpDraft = async (req, res) => {
 
       const [maxSortRows] = await pool.query('SELECT COALESCE(MAX(sort), -1) AS maxSort FROM help_config_draft');
       const nextSort = Number(maxSortRows?.[0]?.maxSort ?? -1) + 1;
-      const [insertResult] = await pool.query(
-        'INSERT INTO help_config_draft (title,content,updated_by,sort) VALUES (?,?,?,?)',
-        [normalizedTitle, content, userId, nextSort],
+      const helpId = generateUUID();
+      await pool.query(
+        'INSERT INTO help_config_draft (id,title,content,updated_by,sort) VALUES (?,?,?,?,?)',
+        [helpId, normalizedTitle, content, userId, nextSort],
       );
-      const insertedId = insertResult.insertId;
-      if (insertedId) {
-        const [rowResult] = await pool.query('SELECT id,title,content,sort FROM help_config_draft WHERE id=? LIMIT 1', [
-          insertedId,
-        ]);
-        res.send(resultData(rowResult[0] || { id: insertedId, title: normalizedTitle, content, sort: nextSort }, 200));
-        return;
-      }
-
-      res.send(resultData({ id: '', title: normalizedTitle, content, sort: nextSort }, 200));
-      return;
+      res.send(resultData({ id: helpId, title: normalizedTitle, content, sort: nextSort }, 200));
     }
 
     const [updateResult] = await pool.query('UPDATE help_config_draft SET title=?,content=?,updated_by=? WHERE id=?', [
@@ -537,7 +528,9 @@ export const saveHelpDraftBatch = async (req, res) => {
       }
       const normalizedSort = Number.isFinite(Number(item?.sort)) ? Number(item.sort) : index;
       if (item?.id === undefined || item?.id === null || item?.id === '') {
-        await connection.query('INSERT INTO help_config_draft (title,content,updated_by,sort) VALUES (?,?,?,?)', [
+        const newId = generateUUID();
+        await connection.query('INSERT INTO help_config_draft (id,title,content,updated_by,sort) VALUES (?,?,?,?,?)', [
+          newId,
           normalizedTitle,
           item.content,
           userId,
@@ -630,7 +623,7 @@ export const publishHelpDraft = async (req, res) => {
         existRows[0].id,
       ]);
     } else {
-      await connection.query('INSERT INTO help_config (title,content,sort) VALUES (?,?,?)', [title, target.content, target.sort]);
+      await connection.query('INSERT INTO help_config (id,title,content,sort) VALUES (?,?,?,?)', [generateUUID(), title, target.content, target.sort]);
     }
     await connection.commit();
     res.send(resultData(null, 200, '发布成功'));

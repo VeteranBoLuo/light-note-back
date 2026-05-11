@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { resultData, snakeCaseKeys, mergeExistingProperties, generateUUID } from '../util/common.js';
+import { resultData, snakeCaseKeys, mergeExistingProperties, insertData } from '../util/common.js';
 import {
   RESOURCE_TYPE,
   insertBookmarkLegacyRelations,
@@ -181,24 +181,20 @@ export const addTag = async (req, res) => {
         throw new Error('标签已存在');
       }
       // 插入新的标签
-      let sql = `INSERT INTO Tag SET ?`;
-      const [insertResult] = await connection.query(sql, [
-        mergeExistingProperties(snakeCaseKeys(params), [undefined, '', []], [
-          'related_tag_ids',
-          'bookmark_list',
-          'note_list',
-          'file_list',
-        ]),
+      const insertParams = mergeExistingProperties(insertData(params), [undefined, '', []], [
+        'related_tag_ids',
+        'bookmark_list',
+        'note_list',
+        'file_list',
       ]);
+      const insertedTagId = insertParams.id;
+      let sql = `INSERT INTO Tag SET ?`;
+      await connection.query(sql, [insertParams]);
       // 处理关联标签数量限制
       const { relatedTagIds, bookmarkList, noteList, fileList } = req.body;
       if (relatedTagIds && relatedTagIds.length > 4) {
         throw new Error('最多选择4个相关标签');
       }
-      // 获取新插入的标签ID
-      const getTagSql = `SELECT id FROM Tag ORDER BY create_time DESC LIMIT 1`;
-      const [tagResult] = await connection.query(getTagSql);
-      const insertedTagId = tagResult[0].id;
       // 如果有相关标签，则插入新的关联
       if (relatedTagIds && relatedTagIds.length > 0) {
         for (const relatedTagId of relatedTagIds) {
@@ -457,14 +453,10 @@ export const addBookmark = async (req, res) => {
       throw new Error(`书签${checkRes[0].name}已存在`);
     }
 
+    const insertParams = mergeExistingProperties(insertData(params), [undefined, '', []], ['related_tags']);
+    const insertBookmarkId = insertParams.id;
     let sql = `INSERT INTO bookmark SET ?`;
-    const [result] = await connection.query(sql, [
-      mergeExistingProperties(snakeCaseKeys(params), [undefined, '', []], ['related_tags']),
-    ]);
-
-    let getTBookmarkSql = `SELECT * FROM bookmark ORDER BY create_time DESC LIMIT 1`;
-    const [bookmarkResult] = await connection.query(getTBookmarkSql);
-    const insertBookmarkId = bookmarkResult[0].id;
+    await connection.query(sql, [insertParams]);
     if (req.body.relatedTags && req.body.relatedTags.length > 4) {
       throw new Error('最多选择4个关联标签');
     }
@@ -730,21 +722,12 @@ export const importBookmarksHtml = async (req, res) => {
 
       if (tagName) {
         if (!tagMap.has(tagName)) {
-          const tagPayload = {
+          const tagPayload = insertData({
             name: tagName,
             userId,
-          };
-          const [tagResult] = await connection.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagPayload)]);
-          // 支持自增主键或触发器生成 ID 的两种情况
-          tagId = tagResult.insertId || tagPayload.id || null;
-          // 如果数据库未返回 insertId，说明表使用字符串主键且未自动生成，手动获取刚插入的 id
-          if (!tagId) {
-            const [[lastInsertedTag]] = await connection.query(
-              'SELECT id FROM tag WHERE name = ? AND user_id = ? ORDER BY create_time DESC LIMIT 1',
-              [tagName, userId],
-            );
-            tagId = lastInsertedTag?.id;
-          }
+          });
+          await connection.query('INSERT INTO tag SET ?', [tagPayload]);
+          tagId = tagPayload.id;
           tagMap.set(tagName, tagId);
           createdTags++;
         } else {
@@ -754,21 +737,14 @@ export const importBookmarksHtml = async (req, res) => {
       }
       let bookmarkId = bookmarkMap.get(item.name);
       if (!bookmarkId) {
-        const bookmarkPayload = {
+        const bookmarkPayload = insertData({
           name: item.name,
           userId,
           url: item.url,
           description: '',
-        };
-        const [bookmarkResult] = await connection.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkPayload)]);
-        bookmarkId = bookmarkResult.insertId || bookmarkPayload.id || null;
-        if (!bookmarkId) {
-          const [[lastInsertedBookmark]] = await connection.query(
-            'SELECT id FROM bookmark WHERE name = ? AND user_id = ? ORDER BY create_time DESC LIMIT 1',
-            [item.name, userId],
-          );
-          bookmarkId = lastInsertedBookmark?.id;
-        }
+        });
+        await connection.query('INSERT INTO bookmark SET ?', [bookmarkPayload]);
+        bookmarkId = bookmarkPayload.id;
         bookmarkMap.set(item.name, bookmarkId);
         createdBookmarks++;
       }

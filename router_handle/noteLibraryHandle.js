@@ -1,7 +1,7 @@
 import pool from '../db/index.js';
 import fs from 'fs/promises';
 import path from 'path';
-import { snakeCaseKeys, resultData, mergeExistingProperties } from '../util/common.js';
+import { snakeCaseKeys, resultData, mergeExistingProperties, insertData } from '../util/common.js';
 import { RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '../util/resourceTags.js';
 
 export const addNote = (req, res) => {
@@ -11,15 +11,13 @@ export const addNote = (req, res) => {
       ...req.body,
       createBy: userId,
     };
+    const noteData = insertData(params);
     pool
-      .query('INSERT INTO note SET ?', [snakeCaseKeys(params)])
+      .query('INSERT INTO note SET ?', [noteData])
       .then(() => {
-        pool
-          .query('SELECT id FROM note ORDER BY create_time DESC LIMIT 1')
-          .then(([noteRes]) => {
-            res.send(
-              resultData({
-                id: noteRes[0]['id'],
+        res.send(
+          resultData({
+                id: noteData.id,
               }),
             );
           })
@@ -220,11 +218,9 @@ export const addNoteTag = async (req, res) => {
       if (checkRes.length > 0) {
         throw new Error('标签已存在');
       }
-      await connection.query('INSERT INTO tag SET ?', [snakeCaseKeys(params)]);
-      const [[createdTag]] = await connection.query(
-        'SELECT id, name FROM tag WHERE user_id = ? AND name = ? AND del_flag = 0 ORDER BY create_time DESC LIMIT 1',
-        [userId, name],
-      );
+      const tagData = insertData(params);
+      await connection.query('INSERT INTO tag SET ?', [tagData]);
+      const createdTag = { id: tagData.id, name: tagData.name };
       await connection.commit();
       res.send(resultData(createdTag || '添加标签成功'));
     } catch (err) {

@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { resultData, snakeCaseKeys, mergeExistingProperties } from '../util/common.js';
+import { resultData, snakeCaseKeys, mergeExistingProperties, insertData, generateUUID } from '../util/common.js';
 import { RESOURCE_TYPE, insertResourceTagRelations } from '../util/resourceTags.js';
 import request from '../http/request.js';
 import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
@@ -131,11 +131,9 @@ export const registerUser = async (req, res) => {
     params.preferences = JSON.stringify({ theme: 'day', noteViewMode: 'card' });
 
     // 插入新用户
-    await pool.query('INSERT INTO user SET ?', [snakeCaseKeys(params)]);
-
-    // 获取新用户ID
-    const [userRes] = await pool.query('SELECT * FROM user WHERE email = ?', [req.body.email]);
-    const userId = userRes[0].id;
+    const userData = insertData(params);
+    await pool.query('INSERT INTO user SET ?', [userData]);
+    const userId = userData.id;
 
     // 创建示例数据（非关键操作，失败不影响注册）
     try {
@@ -146,14 +144,9 @@ export const registerUser = async (req, res) => {
         url: 'https://icon-sets.iconify.design/',
         description: '全球最大的免费图标网站之一',
       };
-      await pool.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkData)]);
-
-      // 获取书签ID
-      const [bookmarkRes] = await pool.query('SELECT id FROM bookmark WHERE user_id = ? AND name = ?', [
-        userId,
-        'iconify',
-      ]);
-      const bookmarkId = bookmarkRes[0].id;
+      const bmData = insertData(bookmarkData);
+      await pool.query('INSERT INTO bookmark SET ?', [bmData]);
+      const bookmarkId = bmData.id;
 
       // 示例标签
       const tagData = {
@@ -163,11 +156,9 @@ export const registerUser = async (req, res) => {
           'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMTYgMTYiPjxwYXRoIGZpbGw9IiM2YzgyZmYiIGQ9Ik02LjkyMyAxLjM3OGEzIDMgMCAwIDEgMi4xNTQgMGw0Ljk2MiAxLjkwOGExLjUgMS41IDAgMCAxIC45NjEgMS40djYuNjI2YTEuNSAxLjUgMCAwIDEtLjk2MSAxLjRsLTQuOTYyIDEuOTA5YTMgMyAwIDAgMS0yLjE1NCAwbC00Ljk2MS0xLjkwOWExLjUgMS41IDAgMCAxLS45NjItMS40VjQuNjg2YTEuNSAxLjUgMCAwIDEgLjk2Mi0xLjR6bTEuNzk1LjkzM2EyIDIgMCAwIDAtMS40MzYgMGwtMS4zODQuNTMzbDUuNTkgMi4xMTZsMS45NDgtLjgzNHpNMTQgNC45NzFMOC41IDcuMzN2Ni40MjhxLjExLS4wMjguMjE4LS4wN2w0Ljk2Mi0xLjkwOGEuNS41IDAgMCAwIC4zMi0uNDY3em0tNi41IDguNzg2VjcuMzNMMiA0Ljk3MnY2LjM0YS41LjUgMCAwIDAgLjMyLjQ2N2w0Ljk2MiAxLjkwOHEuMTA3LjA0Mi4yMTguMDdNMi41NjQgNC4xMjZMOCA2LjQ1NmwyLjE2NC0uOTI4bC01LjY2Ny0yLjE0NnoiLz48L3N2Zz4=',
         sort: 0,
       };
-      await pool.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagData)]);
-
-      // 获取标签ID
-      const [tagRes] = await pool.query('SELECT id FROM tag WHERE user_id = ? AND name = ?', [userId, '示例标签']);
-      const tagId = tagRes[0].id;
+      const tgData = insertData(tagData);
+      await pool.query('INSERT INTO tag SET ?', [tgData]);
+      const tagId = tgData.id;
 
       // 关联标签和书签
       const relationData = {
@@ -189,7 +180,7 @@ export const registerUser = async (req, res) => {
         url: 'https://example.com',
         description: '这是一个示例书签，没有关联标签',
       };
-      await pool.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkData2)]);
+      await pool.query('INSERT INTO bookmark SET ?', [insertData(bookmarkData2)]);
 
       // 无书签标签
       const tagData2 = {
@@ -199,7 +190,7 @@ export const registerUser = async (req, res) => {
           'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMTYgMTYiPjxwYXRoIGZpbGw9IiM2YzgyZmYiIGQ9Ik02LjkyMyAxLjM3OGEzIDMgMCAwIDEgMi4xNTQgMGw0Ljk2MiAxLjkwOGExLjUgMS41IDAgMCAxIC45NjEgMS40djYuNjI2YTEuNSAxLjUgMCAwIDEtLjk2MSAxLjRsLTQuOTYyIDEuOTA5YTMgMyAwIDAgMS0yLjE1NCAwbC00Ljk2MS0xLjkwOWExLjUgMS41IDAgMCAxLS45NjItMS40VjQuNjg2YTEuNSAxLjUgMCAwIDEgLjk2Mi0xLjR6bTEuNzk1LjkzM2EyIDIgMCAwIDAtMS40MzYgMGwtMS4zODQuNTMzbDUuNTkgMi4xMTZsMS45NDgtLjgzNHpNMTQgNC45NzFMOC41IDcuMzN2Ni40MjhxLjExLS4wMjguMjE4LS4wN2w0Ljk2Mi0xLjkwOGEuNS41IDAgMCAwIC4zMi0uNDY3em0tNi41IDguNzg2VjcuMzNMMiA0Ljk3MnY2LjM0YS41LjUgMCAwIDAgLjMyLjQ2N2w0Ljk2MiAxLjkwOHEuMTA3LjA0Mi4yMTguMDdNMi41NjQgNC4xMjZMOCA2LjQ1NmwyLjE2NC0uOTI4bC01LjY2Ny0yLjE0NnoiLz48L3N2Zz4=',
         sort: 1,
       };
-      await pool.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagData2)]);
+      await pool.query('INSERT INTO tag SET ?', [insertData(tagData2)]);
 
       // 示例笔记
       const noteData = {
@@ -207,7 +198,7 @@ export const registerUser = async (req, res) => {
         content: '<p>这是您的第一条笔记，欢迎使用轻笺！</p>',
         createBy: userId,
       };
-      await pool.query('INSERT INTO note SET ?', [snakeCaseKeys(noteData)]);
+      await pool.query('INSERT INTO note SET ?', [insertData(noteData)]);
     } catch (err) {
       console.error('创建示例数据失败，但不影响注册:', err.message);
     }
@@ -229,7 +220,7 @@ export const registerUser = async (req, res) => {
         system: system,
         del_flag: 0,
       };
-      await pool.query('INSERT INTO api_logs SET ?', [snakeCaseKeys(log)]);
+      await pool.query('INSERT INTO api_logs SET ?', [insertData(log)]);
     } catch (err) {
       console.error('注册日志更新错误:', err.message);
     }
@@ -594,11 +585,12 @@ const handleUserDatabaseOperation = async (githubUser) => {
   }
 
   // 3. 创建新用户
+  const githubUserId = generateUUID();
   await pool.query(
-    `INSERT INTO user 
-      (email, github_id, login_type, head_picture, password,alias)
-     VALUES (?, ?, 'github', ?, ?, ?)`,
-    [safeEmail, githubUser.id, githubUser.avatar_url, '123456', githubUser.login],
+    `INSERT INTO user
+      (id, email, github_id, login_type, head_picture, password, alias)
+     VALUES (?, ?, ?, 'github', ?, ?, ?)`,
+    [githubUserId, safeEmail, githubUser.id, githubUser.avatar_url, '123456', githubUser.login],
   );
   const [result] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
 
@@ -610,17 +602,12 @@ const handleUserDatabaseOperation = async (githubUser) => {
     const bookmarkData = {
       name: 'iconify',
       userId: userId,
-      url: 'https://icon-sets.iconify.design/',
+      url: 'https://icon-sites.iconify.design/',
       description: '全球最大的免费图标网站之一',
     };
-    await pool.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkData)]);
-
-    // 获取书签ID
-    const [bookmarkRes] = await pool.query('SELECT id FROM bookmark WHERE user_id = ? AND name = ?', [
-      userId,
-      'iconify',
-    ]);
-    const bookmarkId = bookmarkRes[0].id;
+    const bmData = insertData(bookmarkData);
+    await pool.query('INSERT INTO bookmark SET ?', [bmData]);
+    const bookmarkId = bmData.id;
 
     // 示例标签
     const tagData = {
@@ -630,11 +617,9 @@ const handleUserDatabaseOperation = async (githubUser) => {
         'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMTYgMTYiPjxwYXRoIGZpbGw9IiM2YzgyZmYiIGQ9Ik02LjkyMyAxLjM3OGEzIDMgMCAwIDEgMi4xNTQgMGw0Ljk2MiAxLjkwOGExLjUgMS41IDAgMCAxIC45NjEgMS40djYuNjI2YTEuNSAxLjUgMCAwIDEtLjk2MSAxLjRsLTQuOTYyIDEuOTA5YTMgMyAwIDAgMS0yLjE1NCAwbC00Ljk2MS0xLjkwOWExLjUgMS41IDAgMCAxLS45NjItMS40VjQuNjg2YTEuNSAxLjUgMCAwIDEgLjk2Mi0xLjR6bTEuNzk1LjkzM2EyIDIgMCAwIDAtMS40MzYgMGwtMS4zODQuNTMzbDUuNTkgMi4xMTZsMS45NDgtLjgzNHpNMTQgNC45NzFMOC41IDcuMzN2Ni40MjhxLjExLS4wMjguMjE4LS4wN2w0Ljk2Mi0xLjkwOGEuNS41IDAgMCAwIC4zMi0uNDY3em0tNi41IDguNzg2VjcuMzNMMiA0Ljk3MnY2LjM0YS41LjUgMCAwIDAgLjMyLjQ2N2w0Ljk2MiAxLjkwOHEuMTA3LjA0Mi4yMTguMDdNMi41NjQgNC4xMjZMOCA2LjQ1NmwyLjE2NC0uOTI4bC01LjY2Ny0yLjE0NnoiLz48L3N2Zz4=',
       sort: 0,
     };
-    await pool.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagData)]);
-
-    // 获取标签ID
-    const [tagRes] = await pool.query('SELECT id FROM tag WHERE user_id = ? AND name = ?', [userId, '示例标签']);
-    const tagId = tagRes[0].id;
+    const tgData = insertData(tagData);
+    await pool.query('INSERT INTO tag SET ?', [tgData]);
+    const tagId = tgData.id;
 
     // 关联标签和书签
     const relationData = {
@@ -656,7 +641,7 @@ const handleUserDatabaseOperation = async (githubUser) => {
       url: 'https://example.com',
       description: '这是一个示例书签，没有关联标签',
     };
-    await pool.query('INSERT INTO bookmark SET ?', [snakeCaseKeys(bookmarkData2)]);
+    await pool.query('INSERT INTO bookmark SET ?', [insertData(bookmarkData2)]);
 
     // 无书签标签
     const tagData2 = {
@@ -666,7 +651,7 @@ const handleUserDatabaseOperation = async (githubUser) => {
         'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxZW0iIGhlaWdodD0iMWVtIiB2aWV3Qm94PSIwIDAgMTYgMTYiPjxwYXRoIGZpbGw9IiM2YzgyZmYiIGQ9Ik02LjkyMyAxLjM3OGEzIDMgMCAwIDEgMi4xNTQgMGw0Ljk2MiAxLjkwOGExLjUgMS41IDAgMCAxIC45NjEgMS40djYuNjI2YTEuNSAxLjUgMCAwIDEtLjk2MSAxLjRsLTQuOTYyIDEuOTA5YTMgMyAwIDAgMS0yLjE1NCAwbC00Ljk2MS0xLjkwOWExLjUgMS41IDAgMCAxLS45NjItMS40VjQuNjg2YTEuNSAxLjUgMCAwIDEgLjk2Mi0xLjR6bTEuNzk1LjkzM2EyIDIgMCAwIDAtMS40MzYgMGwtMS4zODQuNTMzbDUuNTkgMi4xMTZsMS45NDgtLjgzNHpNMTQgNC45NzFMOC41IDcuMzN2Ni40MjhxLjExLS4wMjguMjE4LS4wN2w0Ljk2Mi0xLjkwOGEuNS41IDAgMCAwIC4zMi0uNDY3em0tNi41IDguNzg2VjcuMzNMMiA0Ljk3MnY2LjM0YS41LjUgMCAwIDAgLjMyLjQ2N2w0Ljk2MiAxLjkwOHEuMTA3LjA0Mi4yMTguMDdNMi41NjQgNC4xMjZMOCA2LjQ1NmwyLjE2NC0uOTI4bC01LjY2Ny0yLjE0NnoiLz48L3N2Zz4=',
       sort: 1,
     };
-    await pool.query('INSERT INTO tag SET ?', [snakeCaseKeys(tagData2)]);
+    await pool.query('INSERT INTO tag SET ?', [insertData(tagData2)]);
 
     // 示例笔记
     const noteData = {
@@ -674,7 +659,7 @@ const handleUserDatabaseOperation = async (githubUser) => {
       content: '<p>这是您的第一条笔记，欢迎使用轻笺！</p>',
       createBy: userId,
     };
-    await pool.query('INSERT INTO note SET ?', [snakeCaseKeys(noteData)]);
+    await pool.query('INSERT INTO note SET ?', [insertData(noteData)]);
   } catch (err) {
     console.error('创建示例数据失败，但不影响注册:', err.message);
   }
