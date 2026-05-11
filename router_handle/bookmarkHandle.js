@@ -189,7 +189,7 @@ export const addTag = async (req, res) => {
       ]);
       const insertedTagId = insertParams.id;
       let sql = `INSERT INTO Tag SET ?`;
-      await connection.query(sql, [insertParams]);
+      const [insertResult] = await connection.query(sql, [insertParams]);
       // 处理关联标签数量限制
       const { relatedTagIds, bookmarkList, noteList, fileList } = req.body;
       if (relatedTagIds && relatedTagIds.length > 4) {
@@ -456,7 +456,7 @@ export const addBookmark = async (req, res) => {
     const insertParams = mergeExistingProperties(insertData(params), [undefined, '', []], ['related_tags']);
     const insertBookmarkId = insertParams.id;
     let sql = `INSERT INTO bookmark SET ?`;
-    await connection.query(sql, [insertParams]);
+    const [result] = await connection.query(sql, [insertParams]);
     if (req.body.relatedTags && req.body.relatedTags.length > 4) {
       throw new Error('最多选择4个关联标签');
     }

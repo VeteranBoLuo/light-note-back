@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { snakeCaseKeys, resultData, formatDateTime } from './common.js';
+import { snakeCaseKeys, resultData, formatDateTime ,insertData} from './common.js';
 
 export async function logFunction(req, res, next) {
   try {
@@ -39,7 +39,7 @@ export async function logFunction(req, res, next) {
           };
           // 将日志保存到数据库
           const query = 'INSERT INTO api_logs SET ?';
-          pool.query(query, [snakeCaseKeys(log)]).catch((err) => {
+          pool.query(query, [insertData(log)]).catch((err) => {
             console.error(formatDateTime(new Date()) + '日志更新sql错误: ' + err.message);
           });
         } catch (err1) {
