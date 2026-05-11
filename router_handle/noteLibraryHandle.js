@@ -15,15 +15,7 @@ export const addNote = (req, res) => {
     pool
       .query('INSERT INTO note SET ?', [noteData])
       .then(() => {
-        res.send(
-          resultData({
-                id: noteData.id,
-              }),
-            );
-          })
-          .catch((err) => {
-            res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
-          });
+        res.send(resultData({ id: noteData.id }));
       })
       .catch((err) => {
         res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
