@@ -2,6 +2,7 @@ import axios from 'axios';
 import { resultData } from '../util/common.js';
 import { Transform } from 'stream';
 import { Agent as HttpAgent } from 'http';
+import { retrieve } from '../util/knowledgeService.js';
 
 // 创建自定义转换流优化数据处理
 class SSETransform extends Transform {
@@ -98,6 +99,22 @@ export const receiveMessage = async (req, res) => {
       const targetLang = langMap[target] || target;
       const prefix = sourceLang ? `将以下${sourceLang}内容翻译成${targetLang}：` : `将以下内容翻译成${targetLang}：`;
       prompt = prefix + message;
+    }
+
+    // 非翻译模式下检索帮助中心数据作为参考
+    if (!enableTranslation) {
+      try {
+        const knowledge = await retrieve(req.user.id, message, 3);
+        if (knowledge.length > 0) {
+          const context = knowledge
+            .map((k) => `【${k.title}】\n${k.content}`)
+            .join('\n\n---\n\n');
+          prompt =
+            `以下是与用户问题相关的内容可供参考：\n\n${context}\n\n---\n\n用户问题：${message}`;
+        }
+      } catch (err) {
+        console.error('帮助中心检索失败，不影响正常回答:', err.message);
+      }
     }
 
     if (stream) {
@@ -376,3 +393,134 @@ export const generateBookmarkMeta = async (req, res) => {
 };
 
 export const generateBookmarkDescription = generateBookmarkMeta;
+
+/**
+ * 笔记组手 —— AI 辅助编辑（润色、摘要、纠错、自定义处理等）
+ * 与 receiveMessage 共享 DashScope 服务，不注入知识库上下文
+ */
+export const assistNote = async (req, res) => {
+  req.setTimeout(0);
+
+  let stream = false;
+
+  try {
+    const { message, sessionId = '' } = req.body;
+    stream = req.body.stream ?? false;
+    const APP_ID = process.env.DASHSCOPE_APP_ID;
+
+    if (stream) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'X-Accel-Buffering': 'no',
+        'Content-Encoding': 'identity',
+      });
+      res.flushHeaders?.();
+    }
+
+    const requestData = {
+      input: { prompt: message, session_id: sessionId },
+      parameters: {
+        incremental_output: true,
+        model: 'qwen-plus',
+        stream_interval: 100,
+        max_tokens: 4096,
+        enable_web_search: false,
+        has_thoughts: false,
+        enable_thinking: false,
+      },
+    };
+
+    const config = {
+      method: 'post',
+      url: `https://dashscope.aliyuncs.com/api/v1/apps/${APP_ID}/completion`,
+      headers: {
+        Authorization: `Bearer ${process.env.DASHSCOPE_API_KEY}`,
+        'Content-Type': 'application/json',
+        'X-DashScope-SSE': stream ? 'enable' : 'disable',
+        Accept: 'text/event-stream',
+      },
+      data: requestData,
+      responseType: stream ? 'stream' : 'json',
+      timeout: 30000,
+      transformResponse: [(data) => data],
+      httpAgent: new HttpAgent({
+        keepAlive: true,
+        maxSockets: 1,
+      }),
+    };
+
+    const response = await Promise.race([
+      axios(config),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时，请稍后重试')), 30000)),
+    ]);
+
+    if (stream) {
+      const sseTransform = new SSETransform();
+
+      response.data.pipe(sseTransform);
+
+      let lastFlushTime = Date.now();
+      const FLUSH_INTERVAL = 50;
+
+      sseTransform.on('data', (chunk) => {
+        res.write(chunk);
+        const now = Date.now();
+        if (now - lastFlushTime >= FLUSH_INTERVAL) {
+          if (typeof res.flush === 'function') {
+            res.flush();
+          } else {
+            res.socket?.cork();
+            process.nextTick(() => res.socket?.uncork());
+          }
+          lastFlushTime = now;
+        }
+      });
+
+      sseTransform.on('end', () => {
+        if (typeof res.flush === 'function') res.flush();
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+
+      sseTransform.on('error', (error) => {
+        console.error('笔记组手 SSE 转换错误:', error);
+        try {
+          res.write('data: {"error": "流处理异常"}\n\n');
+          res.end();
+        } catch (e) {}
+      });
+
+      req.on('close', () => {
+        sseTransform.destroy();
+        response.data.destroy();
+      });
+    } else {
+      const rawText = (() => {
+        const data = response?.data;
+        if (!data) return '';
+        let parsed = data;
+        if (typeof data === 'string') {
+          try { parsed = JSON.parse(data); } catch { return data.trim(); }
+        }
+        return String(parsed?.output?.text || parsed?.text || parsed?.content || '').trim();
+      })();
+      if (!rawText) {
+        return res.status(500).send(resultData(null, 500, 'AI 返回内容为空'));
+      }
+      res.send(resultData({ response: rawText }));
+    }
+  } catch (error) {
+    console.error('笔记组手请求错误:', error.message);
+    if (stream) {
+      try {
+        res.write(`data: ${JSON.stringify({ error: '服务异常', message: error.message })}\n\n`);
+        res.end();
+      } catch (e) {}
+    } else {
+      res.status(500).send(resultData(null, 500, 'AI 服务异常: ' + error.message));
+    }
+  }
+};

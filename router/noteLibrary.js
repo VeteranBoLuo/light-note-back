@@ -86,4 +86,9 @@ router.post('/getNoteTags', noteLibraryHandle.getNoteTags);
 router.post('/delNoteTag', noteLibraryHandle.delNoteTag);
 router.post('/updateNoteTags', noteLibraryHandle.updateNoteTags);
 
+import { assistNote } from '../router_handle/chatHandle.js';
+
+// 笔记组手 —— AI 辅助编辑
+router.post('/assist', assistNote);
+
 export default router;
