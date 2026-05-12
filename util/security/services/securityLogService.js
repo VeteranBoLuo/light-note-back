@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import pool from '../../../db/index.js';
 import { safeJsonStringify } from '../payloadSanitizer.js';
-import { updateIpReputation } from './ipReputation.js';
+import { updateIpReputation, ensureIpLocation } from './ipReputation.js';
 import { updateAccountReputation } from './accountReputation.js';
 
 const countIpAttacks = async (ip, intervalExpr) => {
@@ -72,6 +72,7 @@ export const writeSecurityEvent = async ({ context, evidenceList, threat, decisi
     );
   }
   if (Number(threat.threatScore || 0) >= 20 || decision.shouldBan) {
+    ensureIpLocation(context.sourceIp); // 异步查地理位置，不阻塞
     const reputationChange = await updateIpReputation({
       ip: context.sourceIp,
       attackType: threat.attackType,

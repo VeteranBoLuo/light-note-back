@@ -216,7 +216,7 @@ export const registerUser = async (req, res) => {
         method: req.method,
         url: req.originalUrl,
         req: requestPayload === '{}' ? '' : requestPayload,
-        ip: req.headers['x-forwarded-for'] ?? '未知',
+        ip: getClientIp(req) || '未知',
         system: system,
         del_flag: 0,
       };
@@ -249,9 +249,10 @@ export const getUserInfo = async (req, res) => {
       return;
     }
     // 没有储存ip或者ip地址改变，则更新用户ip相关信息
-    if (userRes[0].ip === null || userRes[0].ip !== req.headers['x-forwarded-for']) {
+    const clientIp = getClientIp(req);
+    if (clientIp && (userRes[0].ip === null || userRes[0].ip !== clientIp)) {
       const { data } = await request.get(
-        `https://restapi.amap.com/v3/ip?ip=${req.headers['x-forwarded-for']}&key=${process.env.AMAP_API_KEY}`,
+        `https://restapi.amap.com/v3/ip?ip=${clientIp}&key=${process.env.AMAP_API_KEY}`,
       );
       const location = {
         city: data.city ?? '接口错误，获取失败',
@@ -261,7 +262,7 @@ export const getUserInfo = async (req, res) => {
       try {
         await pool.query('update user set location=? , ip=? where id=?', [
           JSON.stringify(location),
-          req.headers['x-forwarded-for'],
+          clientIp,
           id,
         ]);
       } catch (e) {

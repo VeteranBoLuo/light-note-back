@@ -1,5 +1,6 @@
 import pool from '../../../db/index.js';
 import { SECURITY_CONFIG } from '../rules.js';
+import https from 'https';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000;
@@ -252,4 +253,33 @@ export const setIpBan = async (ip, banned, minutes = 60, reason = '') => {
     [ip, banned ? 1 : 0, bannedUntil, reason],
   );
   cache.delete(ip);
+};
+
+const locationPending = new Map(); // 防同一 IP 并发重复请求
+
+export const ensureIpLocation = async (ip) => {
+  if (!ip) return;
+  if (locationPending.has(ip)) return; // 已有进行中的查询，跳过
+  try {
+    locationPending.set(ip, true);
+    const data = await new Promise((resolve) => {
+      const url = `https://restapi.amap.com/v3/ip?ip=${encodeURIComponent(ip)}&key=${process.env.AMAP_API_KEY || ''}`;
+      https.get(url, (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve(null); } });
+      }).on('error', () => resolve(null));
+    });
+    if (data?.status === '1') {
+      const location = JSON.stringify({
+        city: data.city ? (Array.isArray(data.city) ? data.city.join('') : data.city) : '未知',
+        province: data.province ? (Array.isArray(data.province) ? data.province.join('') : data.province) : '未知',
+      });
+      await pool.query('UPDATE security_ip_reputation SET location = ? WHERE ip = ?', [location, ip]);
+    }
+  } catch {
+    // 静默失败，不影响主流程
+  } finally {
+    locationPending.delete(ip);
+  }
 };

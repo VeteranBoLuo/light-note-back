@@ -209,7 +209,11 @@ export const getSecurityEventDetail = async (req, res) => {
       [event.source_ip],
     );
     const [ipInfo] = await pool.query('SELECT * FROM security_ip_reputation WHERE ip = ? LIMIT 1', [event.source_ip]);
-    if (ipInfo[0]) parseJsonField(ipInfo[0], 'attack_type_breakdown', {});
+    if (ipInfo[0]) {
+      parseJsonField(ipInfo[0], 'attack_type_breakdown', {});
+      parseJsonField(ipInfo[0], 'location', {});
+      ipInfo[0].city = ipInfo[0].location?.city || '';
+    }
     let userInfo = null;
     if (event.user_id) {
       const [uRows] = await pool.query('SELECT * FROM security_account_reputation WHERE user_id = ? LIMIT 1', [event.user_id]);
@@ -322,7 +326,11 @@ export const getIpReputationList = async (req, res) => {
        LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), Number(skip)],
     );
-    rows.forEach((row) => parseJsonField(row, 'attack_type_breakdown', {}));
+    rows.forEach((row) => {
+      parseJsonField(row, 'attack_type_breakdown', {});
+      parseJsonField(row, 'location', {});
+      row.city = row.location?.city || '';
+    });
     const [totalRows] = await pool.query(`SELECT COUNT(*) AS total FROM security_ip_reputation ${where}`, params);
     res.send(resultData({ items: rows, total: totalRows[0].total }));
   } catch (e) {
