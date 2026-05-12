@@ -20,6 +20,7 @@ export const FIELD_CONTEXT = {
     'module',
     'type',
     'status',
+    'message',
   ],
   numeric: ['pageSize', 'currentPage', 'level', 'sort', 'limit', 'offset', 'count'],
   identifier: [
