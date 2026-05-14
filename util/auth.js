@@ -147,6 +147,21 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     attachUserToRequest(req, res, user, sid, Number(session.expires_in_seconds || 0));
+
+    // 管理员预览其他用户：当 root 用户携带 X-Admin-Preview-User-Id 请求头时，切换为对应身份
+    const previewUserId = req.headers['x-admin-preview-user-id'];
+    if (previewUserId && req.user?.role === 'root' && previewUserId !== req.user.id) {
+      const [previewRows] = await pool.query(
+        'SELECT id, role, del_flag FROM user WHERE id = ? LIMIT 1',
+        [previewUserId],
+      );
+      if (previewRows[0]) {
+        attachUserToRequest(req, res, previewRows[0], req.user.sessionId, 0);
+        req.user.isBanned = false; // 管理员预览时不触发封禁拦截
+        req.isAdminPreview = true; // 标记为预览模式，供日志中间件等下游使用
+      }
+    }
+
     return next();
   } catch (e) {
     console.error('鉴权中间件异常:', e.message);

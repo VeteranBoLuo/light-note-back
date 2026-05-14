@@ -7,6 +7,11 @@ export async function logFunction(req, res, next) {
       // 登录成败交给登录接口处理，日志中间件只记录请求。
     }
     const userId = req.user?.id;
+    // 管理员预览模式下不记录 API 日志
+    if (req.isAdminPreview) {
+      next();
+      return;
+    }
     // 跳过不记录的接口
     const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag','getOpinionNotice'].some((key) =>
       req.originalUrl.includes(key),

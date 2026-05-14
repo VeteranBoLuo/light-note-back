@@ -154,7 +154,7 @@ export const getSecurityEvents = async (req, res) => {
        FROM security_events e
        LEFT JOIN user u ON e.user_id = u.id
        WHERE ${where}
-       ORDER BY e.created_at DESC
+       ORDER BY e.created_at DESC, e.id ASC
        LIMIT ? OFFSET ?`,
       [...params, Number(pageSize), Number(skip)],
     );
@@ -204,7 +204,7 @@ export const getSecurityEventDetail = async (req, res) => {
       `SELECT event_id, attack_type, severity, threat_score, request_path, action_taken, created_at
        FROM security_events
        WHERE source_ip = ?
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, id ASC
        LIMIT 12`,
       [event.source_ip],
     );

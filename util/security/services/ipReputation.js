@@ -49,22 +49,32 @@ export const getIpReputation = async (ip) => {
 
 export const updateIpReputation = async ({ ip, attackType, severity, threatScore, shouldBan = false, banMinutes = 30 }) => {
   if (!ip) return { riskDelta: 0 };
-  const current = await getIpReputation(ip);
+
+  // 直接读 DB，绕过缓存，避免并发 read-modify-write 竞态
+  let current;
+  try {
+    const [rows] = await pool.query('SELECT * FROM security_ip_reputation WHERE ip = ? LIMIT 1', [ip]);
+    current = rows[0] || defaultReputation(ip);
+    current.attack_type_breakdown = parseAttackTypeBreakdown(current.attack_type_breakdown);
+  } catch (e) {
+    current = defaultReputation(ip);
+  }
+
   const breakdown = current.attack_type_breakdown || {};
   breakdown[attackType] = Number(breakdown[attackType] || 0) + 1;
   const highRisk = ['high', 'critical'].includes(severity) ? 1 : 0;
   const critical = severity === 'critical' ? 1 : 0;
   const currentRiskScore = Number(current.risk_score || 0);
   const theoreticalRiskDelta = Math.max(3, Math.ceil(Number(threatScore || 0) / 10));
-  const nextRiskScore = Math.min(100, currentRiskScore + theoreticalRiskDelta);
-  const riskDelta = Math.max(0, nextRiskScore - currentRiskScore);
+  const predictedScore = Math.min(100, currentRiskScore + theoreticalRiskDelta);
+
   const currentBanActive =
     Number(current.is_banned || 0) === 1 &&
     current.banned_until &&
     new Date(current.banned_until).getTime() > Date.now();
   const canAutoBan = SECURITY_CONFIG.blockEnabled && !isPrivateOrLocalIp(ip);
   const autoBanThreshold = Number(SECURITY_CONFIG.ipAutoBanRiskScore || 80);
-  const autoBanned = canAutoBan && !currentBanActive && nextRiskScore >= autoBanThreshold;
+  const autoBanned = canAutoBan && !currentBanActive && predictedScore >= autoBanThreshold;
   const explicitBanned = canAutoBan && Boolean(shouldBan);
   const nextBanned = explicitBanned || autoBanned || currentBanActive;
   const bannedUntil = nextBanned
@@ -75,11 +85,13 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
   const banReason = explicitBanned
     ? `${attackType} 威胁分 ${threatScore}`
     : autoBanned
-      ? `IP风险分 ${nextRiskScore} 达到自动封禁阈值 ${autoBanThreshold}`
+      ? `IP风险分 ${predictedScore} 达到自动封禁阈值 ${autoBanThreshold}`
       : currentBanActive
         ? current.ban_reason || ''
         : '';
 
+  // 原子增量：risk_score = LEAST(100, COALESCE(risk_score, 0) + VALUES(risk_score))
+  // VALUES 中 risk_score 位置传入 theoreticalRiskDelta，INSERT 时作为初始值，UPDATE 时作为增量
   await pool.query(
     `INSERT INTO security_ip_reputation
       (ip,total_attacks,high_risk_count,critical_count,risk_score,is_banned,banned_until,ban_reason,attack_type_breakdown,first_seen_at,last_seen_at,last_attack_time)
@@ -88,7 +100,7 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
       total_attacks = total_attacks + 1,
       high_risk_count = high_risk_count + VALUES(high_risk_count),
       critical_count = critical_count + VALUES(critical_count),
-      risk_score = VALUES(risk_score),
+      risk_score = LEAST(100, COALESCE(risk_score, 0) + VALUES(risk_score)),
       is_banned = VALUES(is_banned),
       banned_until = VALUES(banned_until),
       ban_reason = VALUES(ban_reason),
@@ -100,7 +112,7 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
       1,
       highRisk,
       critical,
-      nextRiskScore,
+      theoreticalRiskDelta, // 原子增量：新行初始值 = 首次增量，已有行执行 risk_score + delta
       nextBanned ? 1 : 0,
       bannedUntil,
       banReason,
@@ -108,7 +120,19 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
     ],
   );
   cache.delete(ip);
-  return { riskDelta, theoreticalRiskDelta, nextRiskScore, highRisk, critical, autoBanned, autoBanThreshold };
+
+  // 接近上限时，读取实际增量以保证 riskDelta 准确（revert 依赖此值）
+  let actualRiskDelta = theoreticalRiskDelta;
+  if (currentRiskScore + theoreticalRiskDelta > 100) {
+    try {
+      const [newRows] = await pool.query('SELECT risk_score FROM security_ip_reputation WHERE ip = ?', [ip]);
+      actualRiskDelta = Math.max(0, Number(newRows[0]?.risk_score || 0) - currentRiskScore);
+    } catch (e) {
+      // 读取失败，回退到理论值
+    }
+  }
+
+  return { riskDelta: actualRiskDelta, theoreticalRiskDelta, nextRiskScore: predictedScore, highRisk, critical, autoBanned, autoBanThreshold };
 };
 
 export const revertIpReputationImpact = async ({ ip, attackType, severity, riskDelta = 0, connection = null }) => {
