@@ -106,9 +106,6 @@ export const queryFolder = async (req, res) => {
       params.push(key);
     }
 
-    // 强制添加 del_flag = 0
-    whereClauses.push(`del_flag = 0`);
-
     // 动态构建 WHERE 条件
     if (whereClauses.length > 0) {
       query += ` WHERE ` + whereClauses.join(' AND ');
@@ -166,15 +163,20 @@ export const associateFile = async (req, res) => {
   }
 };
 
-// 删除文件夹
+// 删除文件夹（物理删除，其下文件 folder_id 由 FK ON DELETE SET NULL 自动置空）
 export const deleteFolder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id } = req.body;
-    const [result] = await connection.query(`UPDATE folders SET del_flag = 1 WHERE id = ?`, [id]);
-    res.send(resultData(result.affectedRows, 200, '删除成功'));
+    await connection.beginTransaction();
+    await connection.query(`DELETE FROM folders WHERE id = ?`, [id]);
+    await connection.commit();
+    res.send(resultData(null, 200, '删除成功'));
   } catch (e) {
+    await connection.rollback();
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 };
 

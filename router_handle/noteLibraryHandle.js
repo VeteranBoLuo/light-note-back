@@ -323,7 +323,7 @@ export const delNoteTag = (req, res) => {
     const userId = req.user.id;
     const tagId = req.body.id;
     pool
-      .query('UPDATE tag SET del_flag = 1 WHERE id = ? AND user_id = ?', [tagId, userId])
+      .query('DELETE FROM tag WHERE id = ? AND user_id = ?', [tagId, userId])
       .then(() => {
         res.send(resultData('删除标签成功'));
       })

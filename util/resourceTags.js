@@ -94,54 +94,6 @@ export const validateUserTags = async (connection, { tagIds = [], userId }) => {
   return normalizedTagIds;
 };
 
-export const replaceBookmarkLegacyRelations = async (connection, { bookmarkId, tagIds = [] }) => {
-  const normalizedTagIds = normalizeTagIds(tagIds);
-  await connection.query('DELETE FROM tag_bookmark_relations WHERE bookmark_id = ?', [bookmarkId]);
-
-  if (!normalizedTagIds.length) return 0;
-
-  const values = normalizedTagIds.map((tagId) => [tagId, bookmarkId]);
-  const [result] = await connection.query('INSERT IGNORE INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?', [
-    values,
-  ]);
-  return result.affectedRows || 0;
-};
-
-export const insertBookmarkLegacyRelations = async (connection, { bookmarkId, tagIds = [] }) => {
-  const normalizedTagIds = normalizeTagIds(tagIds);
-  if (!normalizedTagIds.length) return 0;
-
-  const values = normalizedTagIds.map((tagId) => [tagId, bookmarkId]);
-  const [result] = await connection.query('INSERT IGNORE INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?', [
-    values,
-  ]);
-  return result.affectedRows || 0;
-};
-
-export const replaceTagBookmarkLegacyRelations = async (connection, { tagId, bookmarkIds = [] }) => {
-  const normalizedBookmarkIds = normalizeTagIds(bookmarkIds);
-  await connection.query('DELETE FROM tag_bookmark_relations WHERE tag_id = ?', [tagId]);
-
-  if (!normalizedBookmarkIds.length) return 0;
-
-  const values = normalizedBookmarkIds.map((bookmarkId) => [tagId, bookmarkId]);
-  const [result] = await connection.query('INSERT IGNORE INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?', [
-    values,
-  ]);
-  return result.affectedRows || 0;
-};
-
-export const insertTagBookmarkLegacyRelations = async (connection, { tagId, bookmarkIds = [] }) => {
-  const normalizedBookmarkIds = normalizeTagIds(bookmarkIds);
-  if (!normalizedBookmarkIds.length) return 0;
-
-  const values = normalizedBookmarkIds.map((bookmarkId) => [tagId, bookmarkId]);
-  const [result] = await connection.query('INSERT IGNORE INTO tag_bookmark_relations (tag_id, bookmark_id) VALUES ?', [
-    values,
-  ]);
-  return result.affectedRows || 0;
-};
-
 export const queryTagsForResource = async ({ resourceType, resourceId }) => {
   const [rows] = await pool.query(
     `

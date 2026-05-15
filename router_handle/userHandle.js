@@ -160,12 +160,6 @@ export const registerUser = async (req, res) => {
       await pool.query('INSERT INTO tag SET ?', [tgData]);
       const tagId = tgData.id;
 
-      // 关联标签和书签
-      const relationData = {
-        tag_id: tagId,
-        bookmark_id: bookmarkId,
-      };
-      await pool.query('INSERT INTO tag_bookmark_relations SET ?', [snakeCaseKeys(relationData)]);
       await insertResourceTagRelations(pool, {
         tagIds: [tagId],
         resourceType: RESOURCE_TYPE.BOOKMARK,
@@ -622,12 +616,6 @@ const handleUserDatabaseOperation = async (githubUser) => {
     await pool.query('INSERT INTO tag SET ?', [tgData]);
     const tagId = tgData.id;
 
-    // 关联标签和书签
-    const relationData = {
-      tag_id: tagId,
-      bookmark_id: bookmarkId,
-    };
-    await pool.query('INSERT INTO tag_bookmark_relations SET ?', [snakeCaseKeys(relationData)]);
     await insertResourceTagRelations(pool, {
       tagIds: [tagId],
       resourceType: RESOURCE_TYPE.BOOKMARK,

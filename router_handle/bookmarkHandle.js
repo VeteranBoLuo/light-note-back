@@ -2,13 +2,9 @@ import pool from '../db/index.js';
 import { resultData, snakeCaseKeys, mergeExistingProperties, insertData } from '../util/common.js';
 import {
   RESOURCE_TYPE,
-  insertBookmarkLegacyRelations,
   insertResourceTagRelations,
-  insertTagBookmarkLegacyRelations,
   insertTagResourceRelations,
-  replaceBookmarkLegacyRelations,
   replaceResourceTagRelations,
-  replaceTagBookmarkLegacyRelations,
   replaceTagResourceRelations,
 } from '../util/resourceTags.js';
 
@@ -181,14 +177,13 @@ export const addTag = async (req, res) => {
         throw new Error('标签已存在');
       }
       // 插入新的标签
-      const insertParams = mergeExistingProperties(insertData(params), [undefined, '', []], [
-        'related_tag_ids',
-        'bookmark_list',
-        'note_list',
-        'file_list',
-      ]);
+      const insertParams = mergeExistingProperties(
+        insertData(params),
+        [undefined, '', []],
+        ['related_tag_ids', 'bookmark_list', 'note_list', 'file_list'],
+      );
       const insertedTagId = insertParams.id;
-      let sql = `INSERT INTO Tag SET ?`;
+      let sql = `INSERT INTO tag SET ?`;
       const [insertResult] = await connection.query(sql, [insertParams]);
       // 处理关联标签数量限制
       const { relatedTagIds, bookmarkList, noteList, fileList } = req.body;
@@ -210,10 +205,6 @@ export const addTag = async (req, res) => {
           resourceType: RESOURCE_TYPE.BOOKMARK,
           resourceIds: bookmarkList,
           userId,
-        });
-        await insertTagBookmarkLegacyRelations(connection, {
-          tagId: insertedTagId,
-          bookmarkIds: bookmarkList,
         });
       }
       if (noteList && noteList.length > 0) {
@@ -247,10 +238,9 @@ export const addTag = async (req, res) => {
 
 export const delTag = (req, res) => {
   try {
-    const id = req.body.id; // 获取标签ID
-    let sql = `UPDATE TAG SET del_flag=1  WHERE id=?`;
+    const id = req.body.id;
     pool
-      .query(sql, [id])
+      .query(`DELETE FROM tag WHERE id = ?`, [id])
       .then(([result]) => {
         res.send(resultData(result));
       })
@@ -258,7 +248,7 @@ export const delTag = (req, res) => {
         return res.send(resultData(null, 500, '服务器内部错误: ' + e));
       });
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常' + e)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常' + e));
   }
 };
 
@@ -308,10 +298,6 @@ export const updateTag = async (req, res) => {
         resourceType: RESOURCE_TYPE.BOOKMARK,
         resourceIds: bookmarkList || [],
         userId,
-      });
-      await replaceTagBookmarkLegacyRelations(connection, {
-        tagId: id,
-        bookmarkIds: bookmarkList || [],
       });
     }
     if (noteList !== undefined) {
@@ -468,16 +454,12 @@ export const addBookmark = async (req, res) => {
         resourceId: insertBookmarkId,
         userId,
       });
-      await insertBookmarkLegacyRelations(connection, {
-        bookmarkId: insertBookmarkId,
-        tagIds,
-      });
     }
     await connection.commit();
     res.send(resultData(result));
   } catch (err) {
     await connection.rollback();
-    res.send(resultData(null, 500, err.message)); // 设置状态码为500
+    res.send(resultData(null, 500, err.message));
   } finally {
     connection.release();
   }
@@ -500,12 +482,6 @@ export const updateBookmark = async (req, res) => {
       mergeExistingProperties(snakeCaseKeys(req.body), [], ['related_tags', 'related_tags']),
       id,
     ]);
-    // 清空标签和书签的关联
-    await replaceBookmarkLegacyRelations(connection, {
-      bookmarkId: id,
-      tagIds: req.body.relatedTags || [],
-    });
-    // 如果有书签列表，则插入新的关联
     if (req.body.relatedTags && req.body.relatedTags.length > 4) {
       throw new Error('最多选择4个关联标签');
     }
@@ -749,17 +725,6 @@ export const importBookmarksHtml = async (req, res) => {
         createdBookmarks++;
       }
       if (tagId && bookmarkId) {
-        // 检查关联是否已存在
-        const [existingRelation] = await connection.query(
-          'SELECT 1 FROM tag_bookmark_relations WHERE tag_id = ? AND bookmark_id = ?',
-          [tagId, bookmarkId],
-        );
-        if (existingRelation.length === 0) {
-          await insertBookmarkLegacyRelations(connection, {
-            bookmarkId,
-            tagIds: [tagId],
-          });
-        }
         const inserted = await insertResourceTagRelations(connection, {
           tagIds: [tagId],
           resourceType: RESOURCE_TYPE.BOOKMARK,
