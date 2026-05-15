@@ -10,12 +10,23 @@ function dayLabel(date) {
 }
 
 function getRecentDays() {
-  return Array.from({ length: 7 }, (_, index) => {
-    const current = new Date();
-    current.setHours(0, 0, 0, 0);
-    current.setDate(current.getDate() - (6 - index));
-    return dayLabel(current);
-  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = today.getDay();
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const days = [];
+  for (let i = 0; i <= daysSinceMonday; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - daysSinceMonday + i);
+    days.push(dayLabel(d));
+  }
+  return days;
+}
+
+function getWeekDaysElapsed() {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  return dayOfWeek === 0 ? 7 : dayOfWeek;
 }
 
 function buildDayCountMap(rows) {
@@ -70,9 +81,9 @@ async function queryWeeklyStats(userId) {
   const [rows] = await pool.query(
     `
       SELECT
-        (SELECT COUNT(*) FROM bookmark WHERE user_id = ? AND del_flag = 0 AND create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS bookmark,
-        (SELECT COUNT(*) FROM note WHERE create_by = ? AND del_flag = 0 AND COALESCE(update_time, create_time) >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS note,
-        (SELECT COUNT(*) FROM files WHERE create_by = ? AND del_flag = 0 AND create_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS file
+        (SELECT COUNT(*) FROM bookmark WHERE user_id = ? AND del_flag = 0 AND create_time >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)) AS bookmark,
+        (SELECT COUNT(*) FROM note WHERE create_by = ? AND del_flag = 0 AND COALESCE(update_time, create_time) >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)) AS note,
+        (SELECT COUNT(*) FROM files WHERE create_by = ? AND del_flag = 0 AND create_time >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)) AS file
     `,
     [userId, userId, userId],
   );
@@ -86,7 +97,7 @@ async function queryTrend(userId) {
       `
         SELECT DATE_FORMAT(create_time, '%m-%d') AS day, COUNT(*) AS count
         FROM bookmark
-        WHERE user_id = ? AND del_flag = 0 AND create_time >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        WHERE user_id = ? AND del_flag = 0 AND create_time >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
         GROUP BY day
       `,
       [userId],
@@ -95,7 +106,7 @@ async function queryTrend(userId) {
       `
         SELECT DATE_FORMAT(COALESCE(update_time, create_time), '%m-%d') AS day, COUNT(*) AS count
         FROM note
-        WHERE create_by = ? AND del_flag = 0 AND COALESCE(update_time, create_time) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        WHERE create_by = ? AND del_flag = 0 AND COALESCE(update_time, create_time) >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
         GROUP BY day
       `,
       [userId],
@@ -104,7 +115,7 @@ async function queryTrend(userId) {
       `
         SELECT DATE_FORMAT(create_time, '%m-%d') AS day, COUNT(*) AS count
         FROM files
-        WHERE create_by = ? AND del_flag = 0 AND create_time >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        WHERE create_by = ? AND del_flag = 0 AND create_time >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
         GROUP BY day
       `,
       [userId],
@@ -289,6 +300,7 @@ export const getWorkbenchSummary = async (req, res) => {
           usedSpace: Number(counts.usedSpace || 0),
         },
         weeklyStats,
+        weekDays: getWeekDaysElapsed(),
         trend,
         fileTypeStats,
         commonBookmarks,
