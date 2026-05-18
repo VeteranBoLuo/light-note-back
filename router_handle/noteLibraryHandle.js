@@ -1,6 +1,4 @@
 import pool from '../db/index.js';
-import fs from 'fs/promises';
-import path from 'path';
 import { snakeCaseKeys, resultData, mergeExistingProperties, insertData } from '../util/common.js';
 import { RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '../util/resourceTags.js';
 
@@ -116,56 +114,21 @@ export const getNoteDetail = (req, res) => {
 
 export const delNote = async (req, res) => {
   try {
-    const ids = req.body.ids; // 获取标签ID数组
+    const ids = req.body.ids;
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.send(resultData(null, 400, '无效的请求参数'));
     }
 
-    const sql = `UPDATE note SET del_flag=1 WHERE id IN (?)`;
-    const connection = await pool.getConnection();
+    const userId = req.user.id;
+    const placeholders = ids.map(() => '?').join(',');
+    const [updateResult] = await pool.query(
+      `UPDATE note SET del_flag = 1, deleted_at = NOW() WHERE id IN (${placeholders}) AND create_by = ?`,
+      [...ids, userId],
+    );
 
-    try {
-      await connection.beginTransaction(); // 开始事务
-
-      // 批量更新笔记的 del_flag
-      const [updateResult] = await connection.query(sql, [ids]);
-
-      // 查询所有关联的图片URLs
-      const selectImagesSql = `SELECT url FROM note_images WHERE note_id IN (?)`;
-      const [images] = await connection.query(selectImagesSql, [ids]);
-      // 删除笔记关联的图片记录
-      const deleteAssociationsSql = `DELETE FROM note_images WHERE note_id IN (?)`;
-      await connection.query(deleteAssociationsSql, [ids]);
-
-      // 删除服务器上的图片文件
-      const deletePromises = images.map(async (image) => {
-        // 替换URL中的代理路径为实际文件路径
-        const filePath = image.url.replace(
-          new RegExp(`^${req.protocol}://${req.get('host')}/uploads/`),
-          '/www/wwwroot/images/',
-        );
-        try {
-          console.log('delete filePath', filePath);
-          await fs.unlink(filePath);
-        } catch (e) {
-          console.error(`删除文件 ${filePath} 时出错: ${e.message}`);
-        }
-      });
-
-      // 等待所有文件删除操作完成
-      await Promise.all(deletePromises);
-
-      await connection.commit(); // 提交事务
-
-      res.send(resultData(updateResult));
-    } catch (error) {
-      await connection.rollback(); // 回滚事务
-      res.send(resultData(null, 500, '服务器内部错误: ' + error.message));
-    } finally {
-      connection.release(); // 释放连接
-    }
+    res.send(resultData(updateResult));
   } catch (e) {
-    res.send(resultData(null, 400, '客户端请求异常: ' + e.message)); // 设置状态码为400
+    res.send(resultData(null, 400, '客户端请求异常: ' + e.message));
   }
 };
 

@@ -9,6 +9,7 @@ import jsonRouter from '../router/json.js';
 import searchRouter from '../router/search.js';
 import workbenchRouter from '../router/workbench.js';
 import securityRouter from '../router/security.js';
+import trashRouter from '../router/trash.js';
 
 export const resultData = function (data = null, status = 200, msg = '') {
   if (status !== 200 && status !== 'visitor') {
@@ -198,5 +199,9 @@ export const baseRouter = [
   {
     path: '/security',
     router: securityRouter,
+  },
+  {
+    path: '/trash',
+    router: trashRouter,
   },
 ];

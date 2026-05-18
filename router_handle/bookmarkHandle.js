@@ -532,34 +532,35 @@ export const getBookmarkDetail = (req, res) => {
 
 export const delBookmark = async (req, res) => {
   try {
+    const userId = req.user.id;
     const id = req.body.id;
 
-    const [result] = await pool.query(`SELECT * FROM bookmark WHERE id=?`, [id]);
+    const [result] = await pool.query(`SELECT * FROM bookmark WHERE id=? AND user_id=?`, [id, userId]);
     if (result.length === 0) {
       return res.send(resultData(null, 404, '书签不存在'));
     }
 
     const iconUrl = result[0].icon_url;
 
-    // 提取文件名
-    const url = new URL(iconUrl);
-    const fileName = url.pathname.split('/').pop();
-    // 构造服务器上的文件路径
-    const filePath = path.join('/www/wwwroot/images/', fileName);
-
-    // 删除文件
-    try {
-      await fs.unlink(filePath);
-    } catch (e) {
-      console.error('删除文件失败:', e);
+    // 删除图标文件
+    if (iconUrl) {
+      try {
+        const url = new URL(iconUrl);
+        const fileName = url.pathname.split('/').pop();
+        const filePath = path.join('/www/wwwroot/images/', fileName);
+        await fs.unlink(filePath);
+      } catch (e) {
+        console.error('删除文件失败:', e);
+      }
     }
 
     const params = {
       del_flag: 1,
       icon_url: null,
+      deleted_at: new Date(),
     };
 
-    const [updateResult] = await pool.query(`UPDATE bookmark SET ? WHERE id=?`, [params, id]);
+    const [updateResult] = await pool.query(`UPDATE bookmark SET ? WHERE id=? AND user_id=?`, [params, id, userId]);
 
     res.send(resultData(updateResult));
   } catch (e) {

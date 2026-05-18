@@ -4,6 +4,7 @@ import { logFunction } from './util/log.js';
 import { baseRouter } from './util/common.js';
 import { accountBanMiddleware, authMiddleware, startSessionMaintenance } from './util/auth.js';
 import { attackMonitor, ensureSecurityTables } from './util/security/index.js';
+import { cleanupAllExpiredTrash } from './router_handle/trashHandle.js';
 
 import dotenv from 'dotenv';
 import path from 'path';
@@ -52,6 +53,23 @@ allRouter.forEach((item) => {
 
 startSessionMaintenance();
 ensureSecurityTables().catch((err) => console.error('安全模块初始化失败:', err.message));
+
+// 回收站定时清理（每天凌晨 3:00）
+function scheduleTrashCleanup() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setDate(next.getDate() + 1);
+  next.setHours(3, 0, 0, 0);
+  const delay = next.getTime() - now.getTime();
+
+  setTimeout(() => {
+    cleanupAllExpiredTrash();
+    setInterval(cleanupAllExpiredTrash, 24 * 60 * 60 * 1000);
+  }, delay);
+
+  console.log(`[回收站] 定时清理已注册，首次执行: ${next.toLocaleString('zh-CN')}`);
+}
+scheduleTrashCleanup();
 
 // 启动 Express 服务器
 app.listen(9001, () => {
