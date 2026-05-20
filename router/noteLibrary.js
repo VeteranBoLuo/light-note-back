@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-import { resultData, snakeCaseKeys } from '../util/common.js';
+import { resultData, snakeCaseKeys, insertData } from '../util/common.js';
 import pool from '../db/index.js';
 
 router.post('/uploadImage', upload.single('file'), async (req, res) => {
@@ -38,7 +38,7 @@ router.post('/uploadImage', upload.single('file'), async (req, res) => {
       if (req.body.noteId) {
         noteId = req.body.noteId;
       } else {
-        await pool.query('INSERT INTO note SET ?', [snakeCaseKeys(noteParams)]);
+        await pool.query('INSERT INTO note SET ?', [insertData(noteParams)]);
         // 获取新插入的标签ID
         const getNoteSql = `SELECT id FROM note ORDER BY create_time DESC LIMIT 1`;
         const [noteResult] = await connection.query(getNoteSql);
@@ -50,7 +50,7 @@ router.post('/uploadImage', upload.single('file'), async (req, res) => {
         url: fileUrl,
       };
       pool
-        .query('INSERT INTO note_images set ?', [snakeCaseKeys(params)])
+        .query('INSERT INTO note_images set ?', [insertData(params)])
         .then(() => {
           if (!req.body.noteId) {
             res.send(resultData({ url: fileUrl, noteId: noteId }));
