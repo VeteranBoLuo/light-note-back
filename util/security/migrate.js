@@ -192,6 +192,23 @@ export const ensureSecurityTables = async () => {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS security_whitelist (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      target_type ENUM('ip','user') NOT NULL,
+      target_value VARCHAR(128) NOT NULL,
+      label VARCHAR(255),
+      reason VARCHAR(255),
+      enabled BOOLEAN DEFAULT TRUE,
+      created_by VARCHAR(64),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_security_whitelist_target (target_type, target_value),
+      INDEX idx_enabled_type (enabled, target_type),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
   await ensureSecurityEventSchema();
 
   for (const rule of SECURITY_RULE_CATALOG) {

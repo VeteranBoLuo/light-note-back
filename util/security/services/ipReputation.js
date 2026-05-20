@@ -1,6 +1,7 @@
 import pool from '../../../db/index.js';
 import { SECURITY_CONFIG } from '../rules.js';
 import https from 'https';
+import { isSecurityWhitelisted } from './whitelist.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000;
@@ -72,7 +73,8 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
     Number(current.is_banned || 0) === 1 &&
     current.banned_until &&
     new Date(current.banned_until).getTime() > Date.now();
-  const canAutoBan = SECURITY_CONFIG.blockEnabled && !isPrivateOrLocalIp(ip);
+  const whitelisted = await isSecurityWhitelisted('ip', ip).catch(() => false);
+  const canAutoBan = SECURITY_CONFIG.blockEnabled && !isPrivateOrLocalIp(ip) && !whitelisted;
   const autoBanThreshold = Number(SECURITY_CONFIG.ipAutoBanRiskScore || 80);
   const autoBanned = canAutoBan && !currentBanActive && predictedScore >= autoBanThreshold;
   const explicitBanned = canAutoBan && Boolean(shouldBan);
@@ -132,7 +134,16 @@ export const updateIpReputation = async ({ ip, attackType, severity, threatScore
     }
   }
 
-  return { riskDelta: actualRiskDelta, theoreticalRiskDelta, nextRiskScore: predictedScore, highRisk, critical, autoBanned, autoBanThreshold };
+  return {
+    riskDelta: actualRiskDelta,
+    theoreticalRiskDelta,
+    nextRiskScore: predictedScore,
+    highRisk,
+    critical,
+    autoBanned,
+    autoBanThreshold,
+    whitelisted,
+  };
 };
 
 export const revertIpReputationImpact = async ({ ip, attackType, severity, riskDelta = 0, connection = null }) => {
@@ -268,9 +279,9 @@ export const recordIpRequest = async (ip) => {
     .catch(() => {});
 };
 
-export const setIpBan = async (ip, banned, minutes = 60, reason = '') => {
+export const setIpBan = async (ip, banned, minutes = 60, reason = '', executor = pool) => {
   const bannedUntil = banned ? new Date(Date.now() + Number(minutes || 60) * 60 * 1000) : null;
-  await pool.query(
+  await executor.query(
     `INSERT INTO security_ip_reputation (ip,is_banned,banned_until,ban_reason,first_seen_at,last_seen_at)
      VALUES (?,?,?,?,NOW(),NOW())
      ON DUPLICATE KEY UPDATE is_banned = VALUES(is_banned), banned_until = VALUES(banned_until), ban_reason = VALUES(ban_reason), last_seen_at = NOW()`,

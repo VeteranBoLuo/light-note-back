@@ -3,6 +3,11 @@ import { resultData } from '../util/common.js';
 import { validateQueryParams } from '../util/request.js';
 import { rebuildIpReputationFromEvents, revertIpReputationImpact, setIpBan } from '../util/security/services/ipReputation.js';
 import { rebuildAccountReputationFromEvents, revertAccountReputationImpact } from '../util/security/services/accountReputation.js';
+import {
+  disableSecurityWhitelist,
+  isSecurityWhitelisted,
+  normalizeWhitelistType,
+} from '../util/security/services/whitelist.js';
 import { removeUserSessions } from '../util/sessionStore.js';
 
 const ensureRootRole = async (req, res) => {
@@ -21,6 +26,45 @@ const parseJsonField = (row, field, fallback) => {
   } catch (e) {
     row[field] = fallback;
   }
+};
+
+const buildWhitelistWhere = (filters = {}) => {
+  const conditions = ['1=1'];
+  const params = [];
+  const targetType = normalizeWhitelistType(filters.target_type);
+  if (targetType) {
+    conditions.push('w.target_type = ?');
+    params.push(targetType);
+  }
+  if (filters.enabled !== undefined && filters.enabled !== '' && filters.enabled !== null) {
+    conditions.push('w.enabled = ?');
+    params.push(Number(filters.enabled));
+  }
+  if (filters.key) {
+    conditions.push(
+      `(w.target_value LIKE CONCAT('%', ?, '%')
+        OR w.label LIKE CONCAT('%', ?, '%')
+        OR w.reason LIKE CONCAT('%', ?, '%')
+        OR u.alias LIKE CONCAT('%', ?, '%')
+        OR u.email LIKE CONCAT('%', ?, '%'))`,
+    );
+    params.push(filters.key, filters.key, filters.key, filters.key, filters.key);
+  }
+  return { where: conditions.join(' AND '), params };
+};
+
+const whitelistConflict = async (targetType, targetValue) => {
+  const whitelisted = await isSecurityWhitelisted(targetType, targetValue);
+  if (!whitelisted) return null;
+  return resultData(
+    {
+      whitelistConflict: true,
+      targetType,
+      targetValue,
+    },
+    409,
+    '该对象当前在白名单中，确认后会先移出白名单并执行封禁',
+  );
 };
 
 const buildEventWhere = (filters = {}) => {
@@ -339,14 +383,28 @@ export const getIpReputationList = async (req, res) => {
 };
 
 export const banIp = async (req, res) => {
+  let connection;
   try {
     if (!(await ensureRootRole(req, res))) return;
-    const { ip, minutes = 60, reason = '管理员手动封禁' } = req.body || {};
+    const { ip, minutes = 60, reason = '管理员手动封禁', force = false } = req.body || {};
     if (!ip) return res.send(resultData(null, 400, 'IP不能为空'));
-    await setIpBan(ip, true, minutes, reason);
+    if (!force) {
+      const conflict = await whitelistConflict('ip', ip);
+      if (conflict) return res.send(conflict);
+    }
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    if (force) {
+      await disableSecurityWhitelist('ip', ip, connection);
+    }
+    await setIpBan(ip, true, minutes, reason, connection);
+    await connection.commit();
     res.send(resultData(null, 200, 'IP已封禁'));
   } catch (e) {
+    if (connection) await connection.rollback().catch(() => {});
     res.send(resultData(null, 500, '封禁IP失败：' + e.message));
+  } finally {
+    if (connection) connection.release();
   }
 };
 
@@ -501,15 +559,28 @@ export const getAccountReputationList = async (req, res) => {
 };
 
 export const banAccount = async (req, res) => {
+  let connection;
   try {
     if (!(await ensureRootRole(req, res))) return;
-    const { userId, reason = '管理员在安全中心手动封禁' } = req.body || {};
+    const { userId, reason = '管理员在安全中心手动封禁', force = false } = req.body || {};
     if (!userId) return res.send(resultData(null, 400, '账号不能为空'));
     if (userId === req.user.id) return res.send(resultData(null, 400, '不能封禁当前登录账号'));
-    const [rows] = await pool.query('SELECT id, role, del_flag FROM user WHERE id = ? LIMIT 1', [userId]);
-    if (!rows[0]) return res.send(resultData(null, 404, '账号不存在'));
-    await pool.query('UPDATE user SET del_flag = 1 WHERE id = ?', [userId]);
-    await pool.query(
+    if (!force) {
+      const conflict = await whitelistConflict('user', userId);
+      if (conflict) return res.send(conflict);
+    }
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const [rows] = await connection.query('SELECT id, role, del_flag FROM user WHERE id = ? LIMIT 1', [userId]);
+    if (!rows[0]) {
+      await connection.rollback();
+      return res.send(resultData(null, 404, '账号不存在'));
+    }
+    if (force) {
+      await disableSecurityWhitelist('user', userId, connection);
+    }
+    await connection.query('UPDATE user SET del_flag = 1 WHERE id = ?', [userId]);
+    await connection.query(
       `INSERT INTO security_account_bans (user_id,banned_by,ban_reason,is_active,banned_at)
        VALUES (?,?,?,?,NOW())
        ON DUPLICATE KEY UPDATE
@@ -522,10 +593,16 @@ export const banAccount = async (req, res) => {
         updated_at = NOW()`,
       [userId, req.user.id, reason, 1],
     );
-    await removeUserSessions(userId);
+    await connection.commit();
+    await removeUserSessions(userId).catch((error) => {
+      console.error('[security] remove user sessions failed after account ban:', error);
+    });
     res.send(resultData(null, 200, '账号已封禁'));
   } catch (e) {
+    if (connection) await connection.rollback().catch(() => {});
     res.send(resultData(null, 500, '封禁账号失败：' + e.message));
+  } finally {
+    if (connection) connection.release();
   }
 };
 
@@ -554,5 +631,101 @@ export const getSecurityRules = async (req, res) => {
     res.send(resultData({ items: rows, total: rows.length }));
   } catch (e) {
     res.send(resultData(null, 500, '获取安全规则失败：' + e.message));
+  }
+};
+
+export const getSecurityWhitelist = async (req, res) => {
+  try {
+    if (!(await ensureRootRole(req, res))) return;
+    const { filters, pageSize, currentPage } = validateQueryParams(req.body);
+    const skip = pageSize * (currentPage - 1);
+    const { where, params } = buildWhitelistWhere(filters);
+    const limitSql = Number(pageSize) === -1 ? '' : 'LIMIT ? OFFSET ?';
+    const limitParams = Number(pageSize) === -1 ? [] : [Number(pageSize), Number(skip)];
+    const [rows] = await pool.query(
+      `SELECT
+         w.*,
+         u.alias AS user_alias,
+         u.email AS user_email,
+         creator.alias AS created_by_alias
+       FROM security_whitelist w
+       LEFT JOIN user u ON w.target_type = 'user' AND w.target_value = u.id
+       LEFT JOIN user creator ON creator.id = w.created_by
+       WHERE ${where}
+       ORDER BY w.enabled DESC, w.updated_at DESC, w.created_at DESC
+       ${limitSql}`,
+      [...params, ...limitParams],
+    );
+    const [totalRows] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM security_whitelist w
+       LEFT JOIN user u ON w.target_type = 'user' AND w.target_value = u.id
+       WHERE ${where}`,
+      params,
+    );
+    res.send(resultData({ items: rows, total: totalRows[0].total }));
+  } catch (e) {
+    res.send(resultData(null, 500, '获取安全白名单失败：' + e.message));
+  }
+};
+
+export const saveSecurityWhitelist = async (req, res) => {
+  let connection;
+  try {
+    if (!(await ensureRootRole(req, res))) return;
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [req.body];
+    const items = rawItems
+      .map((item) => ({
+        targetType: normalizeWhitelistType(item.targetType),
+        targetValue: String(item.targetValue || '').trim(),
+        label: String(item.label || '').trim(),
+        reason: String(item.reason || '').trim(),
+      }))
+      .filter((item) => item.targetType && item.targetValue);
+    if (!items.length) {
+      return res.send(resultData(null, 400, '请选择要加入白名单的对象'));
+    }
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    for (const item of items) {
+      await connection.query(
+        `INSERT INTO security_whitelist
+          (target_type,target_value,label,reason,enabled,created_by,created_at,updated_at)
+         VALUES (?,?,?,?,1,?,NOW(),NOW())
+         ON DUPLICATE KEY UPDATE
+          label = VALUES(label),
+          reason = VALUES(reason),
+          enabled = 1,
+          updated_at = NOW()`,
+        [item.targetType, item.targetValue, item.label, item.reason, req.user.id],
+      );
+    }
+    await connection.commit();
+    res.send(resultData(null, 200, '白名单已更新'));
+  } catch (e) {
+    if (connection) await connection.rollback().catch(() => {});
+    res.send(resultData(null, 500, '保存安全白名单失败：' + e.message));
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+export const removeSecurityWhitelist = async (req, res) => {
+  try {
+    if (!(await ensureRootRole(req, res))) return;
+    const { id, targetType, targetValue } = req.body || {};
+    if (id) {
+      await pool.query('UPDATE security_whitelist SET enabled = 0, updated_at = NOW() WHERE id = ?', [id]);
+      return res.send(resultData(null, 200, '已移出白名单'));
+    }
+    const type = normalizeWhitelistType(targetType);
+    const value = String(targetValue || '').trim();
+    if (!type || !value) {
+      return res.send(resultData(null, 400, '缺少白名单对象'));
+    }
+    await disableSecurityWhitelist(type, value);
+    res.send(resultData(null, 200, '已移出白名单'));
+  } catch (e) {
+    res.send(resultData(null, 500, '移出安全白名单失败：' + e.message));
   }
 };

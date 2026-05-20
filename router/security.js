@@ -16,5 +16,8 @@ router.post('/accountReputation', securityHandle.getAccountReputationList);
 router.post('/accountBan', securityHandle.banAccount);
 router.post('/accountUnban', securityHandle.unbanAccount);
 router.post('/rules', securityHandle.getSecurityRules);
+router.post('/whitelist', securityHandle.getSecurityWhitelist);
+router.post('/whitelist/save', securityHandle.saveSecurityWhitelist);
+router.post('/whitelist/remove', securityHandle.removeSecurityWhitelist);
 
 export default router;
