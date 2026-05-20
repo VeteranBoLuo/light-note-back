@@ -25,6 +25,107 @@ const ensureRootRole = async (req, res) => {
   }
 };
 
+const OPINION_STATUS = {
+  PENDING: 'pending',
+  REPLIED: 'replied',
+};
+
+const emptyNoticeSummary = (role = 'visitor') => ({
+  role,
+  opinion: {
+    pendingTotal: 0,
+    unreadReplyTotal: 0,
+    latestAt: null,
+    latestReply: null,
+  },
+  security: {
+    enabled: false,
+    unhandledHighRiskCount: 0,
+    unhandledCriticalCount: 0,
+    latestAt: null,
+  },
+  hasNotice: false,
+  noticeKey: '',
+});
+
+const buildNoticeKey = (summary) =>
+  [
+    summary.role,
+    summary.opinion.pendingTotal,
+    summary.opinion.unreadReplyTotal,
+    summary.opinion.latestAt || '',
+    summary.security.unhandledHighRiskCount,
+    summary.security.unhandledCriticalCount,
+    summary.security.latestAt || '',
+  ].join('|');
+
+export const getNoticeSummary = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const role = req.user?.role || 'visitor';
+    if (!userId || role === 'visitor') {
+      return res.send(resultData(emptyNoticeSummary(role)));
+    }
+
+    const summary = emptyNoticeSummary(role);
+    if (role === 'root') {
+      const [opinionRows] = await pool.query(
+        `SELECT COUNT(*) AS pending_total, MAX(create_time) AS latest_at
+         FROM opinion
+         WHERE del_flag = 0 AND status = ?`,
+        [OPINION_STATUS.PENDING],
+      );
+      const [securityRows] = await pool.query(
+        `SELECT
+           COUNT(*) AS unhandled_high_risk_count,
+           SUM(severity = 'critical') AS unhandled_critical_count,
+           MAX(created_at) AS latest_at
+         FROM security_events
+         WHERE handled_status = 'unhandled'
+           AND severity IN ('high','critical')`,
+      );
+      summary.opinion.pendingTotal = Number(opinionRows[0]?.pending_total || 0);
+      summary.opinion.latestAt = opinionRows[0]?.latest_at || null;
+      summary.security.enabled = true;
+      summary.security.unhandledHighRiskCount = Number(securityRows[0]?.unhandled_high_risk_count || 0);
+      summary.security.unhandledCriticalCount = Number(securityRows[0]?.unhandled_critical_count || 0);
+      summary.security.latestAt = securityRows[0]?.latest_at || null;
+      summary.hasNotice = summary.opinion.pendingTotal > 0 || summary.security.unhandledHighRiskCount > 0;
+      summary.noticeKey = buildNoticeKey(summary);
+      return res.send(resultData(summary));
+    }
+
+    const [countRows] = await pool.query(
+      `SELECT COUNT(*) AS unread_reply_total, MAX(reply_time) AS latest_at
+       FROM opinion
+       WHERE user_id = ?
+         AND del_flag = 0
+         AND status = ?
+         AND reply_viewed = 0`,
+      [userId, OPINION_STATUS.REPLIED],
+    );
+    const [latestRows] = await pool.query(
+      `SELECT id, type, content, reply_content, reply_time
+       FROM opinion
+       WHERE user_id = ?
+         AND del_flag = 0
+         AND status = ?
+         AND reply_viewed = 0
+       ORDER BY reply_time DESC, create_time DESC
+       LIMIT 1`,
+      [userId, OPINION_STATUS.REPLIED],
+    );
+    summary.opinion.unreadReplyTotal = Number(countRows[0]?.unread_reply_total || 0);
+    summary.opinion.latestAt = countRows[0]?.latest_at || null;
+    summary.opinion.latestReply = latestRows[0] || null;
+    summary.hasNotice = summary.opinion.unreadReplyTotal > 0;
+    summary.noticeKey = buildNoticeKey(summary);
+    res.send(resultData(summary));
+  } catch (e) {
+    res.send(resultData(null, 500, '获取提醒汇总失败：' + e.message));
+  }
+};
+
 const ensureSortColumn = async (connection, tableName) => {
   const [columnRows] = await connection.query(`SHOW COLUMNS FROM \`${tableName}\` LIKE 'sort'`);
   if (columnRows.length > 0) {

@@ -1,5 +1,5 @@
 import pool from '../db/index.js';
-import { snakeCaseKeys, resultData, formatDateTime ,insertData} from './common.js';
+import { resultData, formatDateTime, insertData } from './common.js';
 
 export async function logFunction(req, res, next) {
   try {
@@ -13,9 +13,15 @@ export async function logFunction(req, res, next) {
       return;
     }
     // 跳过不记录的接口
-    const skipApi = ['Logs', 'getUserInfo', 'getUserList', 'analyzeImgUrl', 'getRelatedTag','getOpinionNotice'].some((key) =>
-      req.originalUrl.includes(key),
-    );
+    const skipApi = [
+      'Logs',
+      'getUserInfo',
+      'getUserList',
+      'analyzeImgUrl',
+      'getRelatedTag',
+      'getOpinionNotice',
+      'noticeSummary',
+    ].some((key) => req.originalUrl.includes(key));
 
     if (skipApi) {
       next();

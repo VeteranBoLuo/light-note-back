@@ -37,6 +37,8 @@ router.post('/publishAllHelpDraft', commonHandle.publishAllHelpDraft);
 
 router.post('/deleteHelpDraft', commonHandle.deleteHelpDraft);
 
+router.get('/noticeSummary', commonHandle.getNoticeSummary);
+
 
 
 

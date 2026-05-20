@@ -23,13 +23,13 @@ export const SENSITIVE_KEYS = [
 export const SAFE_PREFIXES = ['/security'];
 
 export const SENSITIVE_PATHS = [
-  { pattern: /^\/?\.env/i, score: 50, name: '探测 .env 配置文件' },
-  { pattern: /^\/?\.git(?:\/|$)/i, score: 50, name: '探测 Git 目录' },
+  { pattern: /^\/?\.env/i, score: 42, name: '探测 .env 配置文件' },
+  { pattern: /^\/?\.git(?:\/|$)/i, score: 42, name: '探测 Git 目录' },
   { pattern: /^\/?\.svn(?:\/|$)/i, score: 35, name: '探测 SVN 目录' },
   { pattern: /^\/?\.ds_store$/i, score: 25, name: '探测系统隐藏文件' },
   { pattern: /(?:^|\/)(wp-admin|wp-login\.php|xmlrpc\.php)(?:\/|$)/i, score: 35, name: '探测 WordPress 入口' },
   { pattern: /(?:^|\/)(phpmyadmin|pma|adminer)(?:\/|$)/i, score: 40, name: '探测数据库管理入口' },
-  { pattern: /(?:^|\/)(backup|dump|db|database).*\.(zip|tar|gz|sql|bak)$/i, score: 50, name: '探测备份文件' },
+  { pattern: /(?:^|\/)(backup|dump|db|database).*\.(zip|tar|gz|sql|bak)$/i, score: 45, name: '探测备份文件' },
   { pattern: /(?:^|\/)(server-status|actuator|swagger-ui|api-docs)(?:\/|$)/i, score: 30, name: '探测管理或文档端点' },
 ];
 
@@ -124,10 +124,10 @@ export const DETECTOR_RULES = [
     code: 'SENSITIVE_PATH_PROBE',
     name: '敏感路径探测',
     attackType: 'SCANNER',
-    severity: 'high',
-    baseScore: 50,
+    severity: 'medium',
+    baseScore: 45,
     confidence: 86,
-    description: '按路径敏感程度计 25-50 分',
+    description: '按路径敏感程度计 25-45 分，重复探测或信誉叠加后升级高危',
   },
   {
     code: 'MALICIOUS_FILE_UPLOAD',
@@ -173,8 +173,8 @@ export const DETECTOR_RULES = [
     code: 'SCANNER_404_PATTERN',
     name: '扫描器 404 模式',
     attackType: 'SCANNER',
-    severity: 'high',
-    baseScore: 38,
+    severity: 'medium',
+    baseScore: 32,
     confidence: 82,
   },
   {

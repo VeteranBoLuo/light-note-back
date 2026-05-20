@@ -5,6 +5,7 @@ const router = express.Router();
 
 router.post('/overview', securityHandle.getSecurityOverview);
 router.post('/events', securityHandle.getSecurityEvents);
+router.post('/events/batchHandle', securityHandle.batchHandleSecurityEvents);
 router.get('/events/:eventId', securityHandle.getSecurityEventDetail);
 router.post('/events/:eventId/handle', securityHandle.handleSecurityEvent);
 router.post('/ipReputation', securityHandle.getIpReputationList);

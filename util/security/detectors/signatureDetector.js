@@ -96,7 +96,7 @@ const detectSensitivePath = (context) => {
     code: 'SENSITIVE_PATH_PROBE',
     name: matched.name,
     attackType: 'SCANNER',
-    severity: matched.score >= 40 ? 'high' : 'medium',
+    severity: matched.score >= 50 ? 'high' : 'medium',
     baseScore: matched.score,
     confidence: 86,
   };

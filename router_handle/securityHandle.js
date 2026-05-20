@@ -28,6 +28,96 @@ const parseJsonField = (row, field, fallback) => {
   }
 };
 
+const padDatePart = (value) => String(value).padStart(2, '0');
+
+const formatTrendHourKey = (date) =>
+  `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:00:00`;
+
+const formatTrendHourLabel = (date) =>
+  `${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:00`;
+
+const buildHourlyTrend = (rows = []) => {
+  const rowMap = new Map(rows.map((row) => [row.hourKey, row]));
+  const end = new Date();
+  end.setMinutes(0, 0, 0);
+  const start = new Date(end);
+  start.setHours(start.getHours() - 23);
+
+  return Array.from({ length: 24 }, (_, index) => {
+    const current = new Date(start);
+    current.setHours(start.getHours() + index);
+    const hourKey = formatTrendHourKey(current);
+    const row = rowMap.get(hourKey) || {};
+    return {
+      hourKey,
+      time: formatTrendHourLabel(current),
+      total: Number(row.total || 0),
+      blocked: Number(row.blocked || 0),
+    };
+  });
+};
+
+const normalizeSecurityHandledStatus = (handledStatus = 'processed') => {
+  const statusMap = {
+    confirmed: 'processed',
+    resolved: 'processed',
+    ignored: 'processed',
+    processed: 'processed',
+    false_positive: 'false_positive',
+    unhandled: 'unhandled',
+  };
+  return statusMap[handledStatus];
+};
+
+const applySecurityEventHandle = async ({ connection, event, normalizedStatus, remark, operatorId }) => {
+  await connection.query(
+    `UPDATE security_events
+     SET handled_status = ?, remark = ?, handled_by = ?, handled_at = NOW()
+     WHERE event_id = ?`,
+    [normalizedStatus, remark, operatorId, event.event_id],
+  );
+
+  if (normalizedStatus === 'false_positive' && !event.ip_risk_reverted) {
+    if (Number(event.ip_risk_delta || 0) > 0) {
+      await revertIpReputationImpact({
+        ip: event.source_ip,
+        attackType: event.attack_type,
+        severity: event.severity,
+        riskDelta: event.ip_risk_delta,
+        connection,
+      });
+    } else {
+      await rebuildIpReputationFromEvents({ ip: event.source_ip, connection });
+    }
+    await connection.query(
+      `UPDATE security_events
+       SET ip_risk_reverted = 1, ip_risk_reverted_at = NOW()
+       WHERE event_id = ?`,
+      [event.event_id],
+    );
+  }
+
+  if (normalizedStatus === 'false_positive' && event.user_id && !event.user_risk_reverted) {
+    if (Number(event.user_risk_delta || 0) > 0) {
+      await revertAccountReputationImpact({
+        userId: event.user_id,
+        attackType: event.attack_type,
+        severity: event.severity,
+        riskDelta: event.user_risk_delta,
+        connection,
+      });
+    } else {
+      await rebuildAccountReputationFromEvents({ userId: event.user_id, connection });
+    }
+    await connection.query(
+      `UPDATE security_events
+       SET user_risk_reverted = 1, user_risk_reverted_at = NOW()
+       WHERE event_id = ?`,
+      [event.event_id],
+    );
+  }
+};
+
 const buildWhitelistWhere = (filters = {}) => {
   const conditions = ['1=1'];
   const params = [];
@@ -74,12 +164,13 @@ const buildEventWhere = (filters = {}) => {
     conditions.push(
       `(e.source_ip LIKE CONCAT('%', ?, '%')
         OR e.request_path LIKE CONCAT('%', ?, '%')
+        OR e.matched_rule LIKE CONCAT('%', ?, '%')
         OR e.attack_type LIKE CONCAT('%', ?, '%')
         OR e.user_agent LIKE CONCAT('%', ?, '%')
         OR u.alias LIKE CONCAT('%', ?, '%')
         OR u.email LIKE CONCAT('%', ?, '%'))`,
     );
-    params.push(filters.key, filters.key, filters.key, filters.key, filters.key, filters.key);
+    params.push(filters.key, filters.key, filters.key, filters.key, filters.key, filters.key, filters.key);
   }
   if (filters.attack_type) {
     conditions.push('e.attack_type = ?');
@@ -126,13 +217,27 @@ export const getSecurityOverview = async (req, res) => {
     const [summaryRows] = await pool.query(`
       SELECT
         COUNT(*) AS total,
-        SUM(severity IN ('high','critical')) AS highRisk,
-        SUM(blocked = 1) AS blocked,
+        COALESCE(SUM(severity IN ('high','critical')), 0) AS highRisk,
+        COALESCE(SUM(blocked = 1), 0) AS blocked,
         COUNT(DISTINCT source_ip) AS activeIps,
-        SUM(created_at >= CURDATE()) AS todayTotal,
-        SUM(created_at >= CURDATE() AND severity = 'critical') AS todayCritical
+        COALESCE(SUM(created_at >= CURDATE()), 0) AS todayTotal,
+        COALESCE(SUM(created_at >= CURDATE() AND severity = 'critical'), 0) AS todayCritical,
+        COALESCE(SUM(handled_status = 'unhandled'), 0) AS unhandled,
+        COALESCE(SUM(handled_status = 'unhandled' AND severity IN ('high','critical')), 0) AS unhandledHighRisk
       FROM security_events
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    `);
+    const [severityRows] = await pool.query(`
+      SELECT severity, COUNT(*) AS total
+      FROM security_events
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY severity
+    `);
+    const [statusRows] = await pool.query(`
+      SELECT handled_status AS handledStatus, COUNT(*) AS total
+      FROM security_events
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY handled_status
     `);
     const [typeRows] = await pool.query(`
       SELECT attack_type AS attackType, COUNT(*) AS total
@@ -143,7 +248,10 @@ export const getSecurityOverview = async (req, res) => {
       LIMIT 8
     `);
     const [trendRows] = await pool.query(`
-      SELECT DATE_FORMAT(created_at, '%m-%d %H:00') AS time, COUNT(*) AS total, SUM(blocked = 1) AS blocked
+      SELECT
+        DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') AS hourKey,
+        COUNT(*) AS total,
+        COALESCE(SUM(blocked = 1), 0) AS blocked
       FROM security_events
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
       GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d %H')
@@ -175,8 +283,10 @@ export const getSecurityOverview = async (req, res) => {
     res.send(
       resultData({
         summary: summaryRows[0],
+        severityDistribution: severityRows,
+        statusDistribution: statusRows,
         typeDistribution: typeRows,
-        trend: trendRows,
+        trend: buildHourlyTrend(trendRows),
         topIps: topIpRows,
         topPaths: topPathRows,
         recentEvents: recentRows,
@@ -245,7 +355,7 @@ export const getSecurityEventDetail = async (req, res) => {
       [eventId],
     );
     const [ipRecent] = await pool.query(
-      `SELECT event_id, attack_type, severity, threat_score, request_path, action_taken, created_at
+      `SELECT event_id, matched_rule, attack_type, severity, threat_score, request_path, action_taken, created_at
        FROM security_events
        WHERE source_ip = ?
        ORDER BY created_at DESC, id DESC
@@ -278,15 +388,7 @@ export const handleSecurityEvent = async (req, res) => {
     if (!(await ensureRootRole(req, res))) return;
     const { eventId } = req.params;
     const { handledStatus = 'processed', remark = '' } = req.body || {};
-    const statusMap = {
-      confirmed: 'processed',
-      resolved: 'processed',
-      ignored: 'processed',
-      processed: 'processed',
-      false_positive: 'false_positive',
-      unhandled: 'unhandled',
-    };
-    const normalizedStatus = statusMap[handledStatus];
+    const normalizedStatus = normalizeSecurityHandledStatus(handledStatus);
     const allowed = ['unhandled', 'processed', 'false_positive'];
     if (!allowed.includes(normalizedStatus)) {
       return res.send(resultData(null, 400, '无效的处理状态'));
@@ -300,56 +402,67 @@ export const handleSecurityEvent = async (req, res) => {
       return res.send(resultData(null, 404, '安全事件不存在'));
     }
 
-    await connection.query(
-      `UPDATE security_events
-       SET handled_status = ?, remark = ?, handled_by = ?, handled_at = NOW()
-       WHERE event_id = ?`,
-      [normalizedStatus, remark, req.user.id, eventId],
-    );
-
-    if (normalizedStatus === 'false_positive' && !event.ip_risk_reverted) {
-      if (Number(event.ip_risk_delta || 0) > 0) {
-        await revertIpReputationImpact({
-          ip: event.source_ip,
-          attackType: event.attack_type,
-          severity: event.severity,
-          riskDelta: event.ip_risk_delta,
-          connection,
-        });
-      } else {
-        await rebuildIpReputationFromEvents({ ip: event.source_ip, connection });
-      }
-      await connection.query(
-        `UPDATE security_events
-         SET ip_risk_reverted = 1, ip_risk_reverted_at = NOW()
-         WHERE event_id = ?`,
-        [eventId],
-      );
-    }
-    if (normalizedStatus === 'false_positive' && event.user_id && !event.user_risk_reverted) {
-      if (Number(event.user_risk_delta || 0) > 0) {
-        await revertAccountReputationImpact({
-          userId: event.user_id,
-          attackType: event.attack_type,
-          severity: event.severity,
-          riskDelta: event.user_risk_delta,
-          connection,
-        });
-      } else {
-        await rebuildAccountReputationFromEvents({ userId: event.user_id, connection });
-      }
-      await connection.query(
-        `UPDATE security_events
-         SET user_risk_reverted = 1, user_risk_reverted_at = NOW()
-         WHERE event_id = ?`,
-        [eventId],
-      );
-    }
+    await applySecurityEventHandle({ connection, event, normalizedStatus, remark, operatorId: req.user.id });
     await connection.commit();
     res.send(resultData(null, 200, normalizedStatus === 'false_positive' ? '已标记误报并回滚风险影响' : '处理状态已更新'));
   } catch (e) {
     if (connection) await connection.rollback().catch(() => {});
     res.send(resultData(null, 500, '更新处理状态失败：' + e.message));
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+export const batchHandleSecurityEvents = async (req, res) => {
+  let connection;
+  try {
+    if (!(await ensureRootRole(req, res))) return;
+    const { eventIds = [], handledStatus = 'processed', remark = '' } = req.body || {};
+    const ids = Array.from(new Set((Array.isArray(eventIds) ? eventIds : []).map((id) => String(id).trim()).filter(Boolean)));
+    if (!ids.length) {
+      return res.send(resultData(null, 400, '请选择要处理的安全事件'));
+    }
+    if (ids.length > 100) {
+      return res.send(resultData(null, 400, '单次最多批量处理100条安全事件'));
+    }
+    const normalizedStatus = normalizeSecurityHandledStatus(handledStatus);
+    const allowed = ['unhandled', 'processed', 'false_positive'];
+    if (!allowed.includes(normalizedStatus)) {
+      return res.send(resultData(null, 400, '无效的处理状态'));
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    const placeholders = ids.map(() => '?').join(',');
+    const [events] = await connection.query(
+      `SELECT *
+       FROM security_events
+       WHERE event_id IN (${placeholders})
+       FOR UPDATE`,
+      ids,
+    );
+    const eventMap = new Map(events.map((event) => [event.event_id, event]));
+    const missingIds = ids.filter((id) => !eventMap.has(id));
+    if (missingIds.length) {
+      await connection.rollback();
+      return res.send(resultData({ missingIds }, 404, '部分安全事件不存在'));
+    }
+
+    for (const eventId of ids) {
+      await applySecurityEventHandle({
+        connection,
+        event: eventMap.get(eventId),
+        normalizedStatus,
+        remark,
+        operatorId: req.user.id,
+      });
+    }
+
+    await connection.commit();
+    res.send(resultData({ handledTotal: ids.length }, 200, `已批量处理 ${ids.length} 条安全事件`));
+  } catch (e) {
+    if (connection) await connection.rollback().catch(() => {});
+    res.send(resultData(null, 500, '批量处理安全事件失败：' + e.message));
   } finally {
     if (connection) connection.release();
   }
