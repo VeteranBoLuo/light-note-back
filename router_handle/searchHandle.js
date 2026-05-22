@@ -139,6 +139,21 @@ function formatText(template, params = {}) {
   return Object.entries(params).reduce((text, [key, value]) => text.replace(`{${key}}`, value), template);
 }
 
+async function queryGlobalTypeTotals(userId) {
+  const [bookmarkRows, noteRows, fileRows, tagRows] = await Promise.all([
+    pool.query(`SELECT COUNT(*) AS total FROM bookmark WHERE user_id = ? AND del_flag = 0`, [userId]),
+    pool.query(`SELECT COUNT(*) AS total FROM note WHERE create_by = ? AND del_flag = 0`, [userId]),
+    pool.query(`SELECT COUNT(*) AS total FROM files WHERE create_by = ? AND del_flag = 0`, [userId]),
+    pool.query(`SELECT COUNT(*) AS total FROM tag WHERE user_id = ? AND del_flag = 0`, [userId]),
+  ]);
+  return {
+    bookmark: Number(bookmarkRows?.[0]?.[0]?.total || 0),
+    note: Number(noteRows?.[0]?.[0]?.total || 0),
+    file: Number(fileRows?.[0]?.[0]?.total || 0),
+    tag: Number(tagRows?.[0]?.[0]?.total || 0),
+  };
+}
+
 function normalizeBatchAction(value) {
   return value === 'remove' ? 'remove' : value === 'add' ? 'add' : '';
 }
@@ -372,11 +387,12 @@ export const globalSearch = async (req, res) => {
     const limitPerType = normalizeLimit(req.body?.limitPerType ?? req.body?.pageSize, 12);
     const lang = normalizeLang(req.headers['x-lang']);
 
-    const [bookmarks, notes, files, tags] = await Promise.all([
+    const [bookmarks, notes, files, tags, typeTotals] = await Promise.all([
       queryBookmarks(userId, keyword, limitPerType, lang),
       queryNotes(userId, keyword, limitPerType, lang),
       queryFiles(userId, keyword, limitPerType, lang),
       queryTags(userId, keyword, limitPerType, lang),
+      queryGlobalTypeTotals(userId),
     ]);
 
     const items = [...bookmarks, ...notes, ...files, ...tags];
@@ -386,6 +402,7 @@ export const globalSearch = async (req, res) => {
         items,
         groups: groupItems(items, lang),
         total: items.length,
+        typeTotals,
       }),
     );
   } catch (error) {
