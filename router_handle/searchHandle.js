@@ -1,8 +1,15 @@
 import pool from '../db/index.js';
 import { resultData } from '../util/common.js';
 import { resolveFileCategory } from '../util/fileCategory.js';
+import { normalizeTagIds, validateUserTags } from '../util/resourceTags.js';
 
 const SEARCH_TYPES = ['bookmark', 'note', 'file', 'tag'];
+const BATCH_EDITABLE_TYPES = ['bookmark', 'note', 'file'];
+const RESOURCE_OWNER_SQL = {
+  bookmark: `SELECT id FROM bookmark WHERE user_id = ? AND del_flag = 0 AND id IN ({ids})`,
+  note: `SELECT id FROM note WHERE create_by = ? AND del_flag = 0 AND id IN ({ids})`,
+  file: `SELECT id FROM files WHERE create_by = ? AND del_flag = 0 AND id IN ({ids})`,
+};
 const TYPE_LABELS = {
   'zh-CN': {
     bookmark: '书签',
@@ -130,6 +137,81 @@ function getSearchText(lang) {
 
 function formatText(template, params = {}) {
   return Object.entries(params).reduce((text, [key, value]) => text.replace(`{${key}}`, value), template);
+}
+
+function normalizeBatchAction(value) {
+  return value === 'remove' ? 'remove' : value === 'add' ? 'add' : '';
+}
+
+function normalizeBatchItems(items = []) {
+  if (!Array.isArray(items)) return [];
+  const merged = new Map();
+  items.forEach((item) => {
+    const type = toText(item?.type);
+    const id = toText(item?.id);
+    if (!BATCH_EDITABLE_TYPES.includes(type) || !id) return;
+    merged.set(`${type}:${id}`, { type, id });
+  });
+  return Array.from(merged.values());
+}
+
+async function queryValidResourceIds(connection, { userId, type, ids = [] }) {
+  if (!ids.length || !RESOURCE_OWNER_SQL[type]) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const sql = RESOURCE_OWNER_SQL[type].replace('{ids}', placeholders);
+  const [rows] = await connection.query(sql, [userId, ...ids]);
+  return rows.map((row) => toText(row.id)).filter(Boolean);
+}
+
+async function queryExistingRelationCount(connection, { userId, type, resourceIds = [], tagIds = [] }) {
+  if (!resourceIds.length || !tagIds.length) return 0;
+  const resourcePlaceholders = resourceIds.map(() => '?').join(',');
+  const tagPlaceholders = tagIds.map(() => '?').join(',');
+  const [rows] = await connection.query(
+    `
+      SELECT COUNT(*) AS total
+      FROM resource_tag_relations
+      WHERE user_id = ?
+        AND resource_type = ?
+        AND resource_id IN (${resourcePlaceholders})
+        AND tag_id IN (${tagPlaceholders})
+    `,
+    [userId, type, ...resourceIds, ...tagIds],
+  );
+  return Number(rows?.[0]?.total || 0);
+}
+
+async function insertRelations(connection, { userId, type, resourceIds = [], tagIds = [] }) {
+  if (!resourceIds.length || !tagIds.length) return 0;
+  const values = [];
+  resourceIds.forEach((resourceId) => {
+    tagIds.forEach((tagId) => {
+      values.push([tagId, type, resourceId, userId, 'manual']);
+    });
+  });
+  if (!values.length) return 0;
+  const [result] = await connection.query(
+    `INSERT IGNORE INTO resource_tag_relations (tag_id, resource_type, resource_id, user_id, source) VALUES ?`,
+    [values],
+  );
+  return Number(result?.affectedRows || 0);
+}
+
+async function removeRelations(connection, { userId, type, resourceIds = [], tagIds = [] }) {
+  if (!resourceIds.length || !tagIds.length) return 0;
+  const resourcePlaceholders = resourceIds.map(() => '?').join(',');
+  const tagPlaceholders = tagIds.map(() => '?').join(',');
+  const [result] = await connection.query(
+    `
+      DELETE FROM resource_tag_relations
+      WHERE user_id = ?
+        AND resource_type = ?
+        AND resource_id IN (${resourcePlaceholders})
+        AND tag_id IN (${tagPlaceholders})
+    `,
+    [userId, type, ...resourceIds, ...tagIds],
+  );
+  return Number(result?.affectedRows || 0);
 }
 
 async function queryBookmarks(userId, keyword, limit, lang) {
@@ -309,5 +391,186 @@ export const globalSearch = async (req, res) => {
   } catch (error) {
     console.error('统一搜索失败:', error);
     res.send(resultData(null, 500, '统一搜索失败: ' + error.message));
+  }
+};
+
+export const batchUpdateResourceTags = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.send(resultData(null, 401, '请先登录'));
+    }
+
+    const action = normalizeBatchAction(req.body?.action);
+    const tagIds = normalizeTagIds(req.body?.tagIds || []);
+    const items = normalizeBatchItems(req.body?.items || []);
+
+    if (!action) {
+      return res.send(resultData(null, 400, '缺少有效操作类型'));
+    }
+    if (!items.length) {
+      return res.send(resultData(null, 400, '未选择可编辑资源'));
+    }
+    if (!tagIds.length) {
+      return res.send(resultData(null, 400, '请至少选择一个标签'));
+    }
+
+    await connection.beginTransaction();
+    const validTagIds = await validateUserTags(connection, { tagIds, userId });
+    const grouped = {
+      bookmark: [],
+      note: [],
+      file: [],
+    };
+    items.forEach((item) => grouped[item.type].push(item.id));
+
+    const typeStats = [];
+    let affectedRelationCount = 0;
+    let existingRelationCount = 0;
+    let validItemCount = 0;
+
+    for (const type of BATCH_EDITABLE_TYPES) {
+      const requestedIds = grouped[type];
+      if (!requestedIds.length) continue;
+      const validIds = await queryValidResourceIds(connection, { userId, type, ids: requestedIds });
+      validItemCount += validIds.length;
+      const totalPairs = validIds.length * validTagIds.length;
+      let affected = 0;
+      let existed = 0;
+
+      if (totalPairs > 0) {
+        existed = await queryExistingRelationCount(connection, {
+          userId,
+          type,
+          resourceIds: validIds,
+          tagIds: validTagIds,
+        });
+        if (action === 'add') {
+          affected = await insertRelations(connection, { userId, type, resourceIds: validIds, tagIds: validTagIds });
+        } else {
+          affected = await removeRelations(connection, { userId, type, resourceIds: validIds, tagIds: validTagIds });
+        }
+      }
+
+      affectedRelationCount += affected;
+      existingRelationCount += existed;
+      typeStats.push({
+        type,
+        requestedCount: requestedIds.length,
+        validCount: validIds.length,
+        affectedRelationCount: affected,
+      });
+    }
+
+    await connection.commit();
+
+    const totalPairs = validItemCount * validTagIds.length;
+    const skippedRelationCount =
+      action === 'add'
+        ? Math.max(totalPairs - affectedRelationCount, 0)
+        : Math.max(totalPairs - existingRelationCount, 0);
+
+    res.send(
+      resultData({
+        action,
+        requestedItemCount: items.length,
+        validItemCount,
+        invalidItemCount: Math.max(items.length - validItemCount, 0),
+        requestedTagCount: tagIds.length,
+        validTagCount: validTagIds.length,
+        affectedRelationCount,
+        skippedRelationCount,
+        typeStats,
+      }),
+    );
+  } catch (error) {
+    await connection.rollback();
+    res.send(resultData(null, 500, '批量更新资源标签失败: ' + error.message));
+  } finally {
+    connection.release();
+  }
+};
+
+export const getBatchResourceTagWorkspace = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.send(resultData(null, 401, '请先登录'));
+    }
+
+    const items = normalizeBatchItems(req.body?.items || []);
+    if (!items.length) {
+      return res.send(resultData(null, 400, '未选择可编辑资源'));
+    }
+
+    const grouped = {
+      bookmark: [],
+      note: [],
+      file: [],
+    };
+    items.forEach((item) => grouped[item.type].push(item.id));
+
+    const resourceTagsMap = {};
+    const tagDedup = new Map();
+
+    for (const type of BATCH_EDITABLE_TYPES) {
+      const requestedIds = grouped[type];
+      if (!requestedIds.length) continue;
+      const validIds = await queryValidResourceIds(connection, { userId, type, ids: requestedIds });
+      if (!validIds.length) continue;
+      const placeholders = validIds.map(() => '?').join(',');
+      const [rows] = await connection.query(
+        `
+          SELECT
+            r.resource_id AS resourceId,
+            t.id AS tagId,
+            t.name AS tagName
+          FROM resource_tag_relations r
+          INNER JOIN tag t ON t.id = r.tag_id
+          WHERE r.user_id = ?
+            AND r.resource_type = ?
+            AND r.resource_id IN (${placeholders})
+            AND t.user_id = ?
+            AND t.del_flag = 0
+          ORDER BY t.sort, t.create_time DESC
+        `,
+        [userId, type, ...validIds, userId],
+      );
+
+      rows.forEach((row) => {
+        const key = `${type}:${toText(row.resourceId)}`;
+        if (!resourceTagsMap[key]) resourceTagsMap[key] = [];
+        const tagItem = { id: toText(row.tagId), name: toText(row.tagName) };
+        resourceTagsMap[key].push(tagItem);
+        if (tagItem.id && !tagDedup.has(tagItem.id)) {
+          tagDedup.set(tagItem.id, tagItem);
+        }
+      });
+    }
+
+    const [allTags] = await connection.query(
+      `
+        SELECT id, name
+        FROM tag
+        WHERE user_id = ? AND del_flag = 0
+        ORDER BY sort, create_time DESC
+      `,
+      [userId],
+    );
+
+    res.send(
+      resultData({
+        items,
+        resourceTagsMap,
+        selectedResourceTags: Array.from(tagDedup.values()),
+        allTags: allTags.map((tag) => ({ id: toText(tag.id), name: toText(tag.name) })),
+      }),
+    );
+  } catch (error) {
+    res.send(resultData(null, 500, '获取批量标签工作台数据失败: ' + error.message));
+  } finally {
+    connection.release();
   }
 };
