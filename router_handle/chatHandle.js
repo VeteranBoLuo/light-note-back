@@ -103,6 +103,11 @@ export const receiveMessage = async (req, res) => {
 
     // 非翻译模式下检索帮助中心数据作为参考
     if (!enableTranslation) {
+      // 告知 AI 是否开启了联网搜索
+      const webSearchHint = useInternetSearch
+        ? '注意：本次对话已开启联网搜索能力，对于实时信息（天气、新闻、股价等）请在回答后主动联网查询获取最新数据。'
+        : '注意：本次对话未开启联网搜索。如果用户询问实时信息（天气、新闻、股价等），请告知用户可以开启联网搜索功能来获取最新信息。';
+
       try {
         const knowledge = await retrieve(req.user.id, message, 3);
         if (knowledge.length > 0) {
@@ -110,7 +115,10 @@ export const receiveMessage = async (req, res) => {
             .map((k) => `【${k.title}】\n${k.content}`)
             .join('\n\n---\n\n');
           prompt =
-            `以下是与用户问题相关的内容可供参考：\n\n${context}\n\n---\n\n用户问题：${message}`;
+            `以下是与用户问题相关的内容可供参考：\n\n${context}\n\n---\n\n` +
+            `请优先基于上述参考资料回答用户的问题。如果参考资料中不包含答案或用户问的是具体的访问地址、功能路径等信息，请直接说不知道或建议用户查阅帮助中心，不要自行编造。\n${webSearchHint}\n\n用户问题：${message}`;
+        } else {
+          prompt = `请根据你的知识回答用户的问题。注意：如果不知道确切答案（特别是具体的功能路径、访问地址等信息），请直接告诉用户你不确定，建议查阅帮助中心或联系管理员，不要自行编造。\n${webSearchHint}\n\n用户问题：${message}`;
         }
       } catch (err) {
         console.error('帮助中心检索失败，不影响正常回答:', err.message);
