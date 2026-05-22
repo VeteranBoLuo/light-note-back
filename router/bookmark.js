@@ -4,6 +4,7 @@ import multer from 'multer';
 const router = express.Router();
 
 import * as bookmarkHandle from '../router_handle/bookmarkHandle.js';
+import * as tagGraphHandle from '../router_handle/tagGraphHandle.js';
 
 const upload = multer({ dest: '/' }); // 临时目录用于上传文件
 
@@ -14,6 +15,8 @@ router.post('/updateTagSort', bookmarkHandle.updateTagSort);
 router.post('/getTagDetail', bookmarkHandle.getTagDetail);
 
 router.post('/getRelatedTag', bookmarkHandle.getRelatedTag);
+
+router.post('/getTagGraph', tagGraphHandle.getTagGraph);
 
 router.post('/getBookmarkList', bookmarkHandle.getBookmarkList);
 
