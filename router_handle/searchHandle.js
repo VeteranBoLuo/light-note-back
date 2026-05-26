@@ -5,10 +5,12 @@ import { normalizeTagIds, validateUserTags } from '../util/resourceTags.js';
 
 const SEARCH_TYPES = ['bookmark', 'note', 'file', 'tag'];
 const BATCH_EDITABLE_TYPES = ['bookmark', 'note', 'file'];
+const BATCH_DELETE_TYPES = ['bookmark', 'note', 'file', 'tag'];
 const RESOURCE_OWNER_SQL = {
   bookmark: `SELECT id FROM bookmark WHERE user_id = ? AND del_flag = 0 AND id IN ({ids})`,
   note: `SELECT id FROM note WHERE create_by = ? AND del_flag = 0 AND id IN ({ids})`,
   file: `SELECT id FROM files WHERE create_by = ? AND del_flag = 0 AND id IN ({ids})`,
+  tag: `SELECT id FROM tag WHERE user_id = ? AND del_flag = 0 AND id IN ({ids})`,
 };
 const TYPE_LABELS = {
   'zh-CN': {
@@ -165,6 +167,18 @@ function normalizeBatchItems(items = []) {
     const type = toText(item?.type);
     const id = toText(item?.id);
     if (!BATCH_EDITABLE_TYPES.includes(type) || !id) return;
+    merged.set(`${type}:${id}`, { type, id });
+  });
+  return Array.from(merged.values());
+}
+
+function normalizeBatchDeleteItems(items = []) {
+  if (!Array.isArray(items)) return [];
+  const merged = new Map();
+  items.forEach((item) => {
+    const type = toText(item?.type);
+    const id = toText(item?.id);
+    if (!BATCH_DELETE_TYPES.includes(type) || !id) return;
     merged.set(`${type}:${id}`, { type, id });
   });
   return Array.from(merged.values());
@@ -587,6 +601,110 @@ export const getBatchResourceTagWorkspace = async (req, res) => {
     );
   } catch (error) {
     res.send(resultData(null, 500, '获取批量标签工作台数据失败: ' + error.message));
+  } finally {
+    connection.release();
+  }
+};
+
+export const batchDeleteResources = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.send(resultData(null, 401, '请先登录'));
+    }
+
+    const items = normalizeBatchDeleteItems(req.body?.items || []);
+    if (!items.length) {
+      return res.send(resultData(null, 400, '未选择可删除资源'));
+    }
+
+    const grouped = {
+      bookmark: [],
+      note: [],
+      file: [],
+      tag: [],
+    };
+    items.forEach((item) => grouped[item.type].push(item.id));
+
+    await connection.beginTransaction();
+
+    const typeStats = [];
+    let affectedItemCount = 0;
+    let validItemCount = 0;
+
+    for (const type of BATCH_DELETE_TYPES) {
+      const requestedIds = grouped[type];
+      if (!requestedIds.length) continue;
+
+      const validIds = await queryValidResourceIds(connection, { userId, type, ids: requestedIds });
+      validItemCount += validIds.length;
+      if (!validIds.length) {
+        typeStats.push({
+          type,
+          requestedCount: requestedIds.length,
+          validCount: 0,
+          affectedItemCount: 0,
+        });
+        continue;
+      }
+
+      const placeholders = validIds.map(() => '?').join(',');
+      let result = { affectedRows: 0 };
+      if (type === 'bookmark') {
+        [result] = await connection.query(
+          `UPDATE bookmark SET del_flag = 1, deleted_at = NOW(), icon_url = NULL
+           WHERE id IN (${placeholders}) AND user_id = ? AND del_flag = 0`,
+          [...validIds, userId],
+        );
+      } else if (type === 'note') {
+        [result] = await connection.query(
+          `UPDATE note SET del_flag = 1, deleted_at = NOW()
+           WHERE id IN (${placeholders}) AND create_by = ? AND del_flag = 0`,
+          [...validIds, userId],
+        );
+      } else if (type === 'file') {
+        [result] = await connection.query(
+          `UPDATE files SET del_flag = 1, deleted_at = NOW()
+           WHERE id IN (${placeholders}) AND create_by = ? AND del_flag = 0`,
+          [...validIds, userId],
+        );
+      } else if (type === 'tag') {
+        await connection.query(`DELETE FROM resource_tag_relations WHERE tag_id IN (${placeholders})`, validIds);
+        await connection.query(
+          `DELETE FROM tag_relations WHERE tag_id IN (${placeholders}) OR related_tag_id IN (${placeholders})`,
+          [...validIds, ...validIds],
+        );
+        [result] = await connection.query(
+          `DELETE FROM tag
+           WHERE id IN (${placeholders}) AND user_id = ? AND del_flag = 0`,
+          [...validIds, userId],
+        );
+      }
+
+      const affected = Number(result?.affectedRows || 0);
+      affectedItemCount += affected;
+      typeStats.push({
+        type,
+        requestedCount: requestedIds.length,
+        validCount: validIds.length,
+        affectedItemCount: affected,
+      });
+    }
+
+    await connection.commit();
+    res.send(
+      resultData({
+        requestedItemCount: items.length,
+        validItemCount,
+        invalidItemCount: Math.max(items.length - validItemCount, 0),
+        affectedItemCount,
+        typeStats,
+      }),
+    );
+  } catch (error) {
+    await connection.rollback();
+    res.send(resultData(null, 500, '批量删除资源失败: ' + error.message));
   } finally {
     connection.release();
   }
