@@ -1,118 +1,137 @@
-# 轻笺 🌊 
+# 轻笺 LightNote Backend
 
-![top-language](https://img.shields.io/github/languages/top/VeteranBoLuo/BMS_Back)
-[![Website](https://img.shields.io/website?up_message=online&url=https%3A%2F%2Fboluo66.top)](https://boluo66.top) 
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/VeteranBoLuo/BMS_Back)
-![GitHub last commit](https://img.shields.io/github/last-commit/VeteranBoLuo/BMS_Back)
+> 轻笺后端服务——为标签化知识管理提供 API 支撑。
 
-> **云端书签的智能管理革命**  
-轻笺是专为效率控设计的云端书签管理神器，以智能标签为核心，帮你瞬间归档网页、笔记与灵感碎片。通过动态关联的标签网络，实现书签/笔记的跨设备秒搜、多维分类与智能推荐，让知识管理像刷社交动态一样轻松有趣
+基于 Node.js + Express + MySQL 构建，为前端提供书签、笔记、云空间、AI 助手、标签图谱、后台管理等功能接口。
 
+---
 
-🌐 **立即体验**：[轻笺](https://boluo66.top/#/home)  
-📱 **多端适配**：完美支持桌面/移动设备
+## 技术栈
 
-## 📑 目录
-- [🛠 技术架构](#-技术栈)  
-- [⚡ 核心功能](#-核心功能)  
-- [🚀 快速开始](#-快速开始)  
-- [✨ 开发路线](#-未来路线图)
-- [📢 更新日志](#-更新日志)  
-- [⭐ 参与贡献](#-Stargazers)  
+| 层级 | 技术选型 |
+|------|----------|
+| 运行时 | Node.js |
+| 框架 | Express |
+| 数据库 | MySQL |
+| 连接池 | mysql2 |
+| 实时通信 | WebSocket |
 
-## 🛠 技术栈
-| 层级       | 技术选型                          |
-|------------|-----------------------------------|
-| **前端**   | Vue3 + Pinia + Vite + Typescript |
-| **后端**   | Node.js + Express + Mysql       |
-| **工具链** | GitHub Actions     |
+---
 
+## 功能接口
 
-## ⚡ 核心功能
+### 书签
+- 书签 CRUD · 书签搜索（标题/URL/描述/标签联合检索）
+- 书签移动/复制 · 批量删除
+- 自动抓取网页图标与描述
 
-### 🧲 __书签 & 笔记__
-- **智能书签引擎**  
-  🌐 一键保存网页（自动抓取网站图标与描述），支持**多标签分类**（如`#前端` `#灵感库`），书签间通过标签动态关联形成**知识图谱**。
-  
-  🔍 **闪电搜索**：支持书名/标签/描述跨字段联合检索（如“React教程 #框架”），结果按关联度智能排序。
-  
-  📦 **批量管理**：拖拽式书签归类、标签批量操作（如为50个书签统一添加`#deprecated`标签）。
+### 笔记
+- 笔记 CRUD · 富文本内容存储
+- 笔记搜索 · 批量删除
+- PDF 导出接口
 
-- **轻量化笔记辅助**  
-  📝 笔记模块采用极简设计，支持文字、图片等多形式快速输入，实现碎片化信息的即时捕捉与整理。通过智能标签体系，笔记可自动归类并实现秒级搜索，帮助用户高效沉淀知识、回顾思考轨迹。
+### 标签
+- 标签 CRUD · 标签树结构维护
+- 标签关系图谱数据
+- 标签合并/拆分
+- 统一标签体系：一个标签同时关联书签、笔记、文件
 
-### ☁️ 云空间
-- **文件云端存储**  
-  📁 用户可上传任意格式文件至云端空间，默认每位用户享有 100MB 存储额度，支持移动端与桌面端无缝访问。
-  
-- **可视化容量展示**  
-  📊 提供组件实时显示当前使用空间与上限（如：“已用 45 / 100MB”），方便用户管理资源。
-  
-- **高效上传机制**  
-  🚀 支持多文件批量上传、断点续传，提升大文件传输稳定性；优化上传流程，减少等待时间。
-  
-### 📦 __配置中心__
-- **🖼 书签管理**  
-  可视化卡片墙/列表视图自由切换，支持按标签、收藏时间、热度多维度排序。  
-  🗑️ **智能清理**：自动识别失效链接，定期提醒整理冗余书签。
+### 云空间
+- 文件上传/下载/删除
+- 文件夹管理 · 文件移动
+- 文件预览支持（图片/PDF/音视频/Office）
+- 存储配额管理（默认 1GB）
+- 外部分享链接生成与下载
 
-- **🧭 智能标签工坊**  
-  🔗 标签关系图谱可视化（如`#前端`→关联`#Vue`/`#React`），支持标签合并/别名设置。  
-  🏷️ **嵌套标签系统**：支持多级标签嵌套（如`#学习/前端/框架`），实现精细化分类。
+### AI 助手
+- AI 对话接口 · 流式响应
+- 翻译能力
+- 知识问答
 
-- **🛠 个人实验室**  
-  ⚙️ **快捷键操作**：支持书签、标签右键直接快速修改删除。  
-  🌓 **主题皮肤库**：莫兰迪色系/暗黑模式/自定义主题色。  
-  📱 **多端同步策略**：自适应移动端布局。
+### 后台管理（Root 角色）
+- 用户管理 · 账号封禁
+- API 日志 / 操作日志审计
+- 用户反馈处理
+- 图片存储管理
+- 帮助文档管理（含草稿发布）
+- SQL 控制台
 
+### 基础能力
+- 用户注册/登录 · GitHub OAuth 回调
+- Token 鉴权 · 角色权限控制（user / visitor / root）
+- 操作埋点与日志记录
+- 国际化文案接口
+- WebSocket 实时通知
 
-## 🚀 快速开始
-项目已经配置好了后端环境，想要快速体验只需下载前端仓库即可
+---
+
+## 快速开始
+
+### 前置要求
+
+- Node.js 20.x
+- MySQL 8.0+
+
+### 安装
+
 ```bash
-# 克隆前端仓库
-git clone https://github.com/VeteranBoLuo/BMS_Front
+git clone https://github.com/VeteranBoLuo/light-note-back
+cd light-note-back
+
+# 导入数据库
+mysql -u root -p < init.sql
 
 # 安装依赖
 npm install
 
-# 启动开发环境 (访问 http://localhost:5173)
-npm run dev
+# 配置数据库连接（编辑 app.js 中的 pool 配置）
+# host / port / user / password / database
 
-# 生产环境构建
-npm run build
-
-# 克隆后端仓库（按需）
-git clone https://github.com/VeteranBoLuo/BMS_Back
-
-# 将根目录下的sql文件导入mysql数据库中
-
-# 修改index.js中的账号密码为自己数据库中账号密码
-const pool = mysql.createPool({
-  connectionLimit: 10, // 例如限制为10个连接
-  host: '127.0.0.1',
-  port: 3306,
-  user: 'root',// 账号
-  password: '123456',// 秘密
-  database: 'tag_db',
-  namedPlaceholders: true,
-  charset: 'utf8mb4'
-});
-
-# 启动开发环境
+# 启动服务
 node app.js
 ```
 
+---
 
-## ✨ 未来路线图
-- **AI智能归档**：基于历史行为自动推荐书签标签  
-- **灵感火花**：关联书签的智能内容推荐引擎  
-- **轻笺宇宙**：UGC书签合集共享
+## API 规范
 
-## 📢 更新日志
-[查看更新日志](https://boluo66.top/#/updateLogs)
+- **响应格式**：统一 `{ code, data, msg }`
+- **认证方式**：Bearer Token（`Authorization` 请求头）
+- **状态码**：200 成功 · 400 参数错误 · 401 未登录 · 403 无权限 · 404 不存在 · 500 服务端错误
+- **命名风格**：请求使用 camelCase，服务端自动转换 snake_case
 
-## ⭐ Stargazers
+---
 
-非常感谢各位好心人留下的星星。非常感谢你们的支持！
+## 项目结构
 
-[![Stargazers for BMS_Front](https://reporoster.com/stars/VeteranBoLuo/BMS_Back)](https://github.com/VeteranBoLuo/BMS_Back/stargazers)
+```
+├── app.js              # 入口文件
+├── db/index.js         # 数据库连接池
+├── util/
+│   ├── common.js       # 工具函数（insertData / snakeCaseKeys / generateUUID 等）
+│   ├── auth.js         # 认证中间件
+│   ├── resourceTags.js # 资源标签关联工具
+│   └── ...
+├── api/                # 路由与处理器
+│   ├── bookmarkHandle.js
+│   ├── noteHandle.js
+│   ├── tagHandle.js
+│   ├── fileHandle.js
+│   ├── aiHandle.js
+│   ├── admin/          # 后台管理接口
+│   └── ...
+└── websocket/          # WebSocket 服务
+```
+
+---
+
+## 相关项目
+
+- [轻笺前端](https://github.com/VeteranBoLuo/light-note)——Vue 3 + TypeScript 前端
+- [轻笺后端](https://github.com/VeteranBoLuo/light-note-back)——本仓库
+
+---
+
+## License
+
+MIT
