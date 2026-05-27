@@ -301,16 +301,22 @@ export const getSecurityEvents = async (req, res) => {
   try {
     if (!(await ensureRootRole(req, res))) return;
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const skip = pageSize * (currentPage - 1);
     const { where, params } = buildEventWhere(filters);
+    const queryParams = [...params];
+    let limitClause = '';
+    if (pageSize !== -1) {
+      const skip = pageSize * (currentPage - 1);
+      limitClause = 'LIMIT ? OFFSET ?';
+      queryParams.push(Number(pageSize), Number(skip));
+    }
     const [rows] = await pool.query(
       `SELECT e.*, u.alias, u.email
        FROM security_events e
        LEFT JOIN user u ON e.user_id = u.id
        WHERE ${where}
        ORDER BY e.created_at DESC, e.id DESC
-       LIMIT ? OFFSET ?`,
-      [...params, Number(pageSize), Number(skip)],
+       ${limitClause}`,
+      queryParams,
     );
     rows.forEach((row) => {
       parseJsonField(row, 'payload_summary', {});
@@ -472,16 +478,22 @@ export const getIpReputationList = async (req, res) => {
   try {
     if (!(await ensureRootRole(req, res))) return;
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const skip = pageSize * (currentPage - 1);
     const where = filters.key ? 'WHERE ip LIKE CONCAT("%", ?, "%") OR ban_reason LIKE CONCAT("%", ?, "%")' : '';
     const params = filters.key ? [filters.key, filters.key] : [];
+    const queryParams = [...params];
+    let limitClause = '';
+    if (pageSize !== -1) {
+      const skip = pageSize * (currentPage - 1);
+      limitClause = 'LIMIT ? OFFSET ?';
+      queryParams.push(Number(pageSize), Number(skip));
+    }
     const [rows] = await pool.query(
       `SELECT *
        FROM security_ip_reputation
        ${where}
        ORDER BY is_banned DESC, risk_score DESC, total_attacks DESC
-       LIMIT ? OFFSET ?`,
-      [...params, Number(pageSize), Number(skip)],
+       ${limitClause}`,
+      queryParams,
     );
     rows.forEach((row) => {
       parseJsonField(row, 'attack_type_breakdown', {});
@@ -627,7 +639,6 @@ export const getAccountReputationList = async (req, res) => {
   try {
     if (!(await ensureRootRole(req, res))) return;
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
-    const skip = pageSize * (currentPage - 1);
     const params = [];
     const conditions = [];
     if (filters.key) {
@@ -637,6 +648,13 @@ export const getAccountReputationList = async (req, res) => {
       params.push(filters.key, filters.key, filters.key);
     }
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const queryParams = [...params];
+    let limitClause = '';
+    if (pageSize !== -1) {
+      const skip = pageSize * (currentPage - 1);
+      limitClause = 'LIMIT ? OFFSET ?';
+      queryParams.push(Number(pageSize), Number(skip));
+    }
     const [rows] = await pool.query(
       `SELECT
          u.id AS user_id,
@@ -654,8 +672,8 @@ export const getAccountReputationList = async (req, res) => {
        LEFT JOIN security_account_reputation r ON r.user_id = u.id
        ${where}
        ORDER BY u.del_flag DESC, COALESCE(r.risk_score, 0) DESC, u.create_time DESC
-       LIMIT ? OFFSET ?`,
-      [...params, Number(pageSize), Number(skip)],
+       ${limitClause}`,
+      queryParams,
     );
     rows.forEach((row) => parseJsonField(row, 'attack_type_breakdown', {}));
     const [totalRows] = await pool.query(
