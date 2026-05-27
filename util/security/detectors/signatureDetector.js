@@ -112,6 +112,7 @@ const detectSensitivePath = (context) => {
 
 const detectFileUpload = (context) => {
   const evidence = [];
+  const isUploadPath = /\/file\/upload|\/upload$/i.test(context.path);
   for (const file of context.files || []) {
     const filename = file.originalname || file.filename || '';
     if (!MALICIOUS_FILE_EXTENSIONS.test(filename)) {
@@ -134,12 +135,60 @@ const detectFileUpload = (context) => {
       }),
     );
   }
+  // 检查 JSON body 中的 filename（仅限上传接口）
+  if (isUploadPath) {
+    const bodyName = context.body?.filename || context.body?.fileName || context.body?.originalName;
+    if (bodyName && MALICIOUS_FILE_EXTENSIONS.test(bodyName)) {
+      const rule = {
+        code: 'MALICIOUS_FILE_UPLOAD',
+        name: '恶意文件上传',
+        attackType: 'MALICIOUS_FILE_UPLOAD',
+        severity: 'critical',
+        baseScore: 86,
+        confidence: 88,
+      };
+      evidence.push(
+        createEvidence({
+          rule,
+          field: 'body.filename',
+          value: bodyName,
+          message: `上传了高风险扩展名文件：${bodyName}`,
+        }),
+      );
+    }
+  }
   return evidence;
 };
 
 const detectParameterAnomaly = (context) => {
   const fields = [...flattenObject(context.query, 'query'), ...flattenObject(context.body, 'body')];
   const evidence = [];
+  // 检查超长参数（协议 fuzzing 特征，排除正文类字段）
+  const rawParams = { ...context.query, ...context.body };
+  for (const [key, value] of Object.entries(rawParams)) {
+    const fieldContext = getFieldContext(key);
+    if (fieldContext === 'freeText') continue; // 正文内容天然可能很长
+    const strVal = String(value || '');
+    if (strVal.length > 5000 || key.length > 500) {
+      const rule = {
+        code: 'PARAMETER_OVERFLOW',
+        name: '参数溢出',
+        attackType: 'PROTOCOL_ANOMALY',
+        severity: 'medium',
+        baseScore: 22,
+        confidence: 80,
+      };
+      evidence.push(
+        createEvidence({
+          rule,
+          field: key,
+          value: strVal.slice(0, 200),
+          message: `参数 ${key} 长度异常: key=${key.length} value=${strVal.length}`,
+        }),
+      );
+      break;
+    }
+  }
   for (const item of fields) {
     const fieldContext = getFieldContext(item.field);
     if (fieldContext !== 'numeric') {

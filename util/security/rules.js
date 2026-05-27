@@ -23,14 +23,14 @@ export const SENSITIVE_KEYS = [
 export const SAFE_PREFIXES = ['/security'];
 
 export const SENSITIVE_PATHS = [
-  { pattern: /^\/?\.env/i, score: 42, name: '探测 .env 配置文件' },
-  { pattern: /^\/?\.git(?:\/|$)/i, score: 42, name: '探测 Git 目录' },
-  { pattern: /^\/?\.svn(?:\/|$)/i, score: 35, name: '探测 SVN 目录' },
-  { pattern: /^\/?\.ds_store$/i, score: 25, name: '探测系统隐藏文件' },
-  { pattern: /(?:^|\/)(wp-admin|wp-login\.php|xmlrpc\.php)(?:\/|$)/i, score: 35, name: '探测 WordPress 入口' },
-  { pattern: /(?:^|\/)(phpmyadmin|pma|adminer)(?:\/|$)/i, score: 40, name: '探测数据库管理入口' },
-  { pattern: /(?:^|\/)(backup|dump|db|database).*\.(zip|tar|gz|sql|bak)$/i, score: 45, name: '探测备份文件' },
-  { pattern: /(?:^|\/)(server-status|actuator|swagger-ui|api-docs)(?:\/|$)/i, score: 30, name: '探测管理或文档端点' },
+  { pattern: /^\/?\.env/i, score: 55, name: '探测 .env 配置文件' },
+  { pattern: /^\/?\.git(?:\/|$)/i, score: 55, name: '探测 Git 目录' },
+  { pattern: /^\/?\.svn(?:\/|$)/i, score: 40, name: '探测 SVN 目录' },
+  { pattern: /^\/?\.ds_store$/i, score: 30, name: '探测系统隐藏文件' },
+  { pattern: /(?:^|\/)(wp-admin|wp-login\.php|xmlrpc\.php)(?:\/|$)/i, score: 40, name: '探测 WordPress 入口' },
+  { pattern: /(?:^|\/)(phpmyadmin|pma|adminer)(?:\/|$)/i, score: 45, name: '探测数据库管理入口' },
+  { pattern: /(?:^|\/)(backup|dump|db|database).*\.(zip|tar|gz|sql|bak)$/i, score: 50, name: '探测备份文件' },
+  { pattern: /(?:^|\/)(server-status|actuator|swagger-ui|api-docs)(?:\/|$)/i, score: 35, name: '探测管理或文档端点' },
 ];
 
 export const MALICIOUS_FILE_EXTENSIONS = /\.(php\d?|phtml|jsp|jspx|asp|aspx|ashx|sh|bash|cmd|bat|exe|dll|so)$/i;
@@ -44,7 +44,7 @@ export const SIGNATURE_RULES = [
     baseScore: 55,
     confidence: 88,
     regex: /(?:'|%27|")\s*(?:or|and)\s+(?:'?\d+'?\s*=\s*'?\d+'?|[a-z_][\w]*\s*=\s*[a-z_][\w]*)(?:\s*(?:--|#|\/\*))?/i,
-    includedContexts: ['numeric', 'identifier'],
+    includedContexts: ['numeric', 'identifier', 'auth'],
   },
   {
     code: 'SQL_UNION_SELECT',
@@ -54,7 +54,7 @@ export const SIGNATURE_RULES = [
     baseScore: 82,
     confidence: 92,
     regex: /\bunion(?:\s+all)?\s+select\b/i,
-    includedContexts: ['numeric', 'identifier'],
+    includedContexts: ['numeric', 'identifier', 'auth'],
   },
   {
     code: 'SQL_STACKED_QUERY',
@@ -64,7 +64,7 @@ export const SIGNATURE_RULES = [
     baseScore: 86,
     confidence: 90,
     regex: /;\s*(?:drop|delete|insert|update|alter|truncate|create)\b/i,
-    includedContexts: ['numeric', 'identifier'],
+    includedContexts: ['numeric', 'identifier', 'auth'],
   },
   {
     code: 'XSS_SCRIPT',
@@ -83,7 +83,7 @@ export const SIGNATURE_RULES = [
     severity: 'critical',
     baseScore: 88,
     confidence: 90,
-    regex: /(?:;|\|\||&&|\$\(|`)\s*(?:rm|cat|curl|wget|bash|sh|nc|python|perl)\b|\b(?:rm\s+-rf|wget\s+https?:|curl\s+https?:|spawn\(|exec\()\b/i,
+    regex: /(?:;|\|\||&&|\$\(|`)\s*(?:rm|cat|curl|wget|bash|sh|nc|python|perl|ls|id|whoami|echo|env|hostname|ifconfig|netstat|ps|kill|chmod|chown|sudo|passwd|base64|awk|sed|grep|find|dd|mkfs)\b|\b(?:rm\s+-rf|wget\s+https?:|curl\s+https?:|spawn\(|exec\()\b/i,
     includedContexts: ['numeric', 'identifier', 'filename', 'unknown'],
   },
   {
@@ -105,7 +105,7 @@ export const SIGNATURE_RULES = [
     confidence: 88,
     regex: /https?:\/\/(?:localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[0-1])\.)/i,
     includedContexts: ['url'],
-    fieldPattern: /(callback|redirect|webhook|endpoint|target|fetch|proxy).*url$/i,
+    fieldPattern: /(?:callback|redirect|webhook|endpoint|target|fetch|proxy).*url$|^url$/i,
   },
   {
     code: 'CRLF_INJECTION',
@@ -125,9 +125,9 @@ export const DETECTOR_RULES = [
     name: '敏感路径探测',
     attackType: 'SCANNER',
     severity: 'medium',
-    baseScore: 45,
+    baseScore: 55,
     confidence: 86,
-    description: '按路径敏感程度计 25-45 分，重复探测或信誉叠加后升级高危',
+    description: '按路径敏感程度计 30-55 分，高敏路径(.env/.git)直接拦截，重复探测叠加信誉分',
   },
   {
     code: 'MALICIOUS_FILE_UPLOAD',
@@ -192,6 +192,15 @@ export const DETECTOR_RULES = [
     severity: 'high',
     baseScore: 48,
     confidence: 84,
+  },
+  {
+    code: 'PARAMETER_OVERFLOW',
+    name: '参数溢出',
+    attackType: 'PROTOCOL_ANOMALY',
+    severity: 'medium',
+    baseScore: 22,
+    confidence: 80,
+    description: '参数 key 或 value 长度超出合理范围，可能为 fuzzing 扫描',
   },
 ];
 
