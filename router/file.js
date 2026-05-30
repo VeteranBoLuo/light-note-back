@@ -1,4 +1,6 @@
 import express from 'express';
+import multer from 'multer';
+import os from 'os';
 import { resultData, snakeCaseKeys } from '../util/common.js';
 import pool from '../db/index.js';
 import {
@@ -7,10 +9,13 @@ import {
   buildObjectUrl,
   createDownloadSignedUrl,
   createUploadSignedUrl,
+  putObjectToObs,
 } from '../util/obsClient.js';
 import { FILE_CATEGORY_ORDER, getFileExtension, resolveFileCategory } from '../util/fileCategory.js';
 import * as fileHandle from '../router_handle/fileHandle.js';
 const router = express.Router();
+
+const backupUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 export const buildSignedDownloadUrl = (objectKey, expires = 600) => {
   if (!objectKey) return null;
@@ -318,4 +323,74 @@ router.post('/deleteFolder', fileHandle.deleteFolder);
 router.post('/updateFolderSort', fileHandle.updateFolderSort);
 router.post('/getFileTags', fileHandle.getFileTags);
 router.post('/updateFileTags', fileHandle.updateFileTags);
+
+// Hermes 备份上传：服务端一键上传 OBS + 写库
+const HERMES_BACKUP_USER_ID = '453c9c95-9b2e-11ef-9d4d-84a93e80c16e';
+const HERMES_BACKUP_FILENAME = 'hermes-backup.tar.gz';
+
+router.post('/hermesBackup', backupUpload.single('file'), async (req, res) => {
+  const filePath = req.file?.path;
+  try {
+    const token = req.headers['x-backup-token'];
+    const expected = process.env.BACKUP_TOKEN;
+
+    if (!expected || token !== expected) {
+      if (filePath) await import('fs').then(fs => fs.promises.unlink(filePath).catch(() => {}));
+      return res.send(resultData(null, 403, '备份令牌无效'));
+    }
+
+    if (!req.file) {
+      return res.send(resultData(null, 400, '未收到文件'));
+    }
+
+    const objectKey = buildObjectKey(HERMES_BACKUP_USER_ID, HERMES_BACKUP_FILENAME);
+
+    // 1. 直传 OBS
+    await putObjectToObs(objectKey, filePath, 'application/gzip');
+
+    // 2. 写入 files 表（同名覆盖）
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [existing] = await connection.query(
+        'SELECT id FROM files WHERE create_by = ? AND file_name = ? AND del_flag = 0',
+        [HERMES_BACKUP_USER_ID, HERMES_BACKUP_FILENAME],
+      );
+      if (existing.length > 0) {
+        await connection.query('DELETE FROM files WHERE id = ?', [existing[0].id]);
+      }
+
+      const directory = `${bucketBaseUrl}/files/${HERMES_BACKUP_USER_ID}/`;
+      const fileInfo = {
+        create_by: HERMES_BACKUP_USER_ID,
+        file_name: HERMES_BACKUP_FILENAME,
+        file_type: 'application/gzip',
+        file_size: req.file.size,
+        directory,
+        obs_key: objectKey,
+        folder_id: null,
+      };
+      await connection.query('INSERT INTO files SET ?', [snakeCaseKeys(fileInfo)]);
+
+      await connection.commit();
+      res.send(resultData({ fileName: HERMES_BACKUP_FILENAME, size: req.file.size }, 200, '备份上传成功'));
+    } catch (dbErr) {
+      await connection.rollback();
+      throw dbErr;
+    } finally {
+      connection.release();
+    }
+  } catch (e) {
+    console.error('[HermesBackup] 上传失败:', e.message);
+    res.send(resultData(null, 500, '备份上传失败: ' + e.message));
+  } finally {
+    // 清理临时文件
+    if (filePath) {
+      const fs = await import('fs');
+      fs.promises.unlink(filePath).catch(() => {});
+    }
+  }
+});
+
 export default router;

@@ -88,6 +88,14 @@ export const copyObjectInObs = async (sourceKey, targetKey) =>
     CopySource: `${bucketName}/${sourceKey}`,
   });
 
+export const putObjectToObs = async (objectKey, filePath, contentType = 'application/octet-stream') =>
+  wrapObsCall(obsClient.putObject.bind(obsClient), {
+    Bucket: bucketName,
+    Key: objectKey,
+    SourceFile: filePath,
+    ContentType: contentType,
+  });
+
 export const buildObjectUrl = (objectKey) => `${bucketBaseUrl}/${objectKey}`;
 
 export default obsClient;
