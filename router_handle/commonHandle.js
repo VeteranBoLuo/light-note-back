@@ -170,46 +170,39 @@ const ensureHelpSortReady = async () => {
   }
 };
 
-export const getApiLogs = (req, res) => {
+export const getApiLogs = async (req, res) => {
   try {
     const { filters, pageSize, currentPage } = validateQueryParams(req.body);
     const skip = pageSize * (currentPage - 1);
-    let sql = `SELECT a.*,u.alias,u.email 
-      FROM api_logs a left join user u on a.user_id=u.id  where (u.alias LIKE CONCAT('%', ?, '%') 
-      OR a.ip LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0  
-      ORDER BY a.request_time DESC LIMIT ? OFFSET ?`;
-    pool
-      .query(sql, [filters.key, filters.key, filters.key, pageSize, skip])
-      .then(async ([result]) => {
-        result.forEach((row) => {
-          const fieldsToParse = ['req', 'system'];
-          fieldsToParse.forEach((field) => {
-            if (row[field] && typeof row[field] === 'string') {
-              try {
-                row[field] = JSON.parse(row[field]);
-              } catch (e) {
-                console.error(`JSON解析失败 ${field}:${row[field]}--`, e);
-              }
-            }
-          });
-        });
-        const [totalRes] = await pool.query(
-          "SELECT COUNT(*) FROM api_logs a left join user u on a.user_id=u.id where (u.alias LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag=0",
-          [filters.key, filters.key],
-        );
-        if(req.body.filters.filterRoot){
-          result = result.filter(item => item.user_id !== '453c9c95-9b2e-11ef-9d4d-84a93e80c16e');
+    const { key, filter_root: filterRoot } = filters;
+    const ROOT_ID = '453c9c95-9b2e-11ef-9d4d-84a93e80c16e';
+
+    const baseWhere = `(u.alias LIKE CONCAT('%', ?, '%') OR a.ip LIKE CONCAT('%', ?, '%') OR a.url LIKE CONCAT('%', ?, '%')) AND a.del_flag = 0`;
+    const rootFilter = filterRoot ? ` AND a.user_id != '${ROOT_ID}'` : '';
+    const whereClause = baseWhere + rootFilter;
+
+    const [result] = await pool.query(
+      `SELECT a.*, u.alias, u.email FROM api_logs a LEFT JOIN user u ON a.user_id = u.id WHERE ${whereClause} ORDER BY a.request_time DESC LIMIT ? OFFSET ?`,
+      [key, key, key, pageSize, skip],
+    );
+
+    result.forEach((row) => {
+      ['req', 'system'].forEach((field) => {
+        if (row[field] && typeof row[field] === 'string') {
+          try { row[field] = JSON.parse(row[field]); } catch (e) {}
         }
-        res.send(
-          resultData({
-            items: result,
-            total: totalRes[0]['COUNT(*)'],
-          }),
-        );
-      })
-      .catch((err) => {
-        res.send(resultData(null, 500, '服务器内部错误: ' + err.message));
       });
+    });
+
+    const [totalRes] = await pool.query(
+      `SELECT COUNT(*) AS total FROM api_logs a LEFT JOIN user u ON a.user_id = u.id WHERE ${whereClause}`,
+      [key, key, key],
+    );
+
+    res.send(resultData({
+      items: result,
+      total: totalRes[0].total,
+    }));
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
@@ -486,6 +479,13 @@ export const runSql = async (req, res) => {
   try {
     const userId = await ensureRootRole(req, res);
     if (!userId) return;
+
+    // 拦截危险操作（DROP TABLE/DATABASE、TRUNCATE、ALTER TABLE、GRANT、REVOKE）
+    const DANGEROUS = /\b(DROP\s+TABLE|DROP\s+DATABASE|TRUNCATE|ALTER\s+TABLE|GRANT|REVOKE)\b/i;
+    if (DANGEROUS.test(req.body.sql)) {
+      return res.send(resultData(null, 403, '危险操作已拦截。如需执行，请直连数据库。'));
+    }
+
     const [result] = await pool.query(req.body.sql);
     res.send(resultData(result, 200));
   } catch (e) {
