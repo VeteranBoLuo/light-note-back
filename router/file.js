@@ -292,6 +292,30 @@ router.post('/deleteFileById', async (req, res) => {
   }
 });
 
+// 检查文件名是否已存在（用于上传前预检）
+router.post('/checkFileNames', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { fileNames } = req.body;
+    if (!Array.isArray(fileNames) || fileNames.length === 0) {
+      return res.send(resultData([], 200));
+    }
+    const placeholders = fileNames.map(() => '?').join(',');
+    const [rows] = await pool.query(
+      `SELECT file_name FROM files WHERE create_by = ? AND file_name IN (${placeholders}) AND del_flag = 0`,
+      [userId, ...fileNames],
+    );
+    const existingNames = new Set(rows.map((r) => r.file_name));
+    const result = fileNames.map((name) => ({
+      fileName: name,
+      exists: existingNames.has(name),
+    }));
+    res.send(resultData(result, 200));
+  } catch (e) {
+    res.send(resultData(null, 500, '检查文件名时出错: ' + e.message));
+  }
+});
+
 // 查询某个人下的文件的总共大小（单位MB）
 router.post('/queryTotalFileSize', async (req, res) => {
   try {

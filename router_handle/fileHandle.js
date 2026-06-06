@@ -57,13 +57,23 @@ export const updateFile = async (req, res) => {
       finalFileName = fileName;
     }
 
+    // 检查文件扩展名
     if (
       finalFileName.includes('/') ||
-      finalFileName.includes('\\') ||
+      finalFileName.includes('\\\\') ||
       finalFileName.includes('>') ||
       finalFileName.includes('<')
     ) {
       return res.send(resultData(null, 400, '文件名不能包含特殊字符或路径分隔符'));
+    }
+
+    // 查重：同用户下是否存在同名文件（排除自身）
+    const [dupRows] = await pool.query(
+      'SELECT id FROM files WHERE create_by = ? AND file_name = ? AND id != ? AND del_flag = 0',
+      [file.create_by, finalFileName, id],
+    );
+    if (dupRows.length > 0) {
+      return res.send(resultData(null, 400, '已存在同名文件'));
     }
 
     const sourceKey = file.obs_key || buildObjectKey(file.create_by, file.file_name);
