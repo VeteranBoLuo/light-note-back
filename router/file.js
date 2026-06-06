@@ -131,7 +131,7 @@ router.post('/confirmUpload', async (req, res) => {
         folder_id: folderId || null,
       };
 
-      const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ?';
+      const selectSql = 'SELECT * FROM files WHERE create_by = ? AND file_name = ? AND del_flag = 0';
       const [existingRows] = await connection.query(selectSql, [userId, fileName]);
 
       if (existingRows.length > 0) {
