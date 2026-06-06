@@ -310,7 +310,13 @@ router.post('/checkFileNames', async (req, res) => {
       fileName: name,
       exists: existingNames.has(name),
     }));
-    res.send(resultData(result, 200));
+    // 同时返回该用户所有已有文件名，供前端自动改名构建完整 existingSet
+    const [allRows] = await pool.query(
+      `SELECT file_name FROM files WHERE create_by = ? AND del_flag = 0`,
+      [userId],
+    );
+    const allNames = allRows.map((r) => r.file_name);
+    res.send(resultData({ check: result, allNames }, 200));
   } catch (e) {
     res.send(resultData(null, 500, '检查文件名时出错: ' + e.message));
   }
