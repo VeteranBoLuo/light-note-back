@@ -24,6 +24,7 @@ export const getSession = async (sid) => {
        user_id,
        role,
        expires_at,
+       create_time,
        GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), expires_at)) AS expires_in_seconds
      FROM user_sessions
      WHERE sid = ? AND expires_at > NOW()
@@ -36,19 +37,36 @@ export const getSession = async (sid) => {
     return null;
   }
 
-  // 滑动过期策略：剩余不足 24h 时延长到 24h，让活跃用户不掉线
-  const ONE_DAY_SEC = 86400;
-  if (session.expires_in_seconds < ONE_DAY_SEC) {
+  // 通过 expires_at - create_time 判断原始有效期是否为 7 天（记住我）
+  const SEVEN_DAY_MS = 604800000; // 7 * 24 * 60 * 60 * 1000
+  const isRememberMe = (session.expires_at.getTime() - session.create_time.getTime()) >= SEVEN_DAY_MS;
+
+  if (isRememberMe) {
+    // 记住我用户：每次使用续回 7 天
+    const SEVEN_DAY_SEC = 604800;
     await pool.query(
       `UPDATE user_sessions
        SET expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND),
            last_active_time = NOW()
        WHERE sid = ?`,
-      [ONE_DAY_SEC, sid],
+      [SEVEN_DAY_SEC, sid],
     );
-    session.expires_in_seconds = ONE_DAY_SEC;
+    session.expires_in_seconds = SEVEN_DAY_SEC;
   } else {
-    await pool.query('UPDATE user_sessions SET last_active_time = NOW() WHERE sid = ?', [sid]);
+    // 普通登录：滑动过期，不足 24h 时续 24h
+    const ONE_DAY_SEC = 86400;
+    if (session.expires_in_seconds < ONE_DAY_SEC) {
+      await pool.query(
+        `UPDATE user_sessions
+         SET expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND),
+             last_active_time = NOW()
+         WHERE sid = ?`,
+        [ONE_DAY_SEC, sid],
+      );
+      session.expires_in_seconds = ONE_DAY_SEC;
+    } else {
+      await pool.query('UPDATE user_sessions SET last_active_time = NOW() WHERE sid = ?', [sid]);
+    }
   }
 
   return session;
