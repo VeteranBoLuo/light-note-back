@@ -14,9 +14,11 @@ const TABLE_CONFIG = {
 // ---- 清理过期数据 ----
 
 const EXPIRY_CONDITION = `del_flag = 1 AND deleted_at < DATE_SUB(NOW(), INTERVAL ${TRASH_EXPIRY_DAYS} DAY)`;
+const NOT_ROOT_CONDITION = (idField) =>
+  `${idField} NOT IN (SELECT id FROM \`user\` WHERE role = 'root')`;
 
 async function cleanupExpiredFiles(connection, userId = null) {
-  const userCond = userId ? ` AND create_by = ${pool.escape(userId)}` : '';
+  const userCond = userId ? ` AND create_by = ${pool.escape(userId)}` : ` AND ${NOT_ROOT_CONDITION('create_by')}`;
   const [rows] = await connection.query(
     `SELECT id, obs_key, create_by, file_name FROM files WHERE ${EXPIRY_CONDITION}${userCond}`,
   );
@@ -38,13 +40,13 @@ async function cleanupExpiredFiles(connection, userId = null) {
 }
 
 async function cleanupExpiredNotes(connection, userId = null) {
-  const userCond = userId ? ` AND create_by = ${pool.escape(userId)}` : '';
+  const userCond = userId ? ` AND create_by = ${pool.escape(userId)}` : ` AND ${NOT_ROOT_CONDITION('create_by')}`;
   const [result] = await connection.query(`DELETE FROM note WHERE ${EXPIRY_CONDITION}${userCond}`);
   return result.affectedRows;
 }
 
 async function cleanupExpiredBookmarks(connection, userId = null) {
-  const userCond = userId ? ` AND user_id = ${pool.escape(userId)}` : '';
+  const userCond = userId ? ` AND user_id = ${pool.escape(userId)}` : ` AND ${NOT_ROOT_CONDITION('user_id')}`;
 
   // 先清 resource_tag_relations（bookmark 的多态字段无 FK CASCADE）
   await connection.query(
@@ -77,6 +79,10 @@ export async function cleanupAllExpiredTrash() {
 
 /** 单用户清理（打开回收站时调用） */
 async function purgeExpiredItems(userId) {
+  // root 用户的过期数据永不清除
+  const [userRows] = await pool.query('SELECT role FROM `user` WHERE id = ?', [userId]);
+  if (userRows[0]?.role === 'root') return;
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
