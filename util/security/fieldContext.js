@@ -21,6 +21,7 @@ export const FIELD_CONTEXT = {
     'type',
     'status',
     'message',
+    'headPicture',
   ],
   numeric: ['pageSize', 'currentPage', 'level', 'sort', 'limit', 'offset', 'count'],
   identifier: [
