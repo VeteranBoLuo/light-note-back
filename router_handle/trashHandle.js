@@ -267,6 +267,35 @@ export const permanentDelete = async (req, res) => {
   }
 };
 
+export const restoreAllTrash = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.send(resultData(null, 401, '请先登录'));
+
+    await connection.beginTransaction();
+
+    let total = 0;
+    for (const type of RESOURCE_TYPES) {
+      const cfg = TABLE_CONFIG[type];
+      const [result] = await connection.query(
+        `UPDATE \`${cfg.table}\` SET del_flag = 0, deleted_at = NULL
+         WHERE ${cfg.userIdField} = ? AND del_flag = 1`,
+        [userId],
+      );
+      total += result.affectedRows;
+    }
+
+    await connection.commit();
+    res.send(resultData({ restored: total }, 200, `已恢复 ${total} 项`));
+  } catch (e) {
+    await connection.rollback();
+    res.send(resultData(null, 500, '一键恢复失败: ' + e.message));
+  } finally {
+    connection.release();
+  }
+};
+
 export const emptyTrash = async (req, res) => {
   const connection = await pool.getConnection();
   try {
