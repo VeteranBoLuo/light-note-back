@@ -320,8 +320,8 @@ export const analyzeImgUrl = async (req, res) => {
         return new Promise((resolve, reject) => {
           const fileBuffer = [];
           const options = {
-            hostname: 'ico.kucat.cn/get.php',
-            path: '/?url=' + encodeURIComponent(bookmark.url),
+            hostname: 'ico.kucat.cn',
+            path: '/get.php?url=' + encodeURIComponent(bookmark.url),
             method: 'GET',
             rejectUnauthorized: false,
           };
