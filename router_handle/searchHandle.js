@@ -84,7 +84,10 @@ function toText(value) {
 }
 
 function stripHtml(value) {
-  return toText(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return toText(value)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function normalizeDate(value) {
@@ -289,7 +292,7 @@ async function queryBookmarks(userId, keyword, limit, lang) {
     extra: Array.isArray(item.tag_list) ? item.tag_list.map((tag) => `#${tag.name}`).join(' ') : '',
     url: toText(item.url),
     route: '/home',
-    iconUrl: item.icon_url || (item.url ? `https://icon.bqb.cool?url=${item.url}` : ''),
+    iconUrl: item.icon_url || (item.url ? `https://ico.kucat.cn/get.php?url=${item.url}` : ''),
     raw: item,
   }));
 }
