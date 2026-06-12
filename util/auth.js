@@ -93,6 +93,7 @@ const attachUserToRequest = (req, res, user, sessionId = '', expiresInSeconds = 
   const isBanned = role !== 'root' && Number(user.del_flag || 0) === 1;
   req.user = {
     id: user.id || '',
+    alias: user.alias || '',
     role,
     sessionId,
     isAuthenticated: Boolean(sessionId && user.id && role !== 'visitor'),
@@ -129,7 +130,7 @@ export const authMiddleware = async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT id, role, del_flag
+      `SELECT id, alias, role, del_flag
        FROM user
        WHERE id = ?
        LIMIT 1`,

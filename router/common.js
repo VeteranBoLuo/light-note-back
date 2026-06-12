@@ -44,5 +44,6 @@ router.get('/noticeSummary', commonHandle.getNoticeSummary);
 
 // router.post('/updateFolder', commonHandle.updateFolder);
 // router.post('/deleteFolder', commonHandle.deleteFolder);
+router.post('/getAgentLogs', commonHandle.getAgentLogs);
 
 export default router;

@@ -85,9 +85,15 @@ export async function requestDeepSeek(messages, options = {}) {
   }
 
   const msg = data.choices?.[0]?.message;
+  const usage = data.usage || {};
   return {
     content: msg?.content || '',
     toolCalls: msg?.tool_calls || [],
+    usage: {
+      promptTokens: usage.prompt_tokens || 0,
+      completionTokens: usage.completion_tokens || 0,
+      totalTokens: usage.total_tokens || 0,
+    },
   };
 }
 

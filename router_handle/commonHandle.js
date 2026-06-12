@@ -810,3 +810,44 @@ export const deleteHelpDraft = async (req, res) => {
     res.send(resultData(e.message, 200));
   }
 };
+
+export const getAgentLogs = async (req, res) => {
+  try {
+    const userRole = req.user?.role;
+    if (userRole !== 'root') {
+      return res.send(resultData(null, 403, '仅管理员可查看'));
+    }
+
+    const { keyword, pageSize = 20, currentPage = 1 } = req.body || {};
+    const take = Math.min(Math.max(pageSize || 20, 1), 100);
+    const offset = take * (Math.max(currentPage || 1, 1) - 1);
+
+    let where = '1=1';
+    const params = [];
+
+    if (keyword) {
+      where += ' AND (question LIKE ? OR user_alias LIKE ? OR tools_used LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+    }
+
+    const [[rows], [countRes]] = await Promise.all([
+      pool.query(
+        `SELECT * FROM agent_logs WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+        [...params, take, offset],
+      ),
+      pool.query(
+        `SELECT COUNT(*) as total FROM agent_logs WHERE ${where}`,
+        params,
+      ),
+    ]);
+
+    res.send(resultData({
+      items: rows,
+      total: countRes[0].total,
+      currentPage,
+      pageSize: take,
+    }));
+  } catch (e) {
+    res.send(resultData(null, 500, '查询失败: ' + e.message));
+  }
+};

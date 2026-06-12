@@ -10,7 +10,7 @@
  */
 
 import pool from '../db/index.js';
-import { resultData } from '../util/common.js';
+import { resultData, generateUUID } from '../util/common.js';
 import { retrieve } from '../util/knowledgeService.js';
 import { requestDeepSeek, requestDeepSeekStream } from '../util/agent/deepseekClient.js';
 import { parseTimeRange } from '../util/agent/timeRange.js';
@@ -33,6 +33,46 @@ async function resolveUser(keyword) {
     [kw, kw, kw],
   );
   return rows[0] || null;
+}
+
+
+// ============================================================
+// Agent 请求日志
+// ============================================================
+
+/**
+ * 写入 agent_logs 表
+ * DeepSeek Flash 定价（人民币）：输入 ¥1/M tokens，输出 ¥2/M tokens
+ */
+async function logAgentRequest({ userId, userAlias, question, toolsUsed, iterations, totalUsage, durationMs, status, errorMsg }) {
+  const cost = (
+    (totalUsage.promptTokens / 1_000_000) * 1 +
+    (totalUsage.completionTokens / 1_000_000) * 2
+  );
+  const toolsStr = toolsUsed.map(t => t.name).join(',') || null;
+  try {
+    const data = {
+      id: generateUUID(),
+      user_id: userId || '',
+      user_alias: userAlias || '',
+      question: String(question || '').slice(0, 1000),
+      tools_used: toolsStr,
+      iterations,
+      prompt_tokens: totalUsage.promptTokens,
+      completion_tokens: totalUsage.completionTokens,
+      total_tokens: totalUsage.totalTokens,
+      cost: Number(cost.toFixed(6)),
+      status: status || 'success',
+      error_msg: errorMsg || null,
+      duration_ms: durationMs,
+    };
+    await pool.query(
+      `INSERT INTO agent_logs (id,user_id,user_alias,question,tools_used,iterations,prompt_tokens,completion_tokens,total_tokens,cost,status,error_msg,duration_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [data.id, data.user_id, data.user_alias, data.question, data.tools_used, data.iterations, data.prompt_tokens, data.completion_tokens, data.total_tokens, data.cost, data.status, data.error_msg, data.duration_ms],
+    );
+  } catch (err) {
+    console.error('[Agent] 写入日志失败:', err.message);
+  }
 }
 
 // ============================================================
@@ -756,6 +796,55 @@ registerTool({
   },
 });
 
+
+// ---- 11. get_token_usage ----
+
+registerTool({
+  name: 'get_token_usage',
+  description: '查询 Token 消耗统计。可按时间范围汇总，也可指定用户。用来回答"今天消耗了多少token"、"本周费用多少"等问题。',
+  parameters: {
+    type: 'object',
+    properties: {
+      timeRange: { type: 'string', description: '时间范围，如"今天"、"最近7天"、"本周"、"本月"，默认今天' },
+      user: { type: 'string', description: '可选，指定查询的用户（昵称/邮箱/ID），不填则查全部用户' },
+    },
+  },
+  requireRoot: true,
+  async execute(args, ctx) {
+    const time = parseTimeRange(args.timeRange || '今天');
+
+    let where = '1=1';
+    const params = [];
+
+    if (time) {
+      where += ' AND created_at >= ? AND created_at <= ?';
+      params.push(time.start, time.end);
+    }
+
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) as request_count, COALESCE(SUM(prompt_tokens),0) as total_prompt, COALESCE(SUM(completion_tokens),0) as total_completion, COALESCE(SUM(total_tokens),0) as total_tokens, COALESCE(SUM(cost),0) as total_cost
+       FROM agent_logs WHERE ${where}`,
+      params,
+    );
+    return rows[0];
+  },
+  transform(raw) {
+    const count = Number(raw.request_count || 0);
+    if (!count) return '该时间段内没有 AI 调用记录';
+    return `Token 消耗统计：
+• 请求次数：${count} 次
+• Prompt Token：${Number(raw.total_prompt).toLocaleString()} tk
+• 输出 Token：${Number(raw.total_completion).toLocaleString()} tk
+• 总 Token：${Number(raw.total_tokens).toLocaleString()} tk
+• 费用合计：¥${Number(raw.total_cost).toFixed(4)}`;
+  },
+  summarize(raw) {
+    const count = Number(raw.request_count || 0);
+    if (!count) return 'Token消耗：无记录';
+    return `Token消耗：${count} 次请求，¥${Number(raw.total_cost).toFixed(4)}`;
+  },
+});
+
 const SYSTEM_PROMPT = `你是轻笺（Light Note）的 AI 助手。轻笺是一个个人知识管理工具，支持书签管理、笔记、云空间等功能。
 
 ## 你的能力
@@ -773,7 +862,7 @@ const SYSTEM_PROMPT = `你是轻笺（Light Note）的 AI 助手。轻笺是一�
 
 ## 行为规则
 1. 用户问自己的数据（书签/笔记/文件）时，必须调用工具查询，不能编造或猜测数据
-2. 用户问操作性问题（怎么用、在哪里），调用 search_help_center 查找帮助文档
+2. 用户问操作性问题（怎么用、在哪里、如何），即使是简单操作也必须先调用 search_help_center 查询帮助文档再回答，不能凭自己知识直接回答
 3. 安全/管理类工具仅管理员可用。如果你不是管理员但用户要求查这些数据，告知"该功能仅管理员可用"
 4. 跨模块问题可以同时调用多个工具（如"查关于MySQL的书签和笔记"）
 5. 工具返回空结果时，如实告知用户"没有找到相关数据"
@@ -847,9 +936,19 @@ export async function agentChat(req, res) {
     /** @type {Array<{ name: string, status: string, params?: object, error?: string, dataSummary?: string }>} */
     const usedTools = [];
     let finalContent = '';
+    const startTime = Date.now();
+    let apiCalls = 0;
+    // 累计所有 DeepSeek 调用的 token 用量
+    const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const response = await requestDeepSeek(messages, { tools: toolDefs });
+
+      apiCalls++;
+      // 累加 token 用量
+      totalUsage.promptTokens += response.usage.promptTokens;
+      totalUsage.completionTokens += response.usage.completionTokens;
+      totalUsage.totalTokens += response.usage.totalTokens;
 
       // 有 tool_calls → 执行工具
       if (response.toolCalls?.length) {
@@ -904,6 +1003,10 @@ export async function agentChat(req, res) {
         content: '请基于上述工具结果给出简洁的总结。',
       });
       const response = await requestDeepSeek(messages, { toolChoice: 'none' });
+      apiCalls++;
+      totalUsage.promptTokens += response.usage.promptTokens;
+      totalUsage.completionTokens += response.usage.completionTokens;
+      totalUsage.totalTokens += response.usage.totalTokens;
       finalContent = response.content || '抱歉，无法处理该请求。';
     }
 
@@ -929,6 +1032,18 @@ export async function agentChat(req, res) {
 
     // 记录本轮对话
     recordTurn(session, message, finalContent, usedTools);
+
+    // 异步写日志（不阻塞响应）
+
+    logAgentRequest({
+      userId, userAlias,
+      question: message,
+      toolsUsed: usedTools,
+      iterations: apiCalls,
+      totalUsage,
+      durationMs: Date.now() - startTime,
+      status: 'success',
+    });
   } catch (error) {
     console.error('[Agent] 请求错误:', error.message);
     if (stream) {
