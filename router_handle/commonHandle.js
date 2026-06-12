@@ -819,14 +819,22 @@ export const getAgentLogsSummary = async (req, res) => {
       return res.send(resultData(null, 403, '仅管理员可查看'));
     }
 
+    // 用 Node 本地时间计算今日范围（避免 MySQL 时区差异）
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
     const [[todayRow], [totalRow]] = await Promise.all([
       pool.query(
-        `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs WHERE created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY`,
+        `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+        [todayStr, todayStr],
       ),
       pool.query(
         `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs`,
       ),
     ]);
+
+    console.log('[AgentLogsSummary] todayStr:', todayStr, 'todayRow:', JSON.stringify(todayRow), 'totalRow:', JSON.stringify(totalRow));
 
     res.send(resultData({
       today: {
