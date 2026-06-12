@@ -331,7 +331,7 @@ router.post('/queryTotalFileSize', async (req, res) => {
     const userId = req.user.id;
 
     // 构建SQL查询
-    const sql = 'SELECT SUM(file_size) as total_size FROM files WHERE create_by = ?';
+    const sql = 'SELECT SUM(file_size) as total_size FROM files WHERE create_by = ? AND del_flag = 0';
     const [result] = await pool.query(sql, [userId]);
     // 提取总大小（MB）保留两位小数
     const totalSizeMB = parseFloat((result[0].total_size / (1024 * 1024)).toFixed(2));
