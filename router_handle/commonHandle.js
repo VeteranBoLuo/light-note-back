@@ -819,15 +819,9 @@ export const getAgentLogsSummary = async (req, res) => {
       return res.send(resultData(null, 403, '仅管理员可查看'));
     }
 
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const startStr = start.toISOString().slice(0, 10) + ' 00:00:00';
-    const endStr = today.toISOString().slice(0, 10) + ' 23:59:59';
-
     const [[todayRow], [totalRow]] = await Promise.all([
       pool.query(
-        `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs WHERE created_at >= ? AND created_at <= ?`,
-        [startStr, endStr],
+        `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs WHERE created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY`,
       ),
       pool.query(
         `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs`,
