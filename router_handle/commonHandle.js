@@ -811,6 +811,46 @@ export const deleteHelpDraft = async (req, res) => {
   }
 };
 
+
+export const getAgentLogsSummary = async (req, res) => {
+  try {
+    const userRole = req.user?.role;
+    if (userRole !== 'root') {
+      return res.send(resultData(null, 403, '仅管理员可查看'));
+    }
+
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startStr = start.toISOString().slice(0, 10) + ' 00:00:00';
+    const endStr = today.toISOString().slice(0, 10) + ' 23:59:59';
+
+    const [[todayRow], [totalRow]] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs WHERE created_at >= ? AND created_at <= ?`,
+        [startStr, endStr],
+      ),
+      pool.query(
+        `SELECT COUNT(*) as count, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost),0) as cost FROM agent_logs`,
+      ),
+    ]);
+
+    res.send(resultData({
+      today: {
+        count: todayRow[0].count,
+        tokens: todayRow[0].tokens,
+        cost: Number(todayRow[0].cost).toFixed(4),
+      },
+      total: {
+        count: totalRow[0].count,
+        tokens: totalRow[0].tokens,
+        cost: Number(totalRow[0].cost).toFixed(4),
+      },
+    }));
+  } catch (e) {
+    res.send(resultData(null, 500, '查询失败: ' + e.message));
+  }
+};
+
 export const getAgentLogs = async (req, res) => {
   try {
     const userRole = req.user?.role;
