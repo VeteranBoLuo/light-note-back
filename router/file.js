@@ -207,6 +207,8 @@ router.post('/queryFiles', async (req, res) => {
       formattedFiles = formattedFiles.filter((file) => {
         return categoryFilters.includes(file.category);
       });
+    } else if (filters?.category !== undefined && filters?.category !== null) {
+      formattedFiles = [];
     }
     res.send(resultData(formattedFiles));
   } catch (error) {
