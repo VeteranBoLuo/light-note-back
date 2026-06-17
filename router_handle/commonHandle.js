@@ -395,7 +395,16 @@ export const getImages = async (req, res) => {
 
   try {
     // 读取目录中的所有文件和子目录
-    const files = fs.readdirSync(directoryPath);
+    let files = [];
+    try {
+      files = fs.readdirSync(directoryPath);
+    } catch (e) {
+      if (e.code === 'ENOENT') {
+        files = [];
+      } else {
+        throw e;
+      }
+    }
 
     // 过滤并处理文件名和后缀
     let fileList = files.map((file) => {
