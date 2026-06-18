@@ -38,7 +38,7 @@ router.post('/uploadImage', upload.single('file'), async (req, res) => {
       if (req.body.noteId) {
         noteId = req.body.noteId;
       } else {
-        await pool.query('INSERT INTO note SET ?', [insertData(noteParams)]);
+        await connection.query('INSERT INTO note SET ?', [insertData(noteParams)]);
         // 获取新插入的标签ID
         const getNoteSql = `SELECT id FROM note ORDER BY create_time DESC LIMIT 1`;
         const [noteResult] = await connection.query(getNoteSql);

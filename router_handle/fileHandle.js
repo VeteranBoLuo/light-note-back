@@ -210,7 +210,7 @@ export const updateFolderSort = async (req, res) => {
     for (const tag of tags) {
       const { id, sort } = tag;
       const sql = 'UPDATE folders SET sort = ? WHERE id = ?';
-      await pool.query(sql, [sort, id]);
+      await connection.query(sql, [sort, id]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));

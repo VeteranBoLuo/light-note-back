@@ -5,9 +5,9 @@ const router = express.Router();
 import * as userHandle from '../router_handle/userHandle.js';
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  message: { data: null, status: 429, msg: '登录尝试过于频繁，请15分钟后再试' },
+  windowMs: 5 * 60 * 1000,
+  max: 8,
+  message: { data: null, status: 429, msg: '登录尝试过于频繁，请5分钟后再试' },
 });
 
 router.post('/login', loginLimiter, userHandle.login);

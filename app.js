@@ -5,6 +5,7 @@ import { baseRouter } from './util/common.js';
 import { accountBanMiddleware, authMiddleware, startSessionMaintenance } from './util/auth.js';
 import { attackMonitor, ensureSecurityTables } from './util/security/index.js';
 import { cleanupAllExpiredTrash } from './router_handle/trashHandle.js';
+import rateLimit from 'express-rate-limit';
 
 import dotenv from 'dotenv';
 import path from 'path';
@@ -34,6 +35,8 @@ app.use(accountBanMiddleware);
 app.use(attackMonitor);
 // 日志记录中间件
 app.use(logFunction);
+// 全局速率限制：120次/分钟（与安全中心高频检测阈值一致）
+app.use(rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false }));
 
 const allRouter = [
   ...baseRouter,

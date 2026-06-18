@@ -130,7 +130,7 @@ export const updateTagSort = async (req, res) => {
     for (const tag of tags) {
       const { id, sort } = tag;
       const sql = 'UPDATE tag SET sort = ? WHERE id = ?';
-      await pool.query(sql, [sort, id]);
+      await connection.query(sql, [sort, id]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));
@@ -593,7 +593,7 @@ export const updateBookmarkSort = async (req, res) => {
     for (const bookmark of bookmarks) {
       const { id, sort } = bookmark;
       const sql = 'UPDATE bookmark SET sort = ? WHERE id = ?';
-      await pool.query(sql, [sort, id]);
+      await connection.query(sql, [sort, id]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));
