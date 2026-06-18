@@ -314,7 +314,6 @@ export const getUserList = (req, res) => {
         u.role,
         u.ip,
         u.create_time,
-        u.password,
         u.del_flag,
         COALESCE(b.bookmark_count, 0) AS bookmarkTotal,
         COALESCE(t.tag_count, 0) AS tagTotal,
