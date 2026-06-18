@@ -23,7 +23,12 @@ const parseCookies = (cookieHeader = '') => {
   }, {});
 };
 
-export const getRequestSid = (req) => parseCookies(req.headers.cookie || '')[COOKIE_NAME] || '';
+export const getRequestSid = (req) => {
+  const cookieSid = parseCookies(req.headers.cookie || '')[COOKIE_NAME] || '';
+  if (cookieSid) return cookieSid;
+  // 后备：移动端浏览器可能清除 httpOnly cookie，从 X-Session-Id 头读取
+  return req.headers['x-session-id'] || '';
+};
 
 const getCookieOptions = (maxAge) => ({
   httpOnly: true,

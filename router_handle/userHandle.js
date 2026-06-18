@@ -110,9 +110,9 @@ export const login = async (req, res) => {
       res.send(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
       return;
     }
-    await issueLoginSession(req, res, result[0], Boolean(rememberMe));
+    const sid = await issueLoginSession(req, res, result[0], Boolean(rememberMe));
     const userInfo = await queryUserInfoById(result[0].id);
-    res.send(resultData(sanitizeUser(userInfo)));
+    res.send(resultData({ ...sanitizeUser(userInfo), sid }));
   } catch (e) {
     res.send(resultData(null, 400, '客户端请求异常：' + e.message));
   }
@@ -457,10 +457,11 @@ export const github = async (req, res) => {
 
     // 3. 数据库操作（查找/创建用户）
     const user = await handleUserDatabaseOperation(githubUser);
-    await issueLoginSession(req, res, user, true);
+    const sid = await issueLoginSession(req, res, user, true);
 
     res.send(
       resultData({
+        ...({ sid }),
         user_info: {
           id: user.id,
           alias: user.alias,
