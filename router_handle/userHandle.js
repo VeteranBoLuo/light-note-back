@@ -3,6 +3,7 @@ import { resultData, snakeCaseKeys, mergeExistingProperties, insertData, generat
 import { RESOURCE_TYPE, insertResourceTagRelations } from '../util/resourceTags.js';
 import request from '../http/request.js';
 import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
+import { verifyPassword, hashPassword } from '../util/password.js';
 import nodeMail from '../util/nodemailer.js';
 import { issueLoginSession, logoutCurrentSession } from '../util/auth.js';
 import { removeUserSessions } from '../util/sessionStore.js';
@@ -91,9 +92,8 @@ export const login = async (req, res) => {
     const { email, password, rememberMe } = req.body;
     const ipReputation = await getIpReputation(getClientIp(req));
     const isIpBanned = isActiveIpBan(ipReputation);
-    const sql = 'SELECT * FROM user WHERE email = ? AND password = ?';
-    const [result] = await pool.query(sql, [email, password]);
-    if (result.length === 0) {
+    const [result] = await pool.query('SELECT * FROM user WHERE email = ?', [email]);
+    if (result.length === 0 || !verifyPassword(password, result[0].password)) {
       if (isIpBanned) {
         res.send(resultData(null, 403, 'IP 已处于封禁期，禁止登录'));
         return;
@@ -109,6 +109,14 @@ export const login = async (req, res) => {
     if (Number(result[0].del_flag) === 1 && !isRootLogin) {
       res.send(resultData(null, 423, '账号已被封禁，请登录其他账号或联系管理员'));
       return;
+    }
+    // 透明升级：老明文密码 → scrypt 哈希
+    if (result[0].password_method === 'plain' && result[0].password) {
+      const upgradedHash = hashPassword(result[0].password);
+      pool.query("UPDATE user SET password = ?, password_method = 'scrypt' WHERE id = ?", [
+        upgradedHash,
+        result[0].id,
+      ]).catch(() => {}); // 非关键操作，静默忽略
     }
     const sid = await issueLoginSession(req, res, result[0], Boolean(rememberMe));
     const userInfo = await queryUserInfoById(result[0].id);
@@ -129,6 +137,10 @@ export const registerUser = async (req, res) => {
     // 准备用户数据
     const params = req.body;
     params.preferences = JSON.stringify({ theme: 'day', noteViewMode: 'card' });
+    if (params.password) {
+      params.password = hashPassword(params.password);
+      params.password_method = 'scrypt';
+    }
 
     // 插入新用户
     const userData = insertData(params);
@@ -582,11 +594,12 @@ const handleUserDatabaseOperation = async (githubUser) => {
 
   // 3. 创建新用户
   const githubUserId = generateUUID();
+  const githubHashedPassword = hashPassword('123456');
   await pool.query(
     `INSERT INTO user
-      (id, email, github_id, login_type, head_picture, password, alias)
-     VALUES (?, ?, ?, 'github', ?, ?, ?)`,
-    [githubUserId, safeEmail, githubUser.id, githubUser.avatar_url, '123456', githubUser.login],
+      (id, email, github_id, login_type, head_picture, password, password_method, alias)
+     VALUES (?, ?, ?, 'github', ?, ?, 'scrypt', ?)`,
+    [githubUserId, safeEmail, githubUser.id, githubUser.avatar_url, githubHashedPassword, githubUser.login],
   );
   const [result] = await pool.query(`SELECT * FROM user WHERE github_id = ? LIMIT 1`, [githubUser.id]);
 
@@ -670,15 +683,16 @@ export const configPassword = async (req, res) => {
     const [oldUser] = await pool.query(`SELECT * FROM user WHERE id = ? LIMIT 1`, [id]);
     if (type === 'update') {
       const { oldPassword } = req.body;
-      if (oldUser[0].password !== oldPassword) {
+      if (!verifyPassword(oldPassword, oldUser[0].password)) {
         throw new Error('原密码错误');
       }
-      if (oldUser[0].password === password) {
+      if (verifyPassword(password, oldUser[0].password)) {
         throw new Error('新密码不能与原密码相同');
       }
     }
+    const hashedPassword = hashPassword(password);
     pool
-      .query('update user set password=? where id=?', [password, id])
+      .query('update user set password=?, password_method=? where id=?', [hashedPassword, 'scrypt', id])
       .then(async ([result]) => {
         await removeUserSessions(id);
         await logoutCurrentSession(req, res);
@@ -741,8 +755,9 @@ export const verifyCode = async (req, res) => {
     }
     // 3. 验证成功后，删除已用验证码并且设置新密码
     await redisClient.del(`email:code:${email}`);
+    const hashedPassword = hashPassword(password);
     pool
-      .query('update user set password=? where email=?', [password, email])
+      .query('update user set password=?, password_method=? where email=?', [hashedPassword, 'scrypt', email])
       .then(() => {
         res.send(resultData('重置密码成功'));
       })
