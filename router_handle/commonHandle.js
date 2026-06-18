@@ -337,7 +337,7 @@ export const analyzeImgUrl = async (req, res) => {
                   // 确定文件扩展名
                   let fileExtension = 'png';
                   const mimeType = Object.entries(imageMimeTypes).find(([key, value]) =>
-                    contentType.includes(key),
+                    contentType?.includes(key),
                   )?.[1];
                   if (mimeType) {
                     fileExtension = mimeType;
