@@ -255,12 +255,6 @@ export async function agentChat(req, res) {
     const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     // ---- 第1步：Planner（带工具定义，让 LLM 决定是否调工具） ----
-    // 推思考状态，让前端显示"正在分析..."
-    if (stream) {
-      const thinkingPayload = `data: ${JSON.stringify({ output: { text: '⚙️ 正在分析你的问题...\n', session_id: getSessionId(session) } })}\n\n`;
-      console.log('[Agent] sending thinking event');
-      res.write(thinkingPayload);
-    }
     const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
     apiCalls++;
     totalUsage.promptTokens += plannerResponse.usage.promptTokens;
