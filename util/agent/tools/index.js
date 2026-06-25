@@ -15,6 +15,7 @@ import queryTrash from './query_trash.js';
 import restoreTrash from './restore_trash.js';
 import addTag from './add_tag.js';
 import queryTags from './query_tags.js';
+import deleteResource from './delete_resource.js';
 
 export default [
   searchHelpCenter,
@@ -34,4 +35,5 @@ export default [
   restoreTrash,
   addTag,
   queryTags,
+  deleteResource,
 ];
