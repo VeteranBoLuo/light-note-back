@@ -253,7 +253,7 @@ export async function agentChat(req, res) {
     let apiCalls = 0;
     const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
-    // ---- 循环：Planner → 执行 → 再Planner（最多2轮） ----
+    // ---- 循环：Planner → 执行（最多2轮，仅首次有 XML 溢出时才跑第二轮） ----
     for (let round = 0; round < 2; round++) {
       const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
       apiCalls++;
@@ -263,17 +263,11 @@ export async function agentChat(req, res) {
 
       if (!plannerResponse.toolCalls?.length) {
         finalContent = plannerResponse.content || '';
-        break; // 没有工具调用了，跳出循环
+        break;
       }
 
-      // 追加 assistant 消息（含 tool_calls）
-      messages.push({
-        role: 'assistant',
-        content: null,
-        tool_calls: plannerResponse.toolCalls,
-      });
-
       // 执行工具
+      messages.push({ role: 'assistant', content: null, tool_calls: plannerResponse.toolCalls });
       const results = await Promise.all(
         plannerResponse.toolCalls.map(async (tc) => {
           let args = {};
@@ -288,8 +282,8 @@ export async function agentChat(req, res) {
         messages.push({ role: 'tool', tool_call_id: r.toolCallId, content: r.result.summary });
       }
 
-      // 如果还有工具要调（round=0 且工具执行后有后续需求），继续循环
-      // DeepSeek 每次只返回一个 tool_call，不会出现第二个写成 XML 的问题
+      // 第一轮没有 XML 溢出 → 不需要第二轮
+      if (!plannerResponse._hadXmlToolCalls) break;
     }
 
     // ---- Final Reply（有工具调用时才需要） ----
