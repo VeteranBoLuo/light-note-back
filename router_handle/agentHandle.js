@@ -1012,16 +1012,49 @@ export async function agentChat(req, res) {
       });
 
       if (stream) {
-        // 流式：边生成边推 SSE，前端打字机逐字渲染
+        // 流式：首批 buffer 掩盖 DeepSeek token 间隔 gap
+        let bufferStart = 0;
+        let bufferText = '';
+        let isBuffering = true;
+        const BUFFER_MS = 150;
+        const BUFFER_CHARS = 12;
+
         await requestDeepSeekStream(messages, {
           onDelta: (chunk) => {
+            if (isBuffering && bufferStart === 0) {
+              // 第一个 chunk：开始计时，不发送
+              bufferStart = Date.now();
+              bufferText = chunk;
+              return;
+            }
+
+            if (isBuffering) {
+              // 继续 buffer 直到达到阈值
+              bufferText += chunk;
+              const elapsed = Date.now() - bufferStart;
+              if (elapsed >= BUFFER_MS || bufferText.length >= BUFFER_CHARS) {
+                // 阈值到了：flush 全部，后续直通
+                finalContent += bufferText;
+                res.write(`data: ${JSON.stringify({ output: { text: bufferText, session_id: getSessionId(session) } })}\n\n`);
+                isBuffering = false;
+              }
+              return;
+            }
+
+            // 稳定期：逐 chunk 直通
             finalContent += chunk;
             res.write(`data: ${JSON.stringify({ output: { text: chunk, session_id: getSessionId(session) } })}\n\n`);
           },
           signal: agentAbortController.signal,
         });
+
+        // 流结束时 buffer 还没 flush（文本极短未达到阈值）
+        if (isBuffering && bufferText) {
+          finalContent += bufferText;
+          res.write(`data: ${JSON.stringify({ output: { text: bufferText, session_id: getSessionId(session) } })}\n\n`);
+        }
+
         apiCalls++;
-        // 流式无法获取 token 用量，不累计 totalUsage
         if (!finalContent) finalContent = '抱歉，无法处理该请求。';
       } else {
         const finalResponse = await requestDeepSeek(messages, { toolChoice: 'none' });
