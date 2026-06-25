@@ -1,10 +1,10 @@
 /**
  * Agent 聊天处理器
  *
- * 核心流程（ReAct Agent）：
+ * 核心流程（两段式 Agent）：
  *   用户消息 → sync DeepSeek (带 tools) → 有 tool_calls?
- *     ├─ 是 → 执行工具 → 结果塞回 → 继续循环
- *     └─ 否 → stream DeepSeek → SSE 格式转换 → 推前端
+ *     ├─ 是 → 执行工具 → stream DeepSeek (Final Reply) → 逐 chunk 推 SSE
+ *     └─ 否 → sync DeepSeek content 直接作为回答 → 单块 SSE
  *
  * 参考 ai-assistant 的 ReAct 模式，适配轻笺 Express 后端。
  */
@@ -928,6 +928,24 @@ export async function agentChat(req, res) {
       { role: 'user', content: userMessage },
     ];
 
+    // 流式模式：提前设置 SSE headers + 客户端断开时 abort DeepSeek 流
+    const agentAbortController = new AbortController();
+    const onClientClose = () => {
+      if (!agentAbortController.signal.aborted) {
+        agentAbortController.abort();
+      }
+    };
+    req.on('close', onClientClose);
+
+    if (stream) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+    }
+
     // 工具定义
     const toolDefs = getToolDefinitions();
 
@@ -987,37 +1005,49 @@ export async function agentChat(req, res) {
         });
       }
 
-      // ---- 第2步：Final Reply（不带工具定义，减少 prompt 体积） ----
+      // ---- 第2步：Final Reply ----
       messages.push({
         role: 'user',
         content: '请基于上述工具结果给出简洁的总结。',
       });
-      const finalResponse = await requestDeepSeek(messages, { toolChoice: 'none' });
-      apiCalls++;
-      totalUsage.promptTokens += finalResponse.usage.promptTokens;
-      totalUsage.completionTokens += finalResponse.usage.completionTokens;
-      totalUsage.totalTokens += finalResponse.usage.totalTokens;
-      finalContent = finalResponse.content || '抱歉，无法处理该请求。';
+
+      if (stream) {
+        // 流式：边生成边推 SSE，前端打字机逐字渲染
+        await requestDeepSeekStream(messages, {
+          onDelta: (chunk) => {
+            finalContent += chunk;
+            res.write(`data: ${JSON.stringify({ output: { text: chunk, session_id: getSessionId(session) } })}\n\n`);
+          },
+          signal: agentAbortController.signal,
+        });
+        apiCalls++;
+        // 流式无法获取 token 用量，不累计 totalUsage
+        if (!finalContent) finalContent = '抱歉，无法处理该请求。';
+      } else {
+        const finalResponse = await requestDeepSeek(messages, { toolChoice: 'none' });
+        apiCalls++;
+        totalUsage.promptTokens += finalResponse.usage.promptTokens;
+        totalUsage.completionTokens += finalResponse.usage.completionTokens;
+        totalUsage.totalTokens += finalResponse.usage.totalTokens;
+        finalContent = finalResponse.content || '抱歉，无法处理该请求。';
+      }
     }
 
     // ---- 输出 ----
     if (stream) {
-      // SSE 流式输出：将 ReAct 循环中得到的最终回答作为单块 SSE 发送
-      // ChatContainer 前端的打字机效果会自动逐字显示，不需要后端逐字流
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
-
-      // 用 session_id 包装发送，兼容 ChatContainer 的 SSE 解析
-      res.write(`data: ${JSON.stringify({ output: { text: finalContent, session_id: getSessionId(session) } })}\n\n`);
+      // SSE 输出：headers 已在前面提前设置
+      // 无工具调用路径（Planner 直接回复）：发送单块 SSE
+      // 有工具调用路径：Final Reply 已逐 chunk 推完 SSE，只需 [DONE]
+      if (!usedTools.length) {
+        res.write(`data: ${JSON.stringify({ output: { text: finalContent, session_id: getSessionId(session) } })}\n\n`);
+      }
       res.write('data: [DONE]\n\n');
       res.end();
+      res.removeListener('close', onClientClose);
     } else {
       // 非流式
       res.send(resultData({ response: finalContent, sessionId: getSessionId(session) }));
+      res.removeListener('close', onClientClose);
     }
 
     // 记录本轮对话
@@ -1044,5 +1074,6 @@ export async function agentChat(req, res) {
     } else {
       res.status(500).send(resultData(null, 500, 'AI 服务异常: ' + error.message));
     }
+    res.removeListener('close', onClientClose);
   }
 }
