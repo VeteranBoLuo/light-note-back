@@ -1,5 +1,4 @@
 import pool from '../../../db/index.js';
-import { insertData } from '../../../util/common.js';
 
 const VALID_TYPES = ['bookmark', 'note', 'file', 'tag'];
 const TYPE_INFO = {
@@ -9,20 +8,21 @@ const TYPE_INFO = {
   tag: { table: 'tag', userIdField: 'user_id', nameField: 'name' },
 };
 
-function pendingConfirm(type, name) {
+async function pendingConfirm(type, name, userId) {
+  let extra = '';
   if (type === 'tag') {
-    return {
-      pendingConfirm: true,
-      resourceType: type,
-      resourceName: name,
-      confirmMessage: `找到标签「${name}」，确认删除？删除后不可恢复，相关资源的该标签会被移除，资源本身不受影响。`,
-    };
+    const [rows] = await pool.query(
+      'SELECT COUNT(*) AS cnt FROM resource_tag_relations WHERE tag_id IN (SELECT id FROM tag WHERE user_id = ? AND name = ? AND del_flag = 0)',
+      [userId, name],
+    );
+    const count = Number(rows[0]?.cnt || 0);
+    extra = count > 0 ? `（关联 ${count} 个资源）` : '';
   }
   return {
     pendingConfirm: true,
     resourceType: type,
     resourceName: name,
-    confirmMessage: `找到${type === 'bookmark' ? '书签' : type === 'note' ? '笔记' : '文件'}「${name}」，确认删除？删除后进入回收站，可恢复。`,
+    confirmMessage: `${type === 'tag' ? '标签' : type === 'bookmark' ? '书签' : type === 'note' ? '笔记' : '文件'}「${name}」${extra}`,
   };
 }
 
@@ -41,7 +41,6 @@ export default {
   },
   requireRoot: false,
   async execute(args, ctx) {
-    // DeepSeek 可能用别名参数名，统一转换
     const resourceType = args.resourceType || args.type || '';
     const resourceName = args.resourceName || args.name || args.resourceId || '';
     const confirmed = args.confirmed === true;
@@ -55,25 +54,8 @@ export default {
 
     const info = TYPE_INFO[resourceType];
 
-    if (!confirmed) {
-      // 第一步：查询内容并返回确认提示
-      const [resources] = await pool.query(
-        `SELECT id, ${info.nameField} AS name
-         FROM \`${info.table}\`
-         WHERE ${info.userIdField} = ? AND del_flag = 0 AND ${info.nameField} LIKE ?
-         ORDER BY create_time DESC LIMIT 1`,
-        [ctx.userId, `%${resourceName.trim()}%`],
-      );
-      if (resources.length === 0) {
-        return { error: 'NOT_FOUND', message: `未找到名称包含"${resourceName.trim()}"的${resourceType}` };
-      }
-      return pendingConfirm(resourceType, resources[0].name);
-    }
-
-    // 第二步：确认后执行删除
     const [resources] = await pool.query(
-      `SELECT id, ${info.nameField} AS name
-       FROM \`${info.table}\`
+      `SELECT id, ${info.nameField} AS name FROM \`${info.table}\`
        WHERE ${info.userIdField} = ? AND del_flag = 0 AND ${info.nameField} LIKE ?
        ORDER BY create_time DESC LIMIT 1`,
       [ctx.userId, `%${resourceName.trim()}%`],
@@ -82,22 +64,25 @@ export default {
       return { error: 'NOT_FOUND', message: `未找到名称包含"${resourceName.trim()}"的${resourceType}` };
     }
 
-    const resourceId = resources[0].id;
+    const matchedId = resources[0].id;
     const matchedName = resources[0].name;
 
+    if (!confirmed) {
+      return await pendingConfirm(resourceType, matchedName, ctx.userId);
+    }
+
+    // 确认后执行
     if (resourceType === 'tag') {
-      // 标签：硬删 + 清除关联
-      await pool.query('DELETE FROM resource_tag_relations WHERE tag_id = ? AND user_id = ?', [resourceId, ctx.userId]);
-      await pool.query('DELETE FROM tag_relations WHERE tag_id = ? OR related_tag_id = ?', [resourceId, resourceId]);
-      await pool.query('DELETE FROM tag WHERE id = ? AND user_id = ?', [resourceId, ctx.userId]);
+      await pool.query('DELETE FROM resource_tag_relations WHERE tag_id = ? AND user_id = ?', [matchedId, ctx.userId]);
+      await pool.query('DELETE FROM tag_relations WHERE tag_id = ? OR related_tag_id = ?', [matchedId, matchedId]);
+      await pool.query('DELETE FROM tag WHERE id = ? AND user_id = ?', [matchedId, ctx.userId]);
     } else {
-      // 书签/笔记/文件：软删 + 清除关联
       await pool.query('DELETE FROM resource_tag_relations WHERE resource_type = ? AND resource_id = ? AND user_id = ?', [
-        resourceType, resourceId, ctx.userId,
+        resourceType, matchedId, ctx.userId,
       ]);
       await pool.query(
         `UPDATE \`${info.table}\` SET del_flag = 1, deleted_at = NOW() WHERE id = ? AND ${info.userIdField} = ?`,
-        [resourceId, ctx.userId],
+        [matchedId, ctx.userId],
       );
     }
 
