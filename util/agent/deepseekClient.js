@@ -34,32 +34,6 @@
 
 const BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 
-/**
- * 兜底：当 DeepSeek 把函数调用写进 content 文本（XML 格式）而非 tool_calls 时，
- * 从 text content 中提取工具调用。
- */
-function parseXmlToolCalls(content) {
-  const calls = [];
-  const callRegex = /<invoke name="(\w+)">([\s\S]*?)<\/invoke>/g;
-  let callMatch;
-  while ((callMatch = callRegex.exec(content)) !== null) {
-    const name = callMatch[1];
-    const paramsStr = callMatch[2];
-    const params = {};
-    const paramRegex = /<parameter name="(\w+)"[^>]*>([^<]+)<\/parameter>/g;
-    let m;
-    while ((m = paramRegex.exec(paramsStr)) !== null) {
-      params[m[1]] = m[2];
-    }
-    calls.push({
-      id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      type: 'function',
-      function: { name, arguments: JSON.stringify(params) },
-    });
-  }
-  return calls;
-}
-
 function getApiKey() {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) throw new Error('未配置 DEEPSEEK_API_KEY，请检查 .env 文件');
@@ -112,7 +86,7 @@ export async function requestDeepSeek(messages, options = {}) {
 
   const msg = data.choices?.[0]?.message;
   const usage = data.usage || {};
-  const result = {
+  return {
     content: msg?.content || '',
     toolCalls: msg?.tool_calls || [],
     usage: {
@@ -121,17 +95,6 @@ export async function requestDeepSeek(messages, options = {}) {
       totalTokens: usage.total_tokens || 0,
     },
   };
-
-  // 兜底：tool_calls 为空但 content 包含 XML 格式的工具调用
-  if (!result.toolCalls.length && result.content) {
-    const parsed = parseXmlToolCalls(result.content);
-    if (parsed.length) {
-      result.toolCalls = parsed;
-      result.content = result.content.replace(/<invoke[\s\S]*?<\/invoke>/g, '').trim();
-    }
-  }
-
-  return result;
 }
 
 // ---- 流式请求 ----
