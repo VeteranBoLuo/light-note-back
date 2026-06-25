@@ -3,7 +3,7 @@ import { retrieve } from '../../knowledgeService.js';
 export default {
   name: 'search_help_center',
   description: '搜索帮助中心知识库，获取轻笺的使用说明、功能教程、常见问题解答。当用户问"怎么用"、"什么是"、"如何"等操作性问题时调用。',
-  plannerHint: '当用户问操作性问题（怎么用、在哪里设置、是什么功能、如何操作）时，必须优先调用此工具查询帮助文档。不能在未查询的情况下凭知识回答。关键词示例：标签管理、回收站、云空间上传、导出书签。',
+  plannerHint: '当用户问功能的使用方法或步骤时调用（关键词示例：怎么用、如何设置、什么是、在哪里）。如果用户要求直接执行操作（删除、创建、恢复、加标签），不要调用此工具，直接调对应的操作工具。',
   parameters: {
     type: 'object',
     properties: {
