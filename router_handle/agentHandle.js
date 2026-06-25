@@ -931,8 +931,6 @@ export async function agentChat(req, res) {
     // 工具定义
     const toolDefs = getToolDefinitions();
 
-    // ---- ReAct 循环 ----
-    const MAX_ITERATIONS = 3;
     /** @type {Array<{ name: string, status: string, params?: object, error?: string, dataSummary?: string }>} */
     const usedTools = [];
     let finalContent = '';
@@ -941,73 +939,65 @@ export async function agentChat(req, res) {
     // 累计所有 DeepSeek 调用的 token 用量
     const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const response = await requestDeepSeek(messages, { tools: toolDefs });
+    // ---- 第1步：Planner（带工具定义，让 LLM 决定是否调工具） ----
+    const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
+    apiCalls++;
+    totalUsage.promptTokens += plannerResponse.usage.promptTokens;
+    totalUsage.completionTokens += plannerResponse.usage.completionTokens;
+    totalUsage.totalTokens += plannerResponse.usage.totalTokens;
 
-      apiCalls++;
-      // 累加 token 用量
-      totalUsage.promptTokens += response.usage.promptTokens;
-      totalUsage.completionTokens += response.usage.completionTokens;
-      totalUsage.totalTokens += response.usage.totalTokens;
+    if (!plannerResponse.toolCalls?.length) {
+      // 无工具调用 → 直接当作回答，跳过 Final Reply
+      finalContent = plannerResponse.content || '';
+    } else {
+      // 追加 assistant 消息（含 tool_calls）
+      messages.push({
+        role: 'assistant',
+        content: null,
+        tool_calls: plannerResponse.toolCalls,
+      });
 
-      // 有 tool_calls → 执行工具
-      if (response.toolCalls?.length) {
-        // 追加 assistant 消息（含 tool_calls）
-        messages.push({
-          role: 'assistant',
-          content: null,
-          tool_calls: response.toolCalls,
-        });
-
-        // 并行执行所有工具
-        const results = await Promise.all(
-          response.toolCalls.map(async (tc) => {
-            let args = {};
-            try {
-              args = JSON.parse(tc.function.arguments || '{}');
-            } catch {
-              args = {};
-            }
-            const result = await executeTool(tc.function.name, args, { userId, userRole, userAlias });
-            usedTools.push({
-              name: tc.function.name,
-              status: result.status,
-              params: args,
-              error: result.error,
-              dataSummary: result.dataSummary,
-            });
-            return { toolCallId: tc.id, result };
-          }),
-        );
-
-        // 追加 tool 结果消息
-        for (const r of results) {
-          messages.push({
-            role: 'tool',
-            tool_call_id: r.toolCallId,
-            content: r.result.summary,
+      // 并行执行所有工具
+      const results = await Promise.all(
+        plannerResponse.toolCalls.map(async (tc) => {
+          let args = {};
+          try {
+            args = JSON.parse(tc.function.arguments || '{}');
+          } catch {
+            args = {};
+          }
+          const result = await executeTool(tc.function.name, args, { userId, userRole, userAlias });
+          usedTools.push({
+            name: tc.function.name,
+            status: result.status,
+            params: args,
+            error: result.error,
+            dataSummary: result.dataSummary,
           });
-        }
-        continue; // 继续循环
+          return { toolCallId: tc.id, result };
+        }),
+      );
+
+      // 追加 tool 结果消息
+      for (const r of results) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: r.toolCallId,
+          content: r.result.summary,
+        });
       }
 
-      // 无 tool_calls → 最终回答
-      finalContent = response.content;
-      break;
-    }
-
-    // 如果循环结束仍无内容（纯工具调用无最终回答），让 LLM 总结
-    if (!finalContent) {
+      // ---- 第2步：Final Reply（不带工具定义，减少 prompt 体积） ----
       messages.push({
         role: 'user',
         content: '请基于上述工具结果给出简洁的总结。',
       });
-      const response = await requestDeepSeek(messages, { toolChoice: 'none' });
+      const finalResponse = await requestDeepSeek(messages, { toolChoice: 'none' });
       apiCalls++;
-      totalUsage.promptTokens += response.usage.promptTokens;
-      totalUsage.completionTokens += response.usage.completionTokens;
-      totalUsage.totalTokens += response.usage.totalTokens;
-      finalContent = response.content || '抱歉，无法处理该请求。';
+      totalUsage.promptTokens += finalResponse.usage.promptTokens;
+      totalUsage.completionTokens += finalResponse.usage.completionTokens;
+      totalUsage.totalTokens += finalResponse.usage.totalTokens;
+      finalContent = finalResponse.content || '抱歉，无法处理该请求。';
     }
 
     // ---- 输出 ----
