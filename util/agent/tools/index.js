@@ -11,6 +11,8 @@ import queryOperationLogs from './query_operation_logs.js';
 import getActiveUsers from './get_active_users.js';
 import getTokenUsage from './get_token_usage.js';
 import createNote from './create_note.js';
+import queryTrash from './query_trash.js';
+import restoreTrash from './restore_trash.js';
 
 export default [
   searchHelpCenter,
@@ -26,4 +28,6 @@ export default [
   getActiveUsers,
   getTokenUsage,
   createNote,
+  queryTrash,
+  restoreTrash,
 ];
