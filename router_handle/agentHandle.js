@@ -938,8 +938,6 @@ export async function agentChat(req, res) {
     req.on('close', onClientClose);
 
     if (stream) {
-      // 禁用 Nagle 算法，确保每个 SSE chunk 立即推送不被 TCP 合并缓冲
-      if (res.socket) res.socket.setNoDelay(true);
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
