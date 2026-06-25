@@ -251,20 +251,21 @@ export async function agentChat(req, res) {
     let finalContent = '';
     const startTime = Date.now();
     let apiCalls = 0;
-    // 累计所有 DeepSeek 调用的 token 用量
     const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
-    // ---- 第1步：Planner（带工具定义，让 LLM 决定是否调工具） ----
-    const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
-    apiCalls++;
-    totalUsage.promptTokens += plannerResponse.usage.promptTokens;
-    totalUsage.completionTokens += plannerResponse.usage.completionTokens;
-    totalUsage.totalTokens += plannerResponse.usage.totalTokens;
+    // ---- 循环：Planner → 执行 → 再Planner（最多2轮） ----
+    for (let round = 0; round < 2; round++) {
+      const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
+      apiCalls++;
+      totalUsage.promptTokens += plannerResponse.usage.promptTokens;
+      totalUsage.completionTokens += plannerResponse.usage.completionTokens;
+      totalUsage.totalTokens += plannerResponse.usage.totalTokens;
 
-    if (!plannerResponse.toolCalls?.length) {
-      // 无工具调用 → 直接当作回答，跳过 Final Reply
-      finalContent = plannerResponse.content || '';
-    } else {
+      if (!plannerResponse.toolCalls?.length) {
+        finalContent = plannerResponse.content || '';
+        break; // 没有工具调用了，跳出循环
+      }
+
       // 追加 assistant 消息（含 tool_calls）
       messages.push({
         role: 'assistant',
@@ -272,41 +273,28 @@ export async function agentChat(req, res) {
         tool_calls: plannerResponse.toolCalls,
       });
 
-      // 并行执行所有工具
+      // 执行工具
       const results = await Promise.all(
         plannerResponse.toolCalls.map(async (tc) => {
           let args = {};
-          try {
-            args = JSON.parse(tc.function.arguments || '{}');
-          } catch {
-            args = {};
-          }
+          try { args = JSON.parse(tc.function.arguments || '{}'); } catch { args = {}; }
           const result = await executeTool(tc.function.name, args, { userId, userRole, userAlias });
-          usedTools.push({
-            name: tc.function.name,
-            status: result.status,
-            params: args,
-            error: result.error,
-            dataSummary: result.dataSummary,
-          });
+          usedTools.push({ name: tc.function.name, status: result.status, params: args, error: result.error, dataSummary: result.dataSummary });
           return { toolCallId: tc.id, result };
         }),
       );
 
-      // 追加 tool 结果消息
       for (const r of results) {
-        messages.push({
-          role: 'tool',
-          tool_call_id: r.toolCallId,
-          content: r.result.summary,
-        });
+        messages.push({ role: 'tool', tool_call_id: r.toolCallId, content: r.result.summary });
       }
 
-      // ---- 第2步：Final Reply ----
-      messages.push({
-        role: 'user',
-        content: '请基于上述工具结果给出简洁的总结。',
-      });
+      // 如果还有工具要调（round=0 且工具执行后有后续需求），继续循环
+      // DeepSeek 每次只返回一个 tool_call，不会出现第二个写成 XML 的问题
+    }
+
+    // ---- Final Reply（有工具调用时才需要） ----
+    if (usedTools.length > 0) {
+      messages.push({ role: 'user', content: '请基于上述工具结果给出简洁的总结。' });
 
       if (stream) {
         // 流式：首批 buffer 掩盖 DeepSeek token 间隔 gap

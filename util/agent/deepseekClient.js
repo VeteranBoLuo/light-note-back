@@ -115,13 +115,11 @@ export async function requestDeepSeek(messages, options = {}) {
     },
   };
 
-  // 兜底：tool_calls 为空但 content 包含 XML/DSML 格式的工具调用
-  if (!result.toolCalls.length && result.content) {
-    const parsed = parseXmlToolCalls(result.content);
-    if (parsed.length) {
-      result.toolCalls = parsed;
-      result.content = result.content.replace(/<(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke[\s\S]*?<\/(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke\s*>/g, '').trim();
-    }
+  // 兜底：检查 content 是否包含 XML/DSML 格式的工具调用
+  const parsed = parseXmlToolCalls(result.content);
+  if (parsed.length) {
+    result.toolCalls = [...result.toolCalls, ...parsed];
+    result.content = result.content.replace(/<(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke[\s\S]*?<\/(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke\s*>/g, '').trim();
   }
 
   return result;
