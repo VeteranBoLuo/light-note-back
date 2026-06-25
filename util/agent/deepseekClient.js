@@ -40,13 +40,15 @@ const BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
  */
 function parseXmlToolCalls(content) {
   const calls = [];
-  const callRegex = /<invoke name="(\w+)">([\s\S]*?)<\/invoke>/g;
+  // 匹配两种格式：<invoke> 和 <||DSML||invoke>
+  const callRegex = /(?:\|\|\s*DSML\s*\|\|)?\s*<invoke name="(\w+)">([\s\S]*?)<\/invoke>/g;
   let callMatch;
   while ((callMatch = callRegex.exec(content)) !== null) {
     const name = callMatch[1];
     const paramsStr = callMatch[2];
     const params = {};
-    const paramRegex = /<parameter name="(\w+)"[^>]*>([^<]+)<\/parameter>/g;
+    // 匹配两种参数格式：<parameter> 和 <||DSML||parameter>
+    const paramRegex = /(?:\|\|\s*DSML\s*\|\|)?\s*<parameter name="(\w+)"[^>]*>([^<]+)<\/(?:\|\|\s*DSML\s*\|\|)?\s*parameter>/g;
     let m;
     while ((m = paramRegex.exec(paramsStr)) !== null) {
       params[m[1]] = m[2];
@@ -127,7 +129,7 @@ export async function requestDeepSeek(messages, options = {}) {
     const parsed = parseXmlToolCalls(result.content);
     if (parsed.length) {
       result.toolCalls = parsed;
-      result.content = result.content.replace(/<invoke[\s\S]*?<\/invoke>/g, '').trim();
+      result.content = result.content.replace(/(?:\|\|\s*DSML\s*\|\|)?\s*<invoke[\s\S]*?<\/invoke>/g, '').trim();
     }
   }
 
