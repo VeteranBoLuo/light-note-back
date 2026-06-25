@@ -28,7 +28,7 @@ function pendingConfirm(type, name) {
 
 export default {
   name: 'delete_resource',
-  description: '删除书签、笔记、文件或标签。必须用户确认后才真正执行删除，否则只搜索并返回确认提示。',
+  description: '当用户说"删掉""删除""把...删了"时调用此工具。支持删除书签、笔记、文件和标签。第一次调用先不确认（confirmed=false），返回待删内容的确认信息。用户确认后第二次调用带 confirmed=true 真正执行删除。',
   plannerHint: '当用户要求删除书签、笔记、文件或标签时直接调用，不要先查帮助中心。confirmed=true 时才真正执行删除，confirmed=false 时只返回确认提示。',
   parameters: {
     type: 'object',
