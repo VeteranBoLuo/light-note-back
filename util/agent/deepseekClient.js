@@ -35,23 +35,21 @@
 const BASE_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 /**
- * 兜底：当 DeepSeek 把函数调用写进 content 文本（XML 格式）而非 tool_calls 时，
+ * 兜底：当 DeepSeek 把函数调用写进 content 文本（XML/DSML 格式）而非 tool_calls 时，
  * 从 text content 中提取工具调用。
  */
 function parseXmlToolCalls(content) {
   const calls = [];
-  // 匹配两种格式：<invoke> 和 <||DSML||invoke>
-  const callRegex = /(?:\|\|\s*DSML\s*\|\|)?\s*<invoke name="(\w+)">([\s\S]*?)<\/invoke>/g;
-  let callMatch;
-  while ((callMatch = callRegex.exec(content)) !== null) {
-    const name = callMatch[1];
-    const paramsStr = callMatch[2];
+  const blockRegex = /<(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke\s+name="(\w+)"\s*>([\s\S]*?)<\/(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke\s*>/g;
+  let blockMatch;
+  while ((blockMatch = blockRegex.exec(content)) !== null) {
+    const name = blockMatch[1];
+    const inner = blockMatch[2];
     const params = {};
-    // 匹配两种参数格式：<parameter> 和 <||DSML||parameter>
-    const paramRegex = /(?:\|\|\s*DSML\s*\|\|)?\s*<parameter name="(\w+)"[^>]*>([^<]+)<\/(?:\|\|\s*DSML\s*\|\|)?\s*parameter>/g;
-    let m;
-    while ((m = paramRegex.exec(paramsStr)) !== null) {
-      params[m[1]] = m[2];
+    const paramRegex = /<\s*(?:\|\|\s*DSML\s*\|\|)?\s*parameter\s+name="(\w+)"[^>]*>([^<]+)<\//g;
+    let paramMatch;
+    while ((paramMatch = paramRegex.exec(inner)) !== null) {
+      params[paramMatch[1]] = paramMatch[2];
     }
     calls.push({
       id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -77,13 +75,6 @@ function getModel() {
 /**
  * 同步请求 DeepSeek（stream: false）。
  * 用于 Planner 阶段：需要拿到完整的 tool_calls 结果后再执行工具。
- *
- * @param {DeepSeekMessage[]} messages
- * @param {Object} options
- * @param {unknown[]} [options.tools] - OpenAI function-calling 格式的工具定义
- * @param {'auto'|'none'} [options.toolChoice='auto']
- * @param {AbortSignal} [options.signal]
- * @returns {Promise<DeepSeekResult>}
  */
 export async function requestDeepSeek(messages, options = {}) {
   const body = {
@@ -124,12 +115,12 @@ export async function requestDeepSeek(messages, options = {}) {
     },
   };
 
-  // 兜底：tool_calls 为空但 content 包含 XML 格式的工具调用
+  // 兜底：tool_calls 为空但 content 包含 XML/DSML 格式的工具调用
   if (!result.toolCalls.length && result.content) {
     const parsed = parseXmlToolCalls(result.content);
     if (parsed.length) {
       result.toolCalls = parsed;
-      result.content = result.content.replace(/(?:\|\|\s*DSML\s*\|\|)?\s*<invoke[\s\S]*?<\/invoke>/g, '').trim();
+      result.content = result.content.replace(/<(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke[\s\S]*?<\/(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke\s*>/g, '').trim();
     }
   }
 
@@ -141,14 +132,6 @@ export async function requestDeepSeek(messages, options = {}) {
 /**
  * 流式请求 DeepSeek（stream: true）。
  * 用于 Final Reply 阶段：将 AI 回复逐字推送给前端。
- *
- * DeepSeek SSE 格式：每行 "data: <json>"，以 [DONE] 结束。
- *
- * @param {DeepSeekMessage[]} messages
- * @param {Object} options
- * @param {(chunk: string) => void} options.onDelta - 每个文本增量回调
- * @param {AbortSignal} [options.signal]
- * @returns {Promise<{ content: string }>}
  */
 export async function requestDeepSeekStream(messages, options) {
   const res = await fetch(BASE_URL, {
@@ -193,7 +176,7 @@ export async function requestDeepSeekStream(messages, options) {
       try {
         chunk = JSON.parse(dataStr);
       } catch {
-        continue; // 忽略无法解析的行
+        continue;
       }
 
       if (chunk.error?.message) {
