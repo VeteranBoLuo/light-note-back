@@ -10,6 +10,7 @@ import queryApiLogs from './query_api_logs.js';
 import queryOperationLogs from './query_operation_logs.js';
 import getActiveUsers from './get_active_users.js';
 import getTokenUsage from './get_token_usage.js';
+import createNote from './create_note.js';
 
 export default [
   searchHelpCenter,
@@ -24,4 +25,5 @@ export default [
   queryOperationLogs,
   getActiveUsers,
   getTokenUsage,
+  createNote,
 ];
