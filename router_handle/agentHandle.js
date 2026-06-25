@@ -253,16 +253,20 @@ export async function agentChat(req, res) {
     let apiCalls = 0;
     const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
-    // ---- Planner（带工具定义，让 LLM 决定是否调工具） ----
-    const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
-    apiCalls++;
-    totalUsage.promptTokens += plannerResponse.usage.promptTokens;
-    totalUsage.completionTokens += plannerResponse.usage.completionTokens;
-    totalUsage.totalTokens += plannerResponse.usage.totalTokens;
+    // ---- 循环：Planner → 执行（最多2轮，仅首次有 XML 溢出时才跑第二轮） ----
+    for (let round = 0; round < 2; round++) {
+      const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
+      apiCalls++;
+      totalUsage.promptTokens += plannerResponse.usage.promptTokens;
+      totalUsage.completionTokens += plannerResponse.usage.completionTokens;
+      totalUsage.totalTokens += plannerResponse.usage.totalTokens;
 
-    if (!plannerResponse.toolCalls?.length) {
-      finalContent = plannerResponse.content || '';
-    } else {
+      if (!plannerResponse.toolCalls?.length) {
+        finalContent = plannerResponse.content || '';
+        break;
+      }
+
+      // 执行工具
       messages.push({ role: 'assistant', content: null, tool_calls: plannerResponse.toolCalls });
       const results = await Promise.all(
         plannerResponse.toolCalls.map(async (tc) => {
@@ -273,9 +277,13 @@ export async function agentChat(req, res) {
           return { toolCallId: tc.id, result };
         }),
       );
+
       for (const r of results) {
         messages.push({ role: 'tool', tool_call_id: r.toolCallId, content: r.result.summary });
       }
+
+      // 第一轮没有 XML 溢出 → 不需要第二轮
+      if (!plannerResponse._hadXmlToolCalls) break;
     }
 
     // ---- Final Reply（有工具调用时才需要） ----
