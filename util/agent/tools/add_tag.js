@@ -24,7 +24,11 @@ export default {
   },
   requireRoot: false,
   async execute(args, ctx) {
-    const { resourceType, resourceId, resourceName, tagName } = args;
+    // DeepSeek 可能用别名参数名，统一转换
+    const resourceType = args.resourceType || args.type || '';
+    const resourceId = args.resourceId || '';
+    const resourceName = args.resourceName || args.name || '';
+    const tagName = args.tagName || args.tag || '';
 
     if (!VALID_TYPES.includes(resourceType)) {
       return { error: 'INVALID_TYPE', message: `不支持的资源类型：${resourceType}` };

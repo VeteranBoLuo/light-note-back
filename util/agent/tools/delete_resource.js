@@ -41,7 +41,10 @@ export default {
   },
   requireRoot: false,
   async execute(args, ctx) {
-    const { resourceType, resourceName, confirmed } = args;
+    // DeepSeek 可能用别名参数名，统一转换
+    const resourceType = args.resourceType || args.type || '';
+    const resourceName = args.resourceName || args.name || args.resourceId || '';
+    const confirmed = args.confirmed === true;
 
     if (!VALID_TYPES.includes(resourceType)) {
       return { error: 'INVALID_TYPE', message: `不支持的资源类型：${resourceType}` };
