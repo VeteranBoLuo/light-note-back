@@ -13,6 +13,7 @@ import getTokenUsage from './get_token_usage.js';
 import createNote from './create_note.js';
 import queryTrash from './query_trash.js';
 import restoreTrash from './restore_trash.js';
+import addTag from './add_tag.js';
 
 export default [
   searchHelpCenter,
@@ -30,4 +31,5 @@ export default [
   createNote,
   queryTrash,
   restoreTrash,
+  addTag,
 ];
