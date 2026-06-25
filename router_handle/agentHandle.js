@@ -13,7 +13,7 @@ import pool from '../db/index.js';
 import { resultData, generateUUID } from '../util/common.js';
 import { requestDeepSeek, requestDeepSeekStream } from '../util/agent/deepseekClient.js';
 import { parseTimeRange } from '../util/agent/timeRange.js';
-import { getOrCreateSession, recordTurn, buildContext, getSessionId, getPendingAction, setPendingAction, clearPendingAction } from '../util/agent/sessionStore.js';
+import { getOrCreateSession, recordTurn, buildContext, getSessionId } from '../util/agent/sessionStore.js';
 import { buildPlannerPrompt } from '../util/agent/prompt.js';
 import toolDefsArray from '../util/agent/tools/index.js';
 
@@ -97,8 +97,6 @@ async function executeTool(name, args, ctx) {
       summary,
       dataSummary,
       params: args,
-      pendingConfirm: raw?.pendingConfirm || false,
-      confirmData: raw?.pendingConfirm ? { resourceType: raw.resourceType, resourceName: raw.resourceName, confirmMessage: raw.confirmMessage } : null,
     };
   } catch (err) {
     console.error(`[Agent] 工具 ${name} 执行失败:`, err.message);
@@ -248,51 +246,7 @@ export async function agentChat(req, res) {
     // 工具定义
     const toolDefs = getToolDefinitions();
 
-    // 检查待确认操作
-    const pendingAction = getPendingAction(session);
-    if (pendingAction && /^(确认|确认删除|是|可以|yes|confirm|ok)$/i.test(message.trim())) {
-      // 用户确认了待删除操作，直接执行工具
-      const tool = toolRegistry.get(pendingAction.toolName);
-      if (tool) {
-        const args = { ...pendingAction.params, confirmed: true };
-        const result = await executeTool(pendingAction.toolName, args, { userId, userRole, userAlias });
-        finalContent = result.summary;
-        clearPendingAction(session);
-        if (usedTools.length === 0) {
-          // 只有确认时的工具调用
-          usedTools.push({ name: pendingAction.toolName, status: result.status, params: args });
-        }
-        // 直接跳到输出
-        if (stream) {
-          res.write(`data: ${JSON.stringify({ output: { text: finalContent, session_id: getSessionId(session) } })}\n\n`);
-          res.write('data: [DONE]\n\n');
-          res.end();
-          res.removeListener('close', onClientClose);
-        } else {
-          res.send(resultData({ response: finalContent, sessionId: getSessionId(session) }));
-          res.removeListener('close', onClientClose);
-        }
-        recordTurn(session, message, finalContent, usedTools);
-        return;
-      }
-    }
-    if (pendingAction && /^(取消|不|no|cancel)$/i.test(message.trim())) {
-      clearPendingAction(session);
-      finalContent = '已取消操作。';
-      if (stream) {
-        res.write(`data: ${JSON.stringify({ output: { text: finalContent, session_id: getSessionId(session) } })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-        res.removeListener('close', onClientClose);
-      } else {
-        res.send(resultData({ response: finalContent, sessionId: getSessionId(session) }));
-        res.removeListener('close', onClientClose);
-      }
-      recordTurn(session, message, finalContent, usedTools);
-      return;
-    }
-
-    // ---- 第1步：Planner
+    /** @type {Array<{ name: string, status: string, params?: object, error?: string, dataSummary?: string }>} */
     const usedTools = [];
     let finalContent = '';
     const startTime = Date.now();
@@ -335,19 +289,9 @@ export async function agentChat(req, res) {
             error: result.error,
             dataSummary: result.dataSummary,
           });
-          return { toolCallId: tc.id, toolName: tc.function.name, result };
+          return { toolCallId: tc.id, result };
         }),
       );
-
-      // 检查是否有工具需要用户确认
-      const needConfirm = results.find(r => r.result.pendingConfirm);
-      if (needConfirm) {
-        setPendingAction(session, {
-          toolName: needConfirm.toolName,
-          params: needConfirm.result.params,
-          confirmData: needConfirm.result.confirmData,
-        });
-      }
 
       // 追加 tool 结果消息
       for (const r of results) {
@@ -359,22 +303,12 @@ export async function agentChat(req, res) {
       }
 
       // ---- 第2步：Final Reply ----
-      // 如需用户确认，先推 confirmAction 事件
-      const pendingActionForSSE = getPendingAction(session);
-      const confirmActionChunk = pendingActionForSSE?.confirmData
-        ? JSON.stringify({ output: { text: '', session_id: getSessionId(session) }, confirmAction: pendingActionForSSE.confirmData })
-        : null;
-
       messages.push({
         role: 'user',
         content: '请基于上述工具结果给出简洁的总结。',
       });
 
       if (stream) {
-        // 推确认事件
-        if (confirmActionChunk) {
-          res.write(`data: ${confirmActionChunk}\n\n`);
-        }
         // 流式：首批 buffer 掩盖 DeepSeek token 间隔 gap
         let bufferStart = 0;
         let bufferText = '';

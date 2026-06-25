@@ -56,14 +56,9 @@ function makeSession(id) {
     id,
     turns: [],
     lastTool: null,
-    pendingAction: null,
     createdAt: now(),
     updatedAt: now(),
   };
-}
-
-function pendingActionExpired(session) {
-  return session.pendingAction && now() - session.pendingAction.createdAt > 5 * 60 * 1000;
 }
 
 // ---- Redis 操作 ----
@@ -173,23 +168,4 @@ export function buildContext(session) {
 
 export function getSessionId(session) {
   return session.id;
-}
-
-export function getPendingAction(session) {
-  if (!session?.pendingAction) return null;
-  if (pendingActionExpired(session)) {
-    session.pendingAction = null;
-    return null;
-  }
-  return session.pendingAction;
-}
-
-export function setPendingAction(session, action) {
-  session.pendingAction = { ...action, createdAt: now() };
-  redisSet(session.id, session);
-}
-
-export function clearPendingAction(session) {
-  session.pendingAction = null;
-  redisSet(session.id, session);
 }
