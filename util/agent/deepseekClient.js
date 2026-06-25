@@ -120,7 +120,6 @@ export async function requestDeepSeek(messages, options = {}) {
   if (parsed.length) {
     result.toolCalls = [...result.toolCalls, ...parsed];
     result.content = result.content.replace(/<(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke[\s\S]*?<\/(?:\s*\|\|\s*DSML\s*\|\|\s*)?invoke\s*>/g, '').trim();
-    result._hadXmlToolCalls = true;
   }
 
   return result;
