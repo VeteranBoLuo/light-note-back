@@ -199,7 +199,7 @@ export async function agentChat(req, res) {
     const userAlias = req.user?.alias || '访客';
 
     // 会话
-    const session = getOrCreateSession(sessionId);
+    const session = await getOrCreateSession(sessionId);
     const contextStr = buildContext(session);
 
     // 构建 system prompt（动态：根据角色决定工具提示详略）
@@ -255,6 +255,12 @@ export async function agentChat(req, res) {
     const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     // ---- 第1步：Planner（带工具定义，让 LLM 决定是否调工具） ----
+    // 推思考状态，让前端显示"正在分析..."
+    if (stream) {
+      const thinkingPayload = `data: ${JSON.stringify({ output: { text: '⚙️ 正在分析你的问题...\n', session_id: getSessionId(session) } })}\n\n`;
+      console.log('[Agent] sending thinking event');
+      res.write(thinkingPayload);
+    }
     const plannerResponse = await requestDeepSeek(messages, { tools: toolDefs });
     apiCalls++;
     totalUsage.promptTokens += plannerResponse.usage.promptTokens;

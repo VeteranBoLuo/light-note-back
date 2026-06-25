@@ -1,63 +1,24 @@
 /**
- * 会话存储（纯内存）
+ * 会话存储（Redis 持久化 + 内存 Map 兜底）
  *
- * 参考 ai-assistant conversation-store.ts 的设计：
- * - 保留最近 N 轮对话摘要（不存完整消息，存截断后的文本 + 工具摘要）
- * - FIFO：超出上限自动丢弃最早的轮次
- * - 30 分钟无活动自动过期
- * - 会话上下文以 JSON 注入 system prompt，不逐条塞 messages[]
+ * - Redis SETEX 存储序列化 JSON，30 分钟自动过期
+ * - Redis 不可用时自动回退内存 Map
+ * - 保留最近 N 轮对话摘要
  */
+import redisClient from '../redisClient.js';
 
-// ---- 配置 ----
-
-/** 最多保留轮数 */
 const MAX_TURNS = 10;
-
-/** 单条消息最长字符数（截断） */
 const MAX_TEXT_LENGTH = 700;
-
-/** 会话过期时间（毫秒），30 分钟 */
 const TTL_MS = 30 * 60 * 1000;
-
-/** 最多保留会话数 */
 const MAX_SESSIONS = 100;
+const REDIS_PREFIX = 'chat:sess:';
+const REDIS_TTL = 30 * 60;
 
-// ---- 数据结构 ----
-
-/**
- * @typedef {Object} ToolRecord
- * @property {string} name - 工具名
- * @property {'success'|'error'} status
- * @property {Record<string, unknown>} [params] - 调用参数
- * @property {string} [error] - 错误信息
- */
-
-/**
- * @typedef {Object} ConversationTurn
- * @property {string} user - 用户消息（截断）
- * @property {string} assistant - AI 回复（截断）
- * @property {ToolRecord[]} tools - 本轮使用的工具
- * @property {number} createdAt - 时间戳
- */
-
-/**
- * @typedef {Object} LastToolContext
- * @property {string} name
- * @property {Record<string, unknown>} [params]
- * @property {string} [dataSummary] - 工具返回数据的摘要
- */
-
-/**
- * @typedef {Object} Session
- * @property {string} id
- * @property {ConversationTurn[]} turns
- * @property {LastToolContext|null} lastTool
- * @property {number} createdAt
- * @property {number} updatedAt
- */
-
-/** @type {Map<string, Session>} */
 const sessions = new Map();
+let redisOk = true;
+
+redisClient.on('error', () => { redisOk = false; });
+redisClient.on('ready', () => { redisOk = true; });
 
 // ---- 工具函数 ----
 
@@ -74,14 +35,12 @@ function isExpired(session) {
   return now() - session.updatedAt > TTL_MS;
 }
 
-/** 清理过期会话 */
 function cleanupExpired() {
   for (const [id, session] of sessions) {
     if (isExpired(session)) sessions.delete(id);
   }
 }
 
-/** 清理最旧会话（超过 MAX_SESSIONS 时） */
 function evictOldest() {
   while (sessions.size > MAX_SESSIONS) {
     let oldest = null;
@@ -92,47 +51,72 @@ function evictOldest() {
   }
 }
 
-// ---- 公开 API ----
-
-/**
- * 获取或创建会话
- * @param {string} [sessionId]
- * @returns {Session}
- */
-export function getOrCreateSession(sessionId) {
-  cleanupExpired();
-
-  const id = sessionId?.trim();
-  if (id && sessions.has(id)) {
-    const session = sessions.get(id);
-    if (!isExpired(session)) {
-      session.updatedAt = now();
-      return session;
-    }
-    sessions.delete(id);
-  }
-
-  const newId = id || `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const session = {
-    id: newId,
+function makeSession(id) {
+  return {
+    id,
     turns: [],
     lastTool: null,
     createdAt: now(),
     updatedAt: now(),
   };
+}
+
+// ---- Redis 操作 ----
+
+async function redisGet(key) {
+  if (!redisOk) return null;
+  try {
+    const raw = await redisClient.get(REDIS_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function redisSet(key, data) {
+  if (!redisOk) return;
+  try {
+    await redisClient.setEx(REDIS_PREFIX + key, REDIS_TTL, JSON.stringify(data));
+  } catch { /* ignore */ }
+}
+
+// ---- 公开 API ----
+
+export async function getOrCreateSession(sessionId) {
+  cleanupExpired();
+
+  const id = sessionId?.trim();
+  if (id) {
+    // 先尝试 Redis
+    const redisSession = await redisGet(id);
+    if (redisSession && !isExpired(redisSession)) {
+      redisSession.updatedAt = now();
+      sessions.set(id, redisSession);
+      return redisSession;
+    }
+    // Redis 没有或过期，查内存
+    if (sessions.has(id)) {
+      const session = sessions.get(id);
+      if (!isExpired(session)) {
+        session.updatedAt = now();
+        return session;
+      }
+      sessions.delete(id);
+    }
+  }
+
+  const newId = id || `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const session = makeSession(newId);
   sessions.set(newId, session);
   evictOldest();
+
+  // 异步写 Redis
+  redisSet(newId, session);
+
   return session;
 }
 
-/**
- * 记录一轮成功对话
- * @param {Session} session
- * @param {string} userMsg - 用户原始消息
- * @param {string} assistantMsg - AI 最终回复
- * @param {Array<{ name: string, status: 'success'|'error', params?: Record<string, unknown>, error?: string, dataSummary?: string }>} toolResults
- */
-export function recordTurn(session, userMsg, assistantMsg, toolResults = []) {
+export async function recordTurn(session, userMsg, assistantMsg, toolResults = []) {
   session.turns = [
     ...session.turns,
     {
@@ -148,7 +132,6 @@ export function recordTurn(session, userMsg, assistantMsg, toolResults = []) {
     },
   ].slice(-MAX_TURNS);
 
-  // 更新 lastTool：取最后一个成功的工具
   const lastSuccess = [...toolResults].reverse().find((r) => r.status === 'success');
   if (lastSuccess) {
     session.lastTool = {
@@ -159,13 +142,11 @@ export function recordTurn(session, userMsg, assistantMsg, toolResults = []) {
   }
 
   session.updatedAt = now();
+
+  // 异步写 Redis
+  redisSet(session.id, session);
 }
 
-/**
- * 构建会话上下文（JSON 字符串，注入 system prompt）
- * @param {Session} session
- * @returns {string}
- */
 export function buildContext(session) {
   if (!session.turns.length && !session.lastTool) return '';
 
@@ -185,11 +166,6 @@ export function buildContext(session) {
   ].join('\n');
 }
 
-/**
- * 获取会话 ID（供新建会话时返回给前端）
- * @param {Session} session
- * @returns {string}
- */
 export function getSessionId(session) {
   return session.id;
 }
