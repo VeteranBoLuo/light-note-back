@@ -13,7 +13,8 @@ export default {
   },
   requireRoot: false,
   async execute(args, ctx) {
-    const results = await retrieve(ctx.userId, args.query, 5);
+    const onlyPublic = ctx.userRole !== 'root';
+    const results = await retrieve(ctx.userId, args.query, 5, onlyPublic);
     return results;
   },
   transform(rows) {

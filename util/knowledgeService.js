@@ -1,14 +1,14 @@
 import pool from '../db/index.js';
 
-let helpRows = null;
-let helpCacheTimer = null;
+const helpCache = {}; // { 'public': [...], 'all': [...] }
+const helpCacheTimers = {};
 const CACHE_TTL = 5 * 60 * 1000; // 5 分钟
 
-function invalidateCache() {
-  helpRows = null;
-  if (helpCacheTimer) {
-    clearTimeout(helpCacheTimer);
-    helpCacheTimer = null;
+function invalidateCache(key) {
+  delete helpCache[key];
+  if (helpCacheTimers[key]) {
+    clearTimeout(helpCacheTimers[key]);
+    delete helpCacheTimers[key];
   }
 }
 
@@ -86,31 +86,32 @@ function calculateScore(queryTokens, title, content) {
   return score / Math.sqrt(length);
 }
 
-/**
- * 获取帮助中心数据（带缓存）
- */
-async function getHelpRows() {
-  if (helpRows) return helpRows;
+/** 获取知识库数据（带缓存） */
+ async function getHelpRows(onlyPublic) {
+   const cacheKey = onlyPublic ? 'public' : 'all';
+   if (helpCache[cacheKey]) return helpCache[cacheKey];
 
-  const [rows] = await pool.query(
-    "SELECT id, title, SUBSTRING(content, 1, 3000) AS content FROM knowledge_base ORDER BY sort ASC, created_at ASC",
-  );
+   const whereClause = onlyPublic ? " WHERE status = 'public'" : '';
+   const [rows] = await pool.query(
+     `SELECT id, title, SUBSTRING(content, 1, 3000) AS content FROM knowledge_base${whereClause} ORDER BY sort ASC, created_at ASC`,
+   );
 
-  helpRows = rows;
-  helpCacheTimer = setTimeout(invalidateCache, CACHE_TTL);
-  return rows;
-}
+   helpCache[cacheKey] = rows;
+   helpCacheTimers[cacheKey] = setTimeout(() => invalidateCache(cacheKey), CACHE_TTL);
+   return rows;
+ }
 
-/**
- * 检索与用户问题最相关的帮助中心条目
- *
- * @param {string} userId - 用户 ID（保留参数，暂未使用）
- * @param {string} query  - 用户问题
- * @param {number} topK   - 返回最相关的 N 条
- * @returns {Promise<Array<{title: string, content: string, score: number}>>}
- */
-export async function retrieve(userId, query, topK = 3) {
-  const rows = await getHelpRows();
+ /**
+  * 检索与用户问题最相关的知识库条目
+  *
+  * @param {string} userId - 用户 ID（保留参数，暂未使用）
+  * @param {string} query  - 用户问题
+  * @param {number} topK   - 返回最相关的 N 条
+  * @param {boolean} onlyPublic - 是否只返回公开条目
+  * @returns {Promise<Array<{title: string, content: string, score: number}>>}
+  */
+ export async function retrieve(userId, query, topK = 3, onlyPublic = true) {
+  const rows = await getHelpRows(onlyPublic);
   if (rows.length === 0) return [];
 
   const queryTokens = extractTokens(query);
