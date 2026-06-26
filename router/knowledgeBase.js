@@ -12,5 +12,6 @@ router.post('/delete', kbHandle.deleteKnowledgeBase);
 router.post('/batchUpdateStatus', kbHandle.batchUpdateKnowledgeStatus);
 router.post('/batchUpdateCategory', kbHandle.batchUpdateKnowledgeCategory);
 router.post('/batchDelete', kbHandle.batchDeleteKnowledgeBase);
+router.post('/categories', kbHandle.getKnowledgeCategories);
 
 export default router;

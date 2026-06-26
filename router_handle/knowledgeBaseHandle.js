@@ -82,14 +82,40 @@ export const searchKnowledgeBase = async (req, res) => {
     const where = 'WHERE ' + conditions.join(' AND ');
 
     const [rows] = await pool.query(
-      `SELECT id, title, SUBSTRING(REPLACE(REPLACE(content, '<[^>]*>', ''), '&nbsp;', ' '), 1, 500) AS content_preview, category, status, type, sort, updated_at FROM knowledge_base ${where} ORDER BY sort ASC LIMIT 50`,
-      params
+      `SELECT id, title, content, status, category FROM knowledge_base ${where} ORDER BY CASE WHEN title LIKE ? THEN 0 ELSE 1 END, sort ASC LIMIT 50`,
+      ['%' + keyword.trim() + '%', ...params]
     );
-    // Clean HTML from preview server-side
-    const items = rows.map(r => ({
-      ...r,
-      content_preview: (r.content_preview || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 500),
-    }));
+
+    // 在 JS 中提取关键字周围的上下文片段
+    const kwLower = keyword.trim().toLowerCase();
+    const items = rows.map(r => {
+      const plainText = (r.content || '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const lower = plainText.toLowerCase();
+      const pos = lower.indexOf(kwLower);
+      let snippet = '';
+      if (pos >= 0) {
+        const start = Math.max(0, pos - 60);
+        const end = Math.min(plainText.length, pos + kwLower.length + 120);
+        snippet = plainText.slice(start, end);
+        if (start > 0) snippet = '…' + snippet;
+        if (end < plainText.length) snippet = snippet + '…';
+      } else {
+        snippet = plainText.slice(0, 150);
+        if (plainText.length > 150) snippet += '…';
+      }
+      return {
+        id: r.id,
+        title: r.title,
+        contentPreview: snippet,
+        status: r.status || 'internal',
+        category: r.category || '',
+      };
+    });
+
     res.send(resultData({ items, total: items.length }));
   } catch (e) {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
@@ -200,6 +226,21 @@ export const batchDeleteKnowledgeBase = async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) return res.send(resultData(null, 400, '请选择条目'));
     await pool.query('DELETE FROM knowledge_base WHERE id IN (?)', [ids]);
     res.send(resultData({ deleted: ids.length }));
+  } catch (e) {
+    res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  }
+};
+
+/** 获取所有分类 */
+export const getKnowledgeCategories = async (req, res) => {
+  try {
+    const userId = await ensureRootRole(req, res);
+    if (!userId) return;
+    const [rows] = await pool.query('SELECT DISTINCT category FROM knowledge_base ORDER BY category ASC');
+    const categories = rows.map(r => r.category);
+    // Always include 帮助中心 as default
+    if (!categories.includes('帮助中心')) categories.unshift('帮助中心');
+    res.send(resultData(categories));
   } catch (e) {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
   }

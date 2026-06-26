@@ -97,6 +97,7 @@ export const snakeCaseKeys = function (input) {
   }
 
   // 检查输入类型并调用处理函数
+  if (input === null || input === undefined) return input;
   return toSnakeCase(JSON.parse(JSON.stringify(input)));
 };
 
