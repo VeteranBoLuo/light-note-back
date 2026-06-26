@@ -8,6 +8,7 @@ import chatRouter from '../router/chat.js';
 import jsonRouter from '../router/json.js';
 import searchRouter from '../router/search.js';
 import workbenchRouter from '../router/workbench.js';
+import knowledgeBaseRouter from '../router/knowledgeBase.js';
 import securityRouter from '../router/security.js';
 import trashRouter from '../router/trash.js';
 
@@ -203,5 +204,9 @@ export const baseRouter = [
   {
     path: '/trash',
     router: trashRouter,
+  },
+  {
+    path: '/knowledgeBase',
+    router: knowledgeBaseRouter,
   },
 ];

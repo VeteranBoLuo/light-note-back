@@ -1,4 +1,4 @@
-import searchHelpCenter from './search_help_center.js';
+import searchKnowledgeBase from './search_knowledge_base.js';
 import queryBookmarks from './query_bookmarks.js';
 import queryNotes from './query_notes.js';
 import queryFiles from './query_files.js';
@@ -15,9 +15,10 @@ import queryTrash from './query_trash.js';
 import restoreTrash from './restore_trash.js';
 import addTag from './add_tag.js';
 import queryTags from './query_tags.js';
+import writeKnowledgeBase from './write_knowledge_base.js';
 
 export default [
-  searchHelpCenter,
+  searchKnowledgeBase,
   queryBookmarks,
   queryNotes,
   queryFiles,
@@ -34,4 +35,5 @@ export default [
   restoreTrash,
   addTag,
   queryTags,
+  writeKnowledgeBase,
 ];

@@ -93,7 +93,7 @@ async function getHelpRows() {
   if (helpRows) return helpRows;
 
   const [rows] = await pool.query(
-    'SELECT id, title, SUBSTRING(content, 1, 3000) AS content FROM help_config ORDER BY sort ASC, id ASC',
+    "SELECT id, title, SUBSTRING(content, 1, 3000) AS content FROM knowledge_base ORDER BY sort ASC, created_at ASC",
   );
 
   helpRows = rows;
