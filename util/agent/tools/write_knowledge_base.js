@@ -1,5 +1,5 @@
-import { generateUUID } from '../../common.js';
-import pool from '../../db/index.js';
+import { generateUUID } from '../../../util/common.js';
+import pool from '../../../db/index.js';
 
 export default {
   name: 'write_knowledge_base',
