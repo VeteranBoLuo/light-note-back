@@ -9,8 +9,7 @@ const TABLE_CONFIG = {
 
 export default {
   name: 'query_trash',
-  description: '查询回收站中被删除的内容。支持筛选类型（书签/笔记/文件）和关键词搜索。',
-  plannerHint: '当用户问回收站里有什么、误删了什么、最近删了什么时调用。可按资源类型（bookmark/note/file）、关键词、时间范围筛选。不传 type 则查全部类型。',
+  description: '查询回收站中被删除的内容。可按资源类型（bookmark/note/file）、关键词、时间范围筛选。不传 type 则查询全部类型。',
   parameters: {
     type: 'object',
     properties: {

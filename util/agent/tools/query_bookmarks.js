@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'query_bookmarks',
-  description: '查询用户的书签。可按关键词、标签名、时间范围筛选。',
-  plannerHint: '当用户想查询自己收藏的网址、书签时调用。支持按关键词（匹配名称和URL）、标签名、时间范围筛选。跨类型搜索（同时查书签+笔记+文件）时建议同时调 query_notes 和 query_files。',
+  description: '查询用户的书签。可按关键词（匹配名称和URL）、标签名、时间范围筛选。跨类型搜索时可同时调用 query_notes 和 query_files。',
   parameters: {
     type: 'object',
     properties: {

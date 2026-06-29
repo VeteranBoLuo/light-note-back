@@ -2,8 +2,7 @@ import pool from '../../../db/index.js';
 
 export default {
   name: 'query_users',
-  description: '查询平台用户列表。可按关键词（昵称/邮箱）筛选。',
-  plannerHint: '仅管理员可用。当管理员查询用户列表、查找特定用户、了解平台注册用户时调用。支持按昵称或邮箱关键词搜索。',
+  description: '查询平台用户列表。可按关键词匹配用户昵称、邮箱或用户ID。',
   parameters: {
     type: 'object',
     properties: {

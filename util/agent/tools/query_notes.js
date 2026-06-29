@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'query_notes',
-  description: '查询用户的笔记。可按关键词（匹配标题和内容）、时间范围筛选。',
-  plannerHint: '当用户想查询自己的笔记时调用。支持按关键词（匹配标题和内容）、时间范围筛选。查询结果包含笔记标题、创建时间和内容片段。管理员可通过 user 参数查他人笔记。',
+  description: '查询用户的笔记。可按关键词（匹配标题和内容）、时间范围筛选，返回笔记标题和创建时间。管理员可通过 user 参数查询指定用户的笔记。',
   parameters: {
     type: 'object',
     properties: {

@@ -2,8 +2,7 @@ import { retrieve } from '../../knowledgeService.js';
 
 export default {
   name: 'search_knowledge_base',
-  description: '搜索知识库，获取轻笺的使用说明、功能教程、常见问题解答、内部知识。当用户问"怎么用"、"什么是"、"如何"等操作性问题时调用。',
-  plannerHint: '当用户问操作性问题（怎么用、在哪里设置、是什么功能、如何操作）时，必须优先调用此工具查询知识库。不能在未查询的情况下凭知识回答。关键词示例：标签管理、回收站、云空间上传、导出书签。',
+  description: '搜索知识库，获取轻笺的使用说明、功能教程、常见问题解答和内部知识。用于回答"怎么用""在哪里设置""是什么功能""如何操作"等操作性问题。',
   parameters: {
     type: 'object',
     properties: {

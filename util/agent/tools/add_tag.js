@@ -4,7 +4,6 @@ import { insertData } from '../../../util/common.js';
 export default {
   name: 'add_tag',
   description: '创建一个新标签。如果标签已存在则返回已有信息。只创建标签，不关联资源。',
-  plannerHint: '当用户想创建新标签时调用。只需提供标签名称。',
   parameters: {
     type: 'object',
     properties: {

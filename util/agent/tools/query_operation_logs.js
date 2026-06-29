@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'query_operation_logs',
-  description: '查询用户操作日志。可按关键词、模块、用户、时间范围筛选。',
-  plannerHint: '仅管理员可用。当管理员查询用户操作记录、审计用户行为时调用。可按关键词、模块（bookmark/note/file/security）、用户、时间范围筛选。',
+  description: '查询用户操作日志。可按关键词、模块（bookmark/note/file/security）、时间范围筛选，返回操作模块、内容和时间。',
   parameters: {
     type: 'object',
     properties: {

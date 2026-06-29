@@ -3,8 +3,7 @@ import pool from '../../../db/index.js';
 
 export default {
   name: 'write_knowledge_base',
-  description: '新增或更新知识库条目。仅限 root 用户使用。当用户要求"记录""写一篇""存到知识库""新增知识"时调用。如果 title 匹配已有条目则更新，否则新建。',
-  plannerHint: '当用户想让 AI 帮忙新增知识到知识库、记录某个功能的说明、或更新已有知识时调用。仅 root 可用。',
+  description: '新增或更新知识库条目。当用户要求"记录""写一篇""存到知识库""新增知识"时使用。如果 title 匹配已有条目则更新，否则新建。仅限 root 用户使用。',
   parameters: {
     type: 'object',
     properties: {

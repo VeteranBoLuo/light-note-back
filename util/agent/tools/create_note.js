@@ -3,8 +3,7 @@ import { resultData, insertData } from '../../../util/common.js';
 
 export default {
   name: 'create_note',
-  description: '创建一条新笔记。设定标题和内容后直接保存。',
-  plannerHint: '当用户想快速记笔记、保存想法时调用。参数 title 为笔记标题，content 为笔记正文内容。创建成功后返回新笔记的 ID。不处理标签关联，仅创建笔记本身。',
+  description: '创建一条新笔记。参数 title 为笔记标题，content 为正文内容。仅创建笔记本身，不处理标签关联。',
   parameters: {
     type: 'object',
     properties: {

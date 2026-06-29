@@ -2,8 +2,7 @@ import pool from '../../../db/index.js';
 
 export default {
   name: 'query_tags',
-  description: '查询用户的所有标签。可按关键词搜索标签名称。',
-  plannerHint: '当用户问自己有哪些标签、想查看或管理标签时调用。支持关键词搜索过滤标签名称。',
+  description: '查询用户的所有标签。可按关键词模糊匹配标签名称，返回每个标签关联的资源数量。仅查询，不创建或修改标签。',
   parameters: {
     type: 'object',
     properties: {

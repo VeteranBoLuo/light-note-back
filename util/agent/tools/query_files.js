@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'query_files',
-  description: '查询用户云空间的文件。可按关键词（匹配文件名）、文件类型、时间范围筛选。',
-  plannerHint: '当用户想查询云空间存储的文件时调用。支持按关键词（匹配文件名）、文件类型（image/pdf/zip/doc 等）、时间范围筛选。',
+  description: '查询用户云空间的文件。可按关键词（匹配文件名）、文件类型（image/document/video/audio/other）、时间范围筛选。',
   parameters: {
     type: 'object',
     properties: {

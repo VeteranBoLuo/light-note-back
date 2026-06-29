@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'get_token_usage',
-  description: '查询 Token 消耗统计。可按时间范围汇总，也可指定用户。用来回答"今天消耗了多少token"、"本周费用多少"等问题。',
-  plannerHint: '仅管理员可用。当管理员查询 AI Token 消耗、费用统计时调用。可按时间范围汇总，可选指定用户。返回请求次数、token 数和费用合计。',
+  description: '查询 Token 消耗统计，返回请求次数、token 数和费用合计。可按时间范围汇总。',
   parameters: {
     type: 'object',
     properties: {

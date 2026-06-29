@@ -2,8 +2,7 @@ import pool from '../../../db/index.js';
 
 export default {
   name: 'get_storage_usage',
-  description: '查询当前用户的云空间存储用量，包括文件数量和总占用空间。',
-  plannerHint: '当用户问云空间存储用量、还剩多少空间、总文件数时调用。返回文件总数（正常+回收站）和总占用空间。不支持按时间筛选，只返回当前总量。',
+  description: '查询当前用户的云空间存储用量，返回正常文件数量和占用空间，并在有回收站文件时附带回收站数量、大小及合计。不支持按时间筛选。',
   parameters: {
     type: 'object',
     properties: {

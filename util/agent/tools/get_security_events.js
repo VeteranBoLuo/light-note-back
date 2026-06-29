@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'get_security_events',
-  description: '查询安全攻击事件记录。可按事件类型、IP、处理状态、时间范围筛选。',
-  plannerHint: '仅管理员可用。当管理员查询安全攻击事件、威胁详情、攻击记录时调用。支持按攻击类型、源IP、处理状态（已处理/未处理）、时间范围筛选。',
+  description: '查询安全攻击事件记录。可按攻击类型、源IP、处理状态（handled/unhandled）、时间范围筛选。',
   parameters: {
     type: 'object',
     properties: {

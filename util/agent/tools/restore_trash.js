@@ -9,8 +9,7 @@ const TABLE_CONFIG = {
 
 export default {
   name: 'restore_trash',
-  description: '从回收站恢复已删除的内容。支持恢复单个、按类型恢复、按时间范围恢复。',
-  plannerHint: '当用户想恢复误删的书签、笔记或文件时调用。可指定 type 恢复某类全部、id 恢复单个、或 timeRange 恢复某段时间删除的。至少要提供一个筛选条件。',
+  description: '从回收站恢复已删除的内容。支持按 id 恢复单个、按 type 恢复某类内容、按 timeRange 恢复某时间段删除的内容；至少应提供一个筛选条件以避免误恢复。',
   parameters: {
     type: 'object',
     properties: {

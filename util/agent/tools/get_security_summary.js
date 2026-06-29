@@ -2,8 +2,7 @@ import pool from '../../../db/index.js';
 
 export default {
   name: 'get_security_summary',
-  description: '获取安全概览，包括 IP 风险排行和账号风险排行。',
-  plannerHint: '仅管理员可用。当管理员查询安全概览、整体风险状况、平台安全态势时调用。返回风险最高的 IP 和账号排行，不返回事件明细。要查具体事件请用 get_security_events。',
+  description: '获取安全概览，返回风险最高的 IP 和账号排行。不返回事件明细；查询具体事件请使用 get_security_events。',
   parameters: {
     type: 'object',
     properties: {

@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'query_api_logs',
-  description: '查询 API 请求日志。可按关键词、用户、时间范围筛选。',
-  plannerHint: '仅管理员可用。当管理员查询 API 请求日志、排查接口调用情况时调用。可按请求路径关键词、用户、时间范围筛选。',
+  description: '查询 API 请求日志。可按请求路径关键词、时间范围筛选，返回接口路径、状态码和请求时间。',
   parameters: {
     type: 'object',
     properties: {

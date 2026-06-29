@@ -3,8 +3,7 @@ import { parseTimeRange } from '../timeRange.js';
 
 export default {
   name: 'get_active_users',
-  description: '查询最近活跃的用户排行。按 API 请求次数降序排列。用来回答"最近哪些用户活跃"、"谁用得最多"等问题。',
-  plannerHint: '仅管理员可用。当管理员查询最近活跃用户排行、谁在用平台用得最多时调用。按 API 请求次数降序排列，支持按时间范围筛选。',
+  description: '查询最近活跃的用户排行，按 API 请求次数降序排列。支持按时间范围筛选。',
   parameters: {
     type: 'object',
     properties: {
