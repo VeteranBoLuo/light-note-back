@@ -18,8 +18,10 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 import { resultData, snakeCaseKeys, insertData } from '../util/common.js';
 import pool from '../db/index.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 router.post('/uploadImage', upload.single('file'), async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     if (!req.file) {
       return res.send(resultData(null, 400, '没有上传文件'));

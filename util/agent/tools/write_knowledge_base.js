@@ -16,6 +16,7 @@ export default {
     required: ['title'],
   },
   requireRoot: true,
+  isWrite: true,
   async execute(args, ctx) {
     const title = (args.title || '').trim();
     if (!title) return { error: 'TITLE_REQUIRED', message: '标题不能为空' };

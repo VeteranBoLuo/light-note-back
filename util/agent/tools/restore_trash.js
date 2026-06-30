@@ -19,6 +19,7 @@ export default {
     },
   },
   requireRoot: false,
+  isWrite: true,
   async execute(args, ctx) {
     const { type, id } = args;
     const time = parseTimeRange(args.timeRange);

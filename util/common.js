@@ -13,7 +13,7 @@ import securityRouter from '../router/security.js';
 import trashRouter from '../router/trash.js';
 
 export const resultData = function (data = null, status = 200, msg = '') {
-  if (status !== 200 && status !== 'visitor') {
+  if (status !== 200 && status !== 'visitor' && status !== 'preview') {
     console.error(status, msg + ' ' + formatDateTime(new Date()));
   }
   return {

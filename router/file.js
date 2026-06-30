@@ -13,6 +13,7 @@ import {
 } from '../util/obsClient.js';
 import { FILE_CATEGORY_ORDER, getFileExtension, resolveFileCategory } from '../util/fileCategory.js';
 import * as fileHandle from '../router_handle/fileHandle.js';
+import { ensureNotVisitor } from '../util/auth.js';
 const router = express.Router();
 
 const backupUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -46,6 +47,7 @@ const formatFileRecord = (file) => {
 };
 
 router.post('/uploadFiles', async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const { files } = req.body || {};
@@ -90,6 +92,7 @@ router.post('/uploadFiles', async (req, res) => {
 
 // 前端直传 OBS 成功后回调此接口，将文件信息写入数据库
 router.post('/confirmUpload', async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user.id;
@@ -259,6 +262,7 @@ router.post('/downloadFileById', async (req, res) => {
 
 // 软删除文件（移入回收站，OBS 对象保留）
 router.post('/deleteFileById', async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     let { id, ids } = req.body;

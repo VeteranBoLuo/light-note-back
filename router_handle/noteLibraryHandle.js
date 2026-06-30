@@ -1,8 +1,10 @@
 import pool from '../db/index.js';
 import { snakeCaseKeys, resultData, mergeExistingProperties, insertData } from '../util/common.js';
 import { RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '../util/resourceTags.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 export const addNote = (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const params = {
@@ -24,6 +26,7 @@ export const addNote = (req, res) => {
 };
 
 export const updateNote = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const params = {
@@ -113,6 +116,7 @@ export const getNoteDetail = (req, res) => {
 };
 
 export const delNote = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const ids = req.body.ids;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -133,6 +137,7 @@ export const delNote = async (req, res) => {
 };
 
 export const updateNoteSort = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -153,6 +158,7 @@ export const updateNoteSort = async (req, res) => {
 };
 
 export const addNoteTag = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const name = String(req.body.name || '').trim();
@@ -190,6 +196,7 @@ export const addNoteTag = async (req, res) => {
 };
 
 export const editNoteTag = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const name = String(req.body.name || '').trim();
@@ -282,6 +289,7 @@ export const getNoteTags = (req, res) => {
 };
 
 export const delNoteTag = (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const tagId = req.body.id;
@@ -299,6 +307,7 @@ export const delNoteTag = (req, res) => {
 };
 
 export const updateNoteTags = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const { noteId, tags } = req.body;

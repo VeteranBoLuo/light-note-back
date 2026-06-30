@@ -215,6 +215,18 @@ export const requireRole = (...roles) => {
   };
 };
 
+// 游客只读预览守卫：游客（或无身份）执行写操作时，返回 status 'preview' 触发前端注册软引导。
+// 注意：必须用 'preview'，不能用 401/403/'visitor'——前端 request.ts 把这些当作会话过期/硬错误，
+// 只有 'preview' 才会派发 light-note:preview-blocked 弹注册引导。
+// 用法：if (!ensureNotVisitor(req, res)) return; —— 事务函数须放在 pool.getConnection() 之前。
+export const ensureNotVisitor = (req, res) => {
+  if (!req.user?.id || req.user.role === 'visitor') {
+    res.send(resultData(null, 'preview', '预览模式：注册后即可拥有你自己的轻笺，免费保存书签、笔记和文件'));
+    return false;
+  }
+  return true;
+};
+
 export const startSessionMaintenance = () => {
   cleanupExpiredSessions().catch((e) => console.error('清理过期登录态失败:', e.message));
   setInterval(

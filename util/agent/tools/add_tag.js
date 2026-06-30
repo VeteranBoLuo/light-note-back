@@ -12,6 +12,7 @@ export default {
     required: ['tagName'],
   },
   requireRoot: false,
+  isWrite: true,
   async execute(args, ctx) {
     const tagName = (args.tagName || args.tag || '').trim();
     if (!tagName) {

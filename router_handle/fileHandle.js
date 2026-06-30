@@ -5,6 +5,7 @@ import { bucketBaseUrl, buildObjectKey, copyObjectInObs, deleteObjectFromObs } f
 import { buildSignedDownloadUrl } from '../router/file.js';
 import { getFileExtension, resolveFileCategory } from '../util/fileCategory.js';
 import { queryTagsForResource, RESOURCE_TYPE, replaceResourceTagRelations, validateUserTags } from '../util/resourceTags.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 export const getFileInfo = async (req, res) => {
   try {
@@ -34,6 +35,7 @@ export const getFileInfo = async (req, res) => {
 };
 
 export const updateFile = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const { id, fileName } = req.body;
 
@@ -134,6 +136,7 @@ export const queryFolder = async (req, res) => {
 };
 
 export const addFolder = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { name } = req.body;
@@ -152,6 +155,7 @@ export const addFolder = async (req, res) => {
 
 // 文件关联文件夹
 export const associateFile = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     let { folderId, fileIds } = req.body;
@@ -175,6 +179,7 @@ export const associateFile = async (req, res) => {
 
 // 删除文件夹（物理删除，其下文件 folder_id 由 FK ON DELETE SET NULL 自动置空）
 export const deleteFolder = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { id } = req.body;
@@ -192,6 +197,7 @@ export const deleteFolder = async (req, res) => {
 
 // 修改文件夹名称
 export const updateFolder = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const { id, name } = req.body;
@@ -203,6 +209,7 @@ export const updateFolder = async (req, res) => {
 };
 
 export const updateFolderSort = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -239,6 +246,7 @@ export const getFileTags = async (req, res) => {
 };
 
 export const updateFileTags = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user.id;

@@ -1,5 +1,6 @@
 import pool from '../db/index.js';
 import { snakeCaseKeys, resultData, insertData } from '../util/common.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 const OPINION_STATUS = {
   PENDING: 'pending',
@@ -262,6 +263,7 @@ export const getOpinionNotice = async (req, res) => {
 };
 
 export const delOpinion = (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const id = req.body.id; // 获取标签ID
     let sql = `UPDATE opinion SET del_flag=1  WHERE id=?`;

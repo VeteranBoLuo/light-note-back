@@ -1,5 +1,6 @@
 import { resultData } from '../util/common.js';
 import pool from '../db/index.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 /**
  * 根据名称查询JSON配置
@@ -32,6 +33,7 @@ export const getConfigByName = (req, res) => {
 };
 
 export const updateConfig = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const { name, jsonContent } = req.body;
     const [result] = await pool.query('UPDATE config_json SET json_content = ? WHERE name = ?', [jsonContent, name]);
@@ -47,6 +49,7 @@ export const updateConfig = async (req, res) => {
  * @param {Object} res - 响应对象
  */
 export const deleteConfigById = (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const { id } = req.query;
 

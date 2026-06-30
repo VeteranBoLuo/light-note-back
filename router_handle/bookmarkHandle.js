@@ -10,6 +10,7 @@ import {
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import { ensureNotVisitor } from '../util/auth.js';
 export const queryTagList = (req, res) => {
   const userId = req.user.id;
   try {
@@ -123,6 +124,7 @@ WHERE t.user_id=? AND tb.resource_id=? AND t.del_flag=0`;
 };
 
 export const updateTagSort = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -162,6 +164,7 @@ export const getTagDetail = (req, res) => {
 };
 
 export const addTag = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const connection = await pool.getConnection();
     try {
@@ -237,6 +240,7 @@ export const addTag = async (req, res) => {
 };
 
 export const delTag = (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const id = req.body.id;
     pool
@@ -253,6 +257,7 @@ export const delTag = (req, res) => {
 };
 
 export const updateTag = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -425,6 +430,7 @@ ORDER BY
 };
 
 export const addBookmark = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -466,6 +472,7 @@ export const addBookmark = async (req, res) => {
 };
 
 export const updateBookmark = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -531,6 +538,7 @@ export const getBookmarkDetail = (req, res) => {
 };
 
 export const delBookmark = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const userId = req.user.id;
     const id = req.body.id;
@@ -586,6 +594,7 @@ export const getCommonBookmarks = async (req, res) => {
 };
 
 export const updateBookmarkSort = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
@@ -642,6 +651,7 @@ const parseBookmarksFromHtml = (html = '') => {
 
 // HTML 书签导入：新增缺失的标签/书签，并建立关联
 export const importBookmarksHtml = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const userId = req.user.id;
 
   if (!userId) {

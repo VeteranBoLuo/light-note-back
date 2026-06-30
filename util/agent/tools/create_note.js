@@ -13,6 +13,7 @@ export default {
     required: ['title'],
   },
   requireRoot: false,
+  isWrite: true,
   async execute(args, ctx) {
     const { title, content = '' } = args;
     if (!title?.trim()) {

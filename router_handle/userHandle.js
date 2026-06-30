@@ -5,7 +5,7 @@ import request from '../http/request.js';
 import { fetchWithTimeout, validateQueryParams } from '../util/request.js';
 import { verifyPassword, hashPassword } from '../util/password.js';
 import nodeMail from '../util/nodemailer.js';
-import { issueLoginSession, logoutCurrentSession } from '../util/auth.js';
+import { issueLoginSession, logoutCurrentSession, ensureNotVisitor } from '../util/auth.js';
 import { removeUserSessions } from '../util/sessionStore.js';
 import { getClientIp } from '../util/security/requestContext.js';
 import { getIpReputation } from '../util/security/services/ipReputation.js';
@@ -384,6 +384,7 @@ export const getUserList = (req, res) => {
 };
 
 export const saveUserInfo = (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   try {
     const targetId = req.body.id || req.user?.id;
     const isRoot = req.user?.role === 'root';

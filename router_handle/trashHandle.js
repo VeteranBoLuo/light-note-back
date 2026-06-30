@@ -1,6 +1,7 @@
 import pool from '../db/index.js';
 import { resultData } from '../util/common.js';
 import { deleteObjectFromObs, buildObjectKey } from '../util/obsClient.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 const RESOURCE_TYPES = ['bookmark', 'note', 'file'];
 const TRASH_EXPIRY_DAYS = 30;
@@ -185,6 +186,7 @@ export const getTrashFileSize = async (req, res) => {
 };
 
 export const restoreTrash = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user?.id;
@@ -219,6 +221,7 @@ export const restoreTrash = async (req, res) => {
 };
 
 export const permanentDelete = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user?.id;
@@ -274,6 +277,7 @@ export const permanentDelete = async (req, res) => {
 };
 
 export const restoreAllTrash = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user?.id;
@@ -303,6 +307,7 @@ export const restoreAllTrash = async (req, res) => {
 };
 
 export const emptyTrash = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user?.id;

@@ -2,6 +2,7 @@ import pool from '../db/index.js';
 import { resultData } from '../util/common.js';
 import { resolveFileCategory } from '../util/fileCategory.js';
 import { normalizeTagIds, validateUserTags } from '../util/resourceTags.js';
+import { ensureNotVisitor } from '../util/auth.js';
 
 const SEARCH_TYPES = ['bookmark', 'note', 'file', 'tag'];
 const BATCH_EDITABLE_TYPES = ['bookmark', 'note', 'file'];
@@ -429,6 +430,7 @@ export const globalSearch = async (req, res) => {
 };
 
 export const batchUpdateResourceTags = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user?.id;
@@ -610,6 +612,7 @@ export const getBatchResourceTagWorkspace = async (req, res) => {
 };
 
 export const batchDeleteResources = async (req, res) => {
+  if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
     const userId = req.user?.id;

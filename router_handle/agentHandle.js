@@ -72,6 +72,15 @@ async function executeTool(name, args, ctx) {
     return { status: 'error', summary: '权限不足：仅管理员可查询此数据', error: 'FORBIDDEN' };
   }
 
+  // 游客只读预览：写工具对游客（或无身份）拒绝，引导注册；只读工具照常放行
+  if (tool.isWrite && (ctx.userRole === 'visitor' || !ctx.userId || ctx.userId === 'visitor')) {
+    return {
+      status: 'error',
+      summary: '预览模式：登录注册后，我才能帮你新建笔记、标签或恢复回收站内容。',
+      error: 'GUEST_FORBIDDEN',
+    };
+  }
+
   // 如果有 user 参数，解析目标用户（仅 root 可用）
   if (args.user && String(args.user).trim()) {
     if (ctx.userRole !== 'root') {
