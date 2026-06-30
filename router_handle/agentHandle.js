@@ -76,7 +76,7 @@ async function executeTool(name, args, ctx) {
   if (tool.isWrite && (ctx.userRole === 'visitor' || !ctx.userId || ctx.userId === 'visitor')) {
     return {
       status: 'error',
-      summary: '预览模式：登录注册后，我才能帮你新建笔记、标签或恢复回收站内容。',
+      summary: '预览模式仅支持浏览查看，新建、编辑、恢复等操作需要注册；注册后即可拥有你自己的轻笺。',
       error: 'GUEST_FORBIDDEN',
     };
   }

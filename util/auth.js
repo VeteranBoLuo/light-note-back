@@ -221,7 +221,7 @@ export const requireRole = (...roles) => {
 // 用法：if (!ensureNotVisitor(req, res)) return; —— 事务函数须放在 pool.getConnection() 之前。
 export const ensureNotVisitor = (req, res) => {
   if (!req.user?.id || req.user.role === 'visitor') {
-    res.send(resultData(null, 'preview', '预览模式：注册后即可拥有你自己的轻笺，免费保存书签、笔记和文件'));
+    res.send(resultData(null, 'preview', '预览模式仅支持浏览查看，新建、编辑、删除等操作需要注册。注册后即可拥有你自己的轻笺，免费收藏书签、记笔记、存文件。'));
     return false;
   }
   return true;
