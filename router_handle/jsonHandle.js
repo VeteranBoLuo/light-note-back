@@ -34,6 +34,7 @@ export const getConfigByName = (req, res) => {
 
 export const updateConfig = async (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
+  if (req.user?.role !== "root") return res.send(resultData(null, 403, "没有操作权限"));
   try {
     const { name, jsonContent } = req.body;
     const [result] = await pool.query('UPDATE config_json SET json_content = ? WHERE name = ?', [jsonContent, name]);
@@ -50,6 +51,7 @@ export const updateConfig = async (req, res) => {
  */
 export const deleteConfigById = (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
+  if (req.user?.role !== "root") return res.send(resultData(null, 403, "没有操作权限"));
   try {
     const { id } = req.query;
 

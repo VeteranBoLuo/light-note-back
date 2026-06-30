@@ -128,11 +128,12 @@ export const updateTagSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
+    const userId = req.user.id;
     const { tags } = req.body;
     for (const tag of tags) {
       const { id, sort } = tag;
-      const sql = 'UPDATE tag SET sort = ? WHERE id = ?';
-      await connection.query(sql, [sort, id]);
+      const sql = 'UPDATE tag SET sort = ? WHERE id = ? AND user_id = ?';
+      await connection.query(sql, [sort, id, userId]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));
@@ -242,9 +243,10 @@ export const addTag = async (req, res) => {
 export const delTag = (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
   try {
+    const userId = req.user.id;
     const id = req.body.id;
     pool
-      .query(`DELETE FROM tag WHERE id = ?`, [id])
+      .query(`DELETE FROM tag WHERE id = ? AND user_id = ?`, [id, userId])
       .then(([result]) => {
         res.send(resultData(result));
       })
@@ -277,6 +279,12 @@ export const updateTag = async (req, res) => {
 
     if (relatedTagIds && relatedTagIds.length > 4) {
       throw new Error('最多选择4个相关标签');
+    }
+    // 归属校验：确认标签属于当前用户，避免越权改动及破坏关系表
+    const [own] = await connection.query('SELECT id FROM tag WHERE id = ? AND user_id = ? AND del_flag = 0', [id, userId]);
+    if (own.length === 0) {
+      await connection.rollback();
+      return res.send(resultData(null, 403, '无权限操作'));
     }
     // 更新tag表
     const updateTagSql = `UPDATE tag SET ? WHERE id = ?`;
@@ -483,6 +491,12 @@ export const updateBookmark = async (req, res) => {
     if (checkRes.length > 0 && checkRes[0].id != id) {
       throw new Error('书签已存在');
     }
+    // 归属校验：确认书签属于当前用户，避免越权改动及破坏关系表
+    const [own] = await connection.query('SELECT id FROM bookmark WHERE id = ? AND user_id = ? AND del_flag = 0', [id, userId]);
+    if (own.length === 0) {
+      await connection.rollback();
+      return res.send(resultData(null, 403, '无权限操作'));
+    }
     req.body.iconUrl = null;
     const sql = `update bookmark set ? where id=?`;
     const [updateResult] = await connection.query(sql, [
@@ -598,11 +612,12 @@ export const updateBookmarkSort = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
+    const userId = req.user.id;
     const { bookmarks } = req.body;
     for (const bookmark of bookmarks) {
       const { id, sort } = bookmark;
-      const sql = 'UPDATE bookmark SET sort = ? WHERE id = ?';
-      await connection.query(sql, [sort, id]);
+      const sql = 'UPDATE bookmark SET sort = ? WHERE id = ? AND user_id = ?';
+      await connection.query(sql, [sort, id, userId]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));

@@ -38,7 +38,7 @@ export const updateNote = async (req, res) => {
       await connection.beginTransaction();
       // 更新 note 表，排除 tags
       const updateParams = mergeExistingProperties(params, [], ['id', 'tags']);
-      await connection.query('update note set ? where id=?', [snakeCaseKeys(updateParams), req.body.id]);
+      await connection.query('update note set ? where id=? and create_by=?', [snakeCaseKeys(updateParams), req.body.id, userId]);
       if (params.tags && Array.isArray(params.tags)) {
         const tagIds = await validateUserTags(connection, { tagIds: params.tags, userId });
         await replaceResourceTagRelations(connection, {
@@ -138,14 +138,15 @@ export const delNote = async (req, res) => {
 
 export const updateNoteSort = async (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
+  const userId = req.user.id;
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction(); // 开始事务
     const { notes } = req.body;
     for (const note of notes) {
       const { id, sort } = note;
-      const sql = 'UPDATE note SET sort = ?, update_time = update_time WHERE id = ?';
-      await connection.query(sql, [sort, id]);
+      const sql = 'UPDATE note SET sort = ?, update_time = update_time WHERE id = ? AND create_by = ?';
+      await connection.query(sql, [sort, id, userId]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));

@@ -40,8 +40,8 @@ export const updateFile = async (req, res) => {
     const { id, fileName } = req.body;
 
     // 查询文件信息
-    const sql = 'SELECT * FROM files WHERE id = ?';
-    const [results] = await pool.query(sql, [id]);
+    const sql = 'SELECT * FROM files WHERE id = ? AND create_by = ? AND del_flag = 0';
+    const [results] = await pool.query(sql, [id, req.user.id]);
 
     if (results.length === 0) {
       return res.send(resultData(null, 404, '数据库中未找到文件'));
@@ -89,8 +89,8 @@ export const updateFile = async (req, res) => {
       return res.send(resultData(null, 500, 'OBS 文件重命名失败: ' + obsError.message));
     }
 
-    const updateSql = 'UPDATE files SET file_name = ?, obs_key = ?, directory = ? WHERE id = ?';
-    await pool.query(updateSql, [finalFileName, targetKey, `${bucketBaseUrl}/files/${file.create_by}/`, id]);
+    const updateSql = 'UPDATE files SET file_name = ?, obs_key = ?, directory = ? WHERE id = ? AND create_by = ?';
+    await pool.query(updateSql, [finalFileName, targetKey, `${bucketBaseUrl}/files/${file.create_by}/`, id, req.user.id]);
 
     res.send(resultData({ id, fileName: finalFileName }));
   } catch (e) {
@@ -150,6 +150,8 @@ export const addFolder = async (req, res) => {
     res.send(resultData(result.insertId, 200, '新增文件夹成功'));
   } catch (e) {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 };
 
@@ -158,6 +160,7 @@ export const associateFile = async (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
+    const userId = req.user.id;
     let { folderId, fileIds } = req.body;
     if (!folderId) {
       folderId = null;
@@ -165,9 +168,18 @@ export const associateFile = async (req, res) => {
     if (!Array.isArray(fileIds) || fileIds.length === 0) {
       return res.send(resultData(null, 400, 'fileIds 必须是一个非空数组'));
     }
+    if (folderId) {
+      const [folderRows] = await connection.query(
+        `SELECT id FROM folders WHERE id = ? AND create_by = ?`,
+        [folderId, userId],
+      );
+      if (folderRows.length === 0) {
+        return res.send(resultData(null, 404, '文件夹不存在或无权限'));
+      }
+    }
     const placeholders = fileIds.map(() => '?').join(',');
-    const sql = `UPDATE files SET folder_id = ? WHERE id IN (${placeholders})`;
-    const params = [folderId, ...fileIds];
+    const sql = `UPDATE files SET folder_id = ? WHERE id IN (${placeholders}) AND create_by = ?`;
+    const params = [folderId, ...fileIds, userId];
     const [result] = await connection.query(sql, params);
     res.send(resultData(result.affectedRows, 200, '关联成功'));
   } catch (e) {
@@ -184,7 +196,11 @@ export const deleteFolder = async (req, res) => {
   try {
     const { id } = req.body;
     await connection.beginTransaction();
-    await connection.query(`DELETE FROM folders WHERE id = ?`, [id]);
+    const [result] = await connection.query(`DELETE FROM folders WHERE id = ? AND create_by = ?`, [id, req.user.id]);
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return res.send(resultData(null, 404, '文件夹不存在或无权限'));
+    }
     await connection.commit();
     res.send(resultData(null, 200, '删除成功'));
   } catch (e) {
@@ -201,10 +217,19 @@ export const updateFolder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const { id, name } = req.body;
-    const [result] = await connection.query(`UPDATE folders SET name = ? WHERE id = ?`, [name, id]);
+    const [result] = await connection.query(`UPDATE folders SET name = ? WHERE id = ? AND create_by = ?`, [
+      name,
+      id,
+      req.user.id,
+    ]);
+    if (result.affectedRows === 0) {
+      return res.send(resultData(null, 404, '文件夹不存在或无权限'));
+    }
     res.send(resultData(result.affectedRows, 200, '修改成功'));
   } catch (e) {
     res.send(resultData(null, 500, '服务器内部错误: ' + e.message));
+  } finally {
+    connection.release();
   }
 };
 
@@ -212,12 +237,13 @@ export const updateFolderSort = async (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
   const connection = await pool.getConnection();
   try {
+    const userId = req.user.id;
     await connection.beginTransaction(); // 开始事务
     const { tags } = req.body;
     for (const tag of tags) {
       const { id, sort } = tag;
-      const sql = 'UPDATE folders SET sort = ? WHERE id = ?';
-      await connection.query(sql, [sort, id]);
+      const sql = 'UPDATE folders SET sort = ? WHERE id = ? AND create_by = ?';
+      await connection.query(sql, [sort, id, userId]);
     }
     await connection.commit(); // 提交事务
     res.send(resultData(null, 200, 'Sort updated successfully'));
@@ -255,6 +281,11 @@ export const updateFileTags = async (req, res) => {
       return res.send(resultData(null, 400, '缺少文件ID'));
     }
     await connection.beginTransaction();
+    const [own] = await connection.query(`SELECT id FROM files WHERE id = ? AND create_by = ?`, [id, userId]);
+    if (own.length === 0) {
+      await connection.rollback();
+      return res.send(resultData(null, 404, '数据库中未找到文件'));
+    }
     const tagIds = await validateUserTags(connection, { tagIds: tags, userId });
     await replaceResourceTagRelations(connection, {
       tagIds,

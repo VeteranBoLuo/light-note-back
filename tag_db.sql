@@ -461,6 +461,7 @@ CREATE TABLE `user` (
   `id` varchar(255) NOT NULL,
   `alias` varchar(255) NOT NULL DEFAULT '默认昵称' COMMENT '别名，昵称',
   `password` varchar(255) DEFAULT NULL,
+  `password_method` varchar(20) NOT NULL DEFAULT 'plain' COMMENT '密码存储方式: plain(明文待升级)/scrypt',
   `email` varchar(255) DEFAULT NULL,
   `phone_number` int(11) DEFAULT NULL,
   `role` varchar(255) DEFAULT NULL,

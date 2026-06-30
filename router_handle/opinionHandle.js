@@ -266,10 +266,21 @@ export const delOpinion = (req, res) => {
   if (!ensureNotVisitor(req, res)) return;
   try {
     const id = req.body.id; // 获取标签ID
-    let sql = `UPDATE opinion SET del_flag=1  WHERE id=?`;
+    let sql;
+    let params;
+    if (req.user?.role === 'root') {
+      sql = `UPDATE opinion SET del_flag=1  WHERE id=?`;
+      params = [id];
+    } else {
+      sql = `UPDATE opinion SET del_flag=1  WHERE id=? AND user_id = ?`;
+      params = [id, req.user.id];
+    }
     pool
-      .query(sql, [id])
+      .query(sql, params)
       .then(([result]) => {
+        if (result.affectedRows === 0) {
+          return res.send(resultData(null, 404, '反馈不存在或无权限'));
+        }
         res.send(resultData(result));
       })
       .catch((e) => {
